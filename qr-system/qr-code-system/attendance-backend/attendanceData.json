@@ -1,0 +1,25 @@
+{
+  "clockins": [
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-16T15:56:43.854Z",
+      "location": "Office"
+    },
+    {
+      "employeeId": "iiuui",
+      "clockInTime": "2024-07-16T16:00:33.483Z",
+      "location": "Office"
+    },
+    {
+      "employeeId": "iiuui",
+      "clockInTime": "2024-07-16T16:07:04.441Z",
+      "location": "Office"
+    },
+    {
+      "employeeId": "iiuui",
+      "clockInTime": "2024-07-16T16:12:16.766Z",
+      "location": "Office"
+    }
+  ],
+  "clockouts": []
+}
