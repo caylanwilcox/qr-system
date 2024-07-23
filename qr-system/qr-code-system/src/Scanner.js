@@ -1,52 +1,56 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { QrReader } from 'react-qr-reader';
 import './App.css';
-import ErrorLog from './ErrorLog';
 
 const Scanner = ({ setMessage, mode }) => {
   const [scanning, setScanning] = useState(true);
   const [scannedResult, setScannedResult] = useState('');
   const [errors, setErrors] = useState([]);
   const lastErrorTimeRef = useRef(0);
+  const modeRef = useRef(mode); // Create a ref to hold the mode
   const ERROR_THROTTLE_TIME = 5000; // 5 seconds
 
-  const handleScan = (data) => {
-    if (data) {
-      console.log('Scanned data:', data);
-      setScannedResult(data);
-      setScanning(false);
+  useEffect(() => {
+    modeRef.current = mode; // Update the ref whenever mode changes
+    console.log('Scanner component received mode:', mode);
+  }, [mode]);
 
-      const [employeeId, location] = data.split('|');
-      if (!employeeId || !location) {
-        const errorMsg = `Invalid scanned data: ${data}`;
-        console.error(errorMsg);
-        logError(errorMsg);
-        return;
-      }
-
-      const url = `http://localhost:3003/${mode}?employeeId=${employeeId}&location=${location}`;
-      console.log(`Fetching URL: ${url}, Mode: ${mode}`);
-
-      fetch(url)
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`${response.status}: ${response.statusText}`);
-          }
-          return response.text();
-        })
-        .then((result) => {
-          setMessage(result);
-          console.log('Server response:', result);
-        })
-        .catch((error) => {
-          console.error('Error during fetch:', error);
-          setMessage('Error during clock-in/out process: ' + error.message);
-          logError(`Error during fetch: ${error.message}`);
-        });
-    } else {
+  const handleScan = async (data) => {
+    if (!data) {
       console.log('No data scanned');
       setMessage('No data scanned');
       logError('No data scanned');
+      return;
+    }
+
+    console.log('Current mode in handleScan:', modeRef.current);
+    console.log('Scanned data:', data);
+    setScannedResult(data);
+    setScanning(false);
+
+    const [employeeId, location] = data.split('|');
+    if (!employeeId || !location) {
+      const errorMsg = `Invalid scanned data: ${data}`;
+      console.error(errorMsg);
+      logError(errorMsg);
+      return;
+    }
+
+    const url = `http://localhost:3003/${modeRef.current}?employeeId=${employeeId}&location=${location}`;
+    console.log(`Fetching URL: ${url}, Mode: ${modeRef.current}`);
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`${response.status}: ${response.statusText}`);
+      }
+      const result = await response.text();
+      setMessage(result);
+      console.log('Server response:', result);
+    } catch (error) {
+      console.error('Error during fetch:', error);
+      setMessage('Error during clock-in/out process: ' + error.message);
+      logError(`Error during fetch: ${error.message}`);
     }
   };
 
@@ -82,7 +86,6 @@ const Scanner = ({ setMessage, mode }) => {
         {scanning && <p>Scanner is active. Please scan a QR code.</p>}
         {scannedResult && <p>Scanned Result: {scannedResult}</p>}
       </div>
-      <ErrorLog errors={errors} />
     </div>
   );
 };
