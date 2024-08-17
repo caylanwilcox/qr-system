@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { QrReader } from 'react-qr-reader';
 import './App.css';
 
-const Scanner = ({ setMessage, mode }) => {
+const Scanner = ({ setMessage, mode, location }) => {
   const [scanning, setScanning] = useState(true);
   const [scannedResult, setScannedResult] = useState('');
   const [errors, setErrors] = useState([]);
@@ -28,8 +28,8 @@ const Scanner = ({ setMessage, mode }) => {
     setScannedResult(data);
     setScanning(false);
 
-    const [employeeId, location] = data.split('|');
-    if (!employeeId || !location) {
+    const [employeeId, additionalData] = data.split('|');
+    if (!employeeId || !additionalData) {
       const errorMsg = `Invalid scanned data: ${data}`;
       console.error(errorMsg);
       logError(errorMsg);

@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const moment = require('moment-timezone'); // Import moment-timezone
+const moment = require('moment-timezone');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
@@ -38,9 +38,9 @@ const loadData = () => {
 };
 
 const isWithinTimeLimit = (lastTime, limitMinutes) => {
-  const currentTime = new Date();
-  const lastDateTime = new Date(lastTime);
-  const timeDifference = (currentTime - lastDateTime) / (1000 * 0); // in minutes
+  const currentTime = moment();
+  const lastDateTime = moment(lastTime, 'YYYY-MM-DD hh:mm:ss A');
+  const timeDifference = currentTime.diff(lastDateTime, 'minutes');
   return timeDifference < limitMinutes;
 };
 
@@ -53,7 +53,7 @@ app.get('/clock-in', (req, res) => {
     return res.status(400).send('Employee ID and location are required');
   }
 
-  const clockInTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A'); // Central Time in 12-hour format
+  const clockInTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A');
 
   try {
     const data = loadData();
@@ -87,7 +87,7 @@ app.get('/clock-out', (req, res) => {
     return res.status(400).send('Employee ID and location are required');
   }
 
-  const clockOutTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A'); // Central Time in 12-hour format
+  const clockOutTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A');
 
   try {
     const data = loadData();
@@ -97,13 +97,6 @@ app.get('/clock-out', (req, res) => {
     if (lastClockOut) {
       console.log(`Last clock-out time for ${employeeId}: ${lastClockOut.clockOutTime}`);
     }
-    // Commented out this block for testing
-    /*
-    if (lastClockOut && isWithinTimeLimit(lastClockOut.clockOutTime, 5)) {
-      console.log(`Clock-out attempt too soon for ${employeeId}`);
-      return res.status(400).send('You can only clock out once every 5 minutes');
-    }
-    */
 
     data.clockouts.push({ employeeId, clockOutTime, location });
     saveData(data);
@@ -116,30 +109,36 @@ app.get('/clock-out', (req, res) => {
 });
 
 app.get('/attendance', (req, res) => {
+  const { employeeId } = req.query;
   try {
     const data = loadData();
     const attendance = {};
 
-    // Combine clock-in and clock-out data to determine attendance and rank
     data.clockins.forEach(clockin => {
       const { employeeId, clockInTime, location } = clockin;
       if (!attendance[employeeId]) {
-        attendance[employeeId] = { days: 0, rank: 0, location: location };
+        attendance[employeeId] = { days: 0, rank: 0, location: location, clockins: [], clockouts: [] };
       }
-      const clockOut = data.clockouts.find(
-        clockout => clockout.employeeId === employeeId && moment(clockout.clockOutTime).isSame(clockInTime, 'day')
-      );
-      if (clockOut) {
-        const today = moment().format('YYYY-MM-DD');
-        if (!attendance[employeeId][today]) {
-          attendance[employeeId].days += 1;
-          attendance[employeeId][today] = true;
-          if (attendance[employeeId].days % 10 === 0) {
-            attendance[employeeId].rank += 1;
-          }
-        }
-      }
+      attendance[employeeId].clockins.push({ clockInTime, location });
     });
+
+    data.clockouts.forEach(clockout => {
+      const { employeeId, clockOutTime, location } = clockout;
+      if (!attendance[employeeId]) {
+        attendance[employeeId] = { days: 0, rank: 0, location: location, clockins: [], clockouts: [] };
+      }
+      attendance[employeeId].clockouts.push({ clockOutTime, location });
+    });
+
+    Object.keys(attendance).forEach(employeeId => {
+      const uniqueDays = new Set(attendance[employeeId].clockins.map(clockin => clockin.clockInTime.split(' ')[0]));
+      attendance[employeeId].days = uniqueDays.size;
+      attendance[employeeId].rank = Math.floor(attendance[employeeId].days / 1);
+    });
+
+    if (employeeId) {
+      return res.json(attendance[employeeId] || {});
+    }
 
     res.json(attendance);
   } catch (error) {

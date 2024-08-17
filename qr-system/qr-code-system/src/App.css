@@ -9,7 +9,6 @@ body {
 
 .App {
   text-align: center;
-  padding: 20px;
 }
 
 .App-header {
@@ -65,3 +64,88 @@ p {
 #qr-reader p{
   color:black;
 }
+.App {
+  text-align: center;
+  font-family: 'Arial', sans-serif;
+}
+
+.nav {
+  background-color: #3373b8;
+  overflow: hidden;
+}
+
+.nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.nav li {
+  float: left;
+}
+
+.nav li a {
+  display: block;
+  color: rgb(255, 255, 255);
+  text-align: center;
+  padding: 14px 20px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.nav li a:hover {
+  background-color: #185f9e;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.App-header {
+  background-color: #ebeef5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: rgb(0, 0, 0);
+}
+
+.App-header input {
+  width: 80%;
+  max-width: 400px;
+  padding: 10px;
+  margin: 10px 0;
+  border: none;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.App-header button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  margin: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.App-header button:hover {
+  background-color: #45a049;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.App-header p {
+  margin: 20px 0;
+  font-size: 1.2rem;
+}
+.location-dropdown {
+  padding: 10px;
+  font-size: 16px;
+  margin-top: 10px;
+  width: 100%;
+  max-width: 300px;
+}
+

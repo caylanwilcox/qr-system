@@ -1,0 +1,35 @@
+.location-box {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+    text-align: center;
+  }
+  
+  .location-box:hover {
+    transform: translateY(-5px);
+  }
+  
+  .location-box h2 {
+    margin-bottom: 15px;
+    font-size: 1.5rem;
+  }
+  
+  .analytics-details p {
+    margin: 5px 0;
+    font-size: 1rem;
+  }
+  
+  .details-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: #007bff;
+    text-decoration: none;
+  }
+  
+  .details-link:hover {
+    text-decoration: underline;
+  }
+  

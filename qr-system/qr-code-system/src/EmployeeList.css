@@ -1,0 +1,30 @@
+.employee-list-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .employee-list-container h2 {
+    margin-bottom: 20px;
+    color: #3769d4;
+  }
+  
+  .employee-list {
+    list-style: none;
+    padding: 0;
+  }
+  
+  .employee-list li {
+    padding: 10px;
+    background-color: #f9f9f9;
+    margin-bottom: 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .employee-list li:hover {
+    background-color: #e0e0e0;
+  }
+  

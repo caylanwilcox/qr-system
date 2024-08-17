@@ -1639,6 +1639,136 @@
       "employeeId": "jph",
       "clockInTime": "2024-07-20 07:33:41 PM",
       "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockInTime": "2024-07-25 07:13:34 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockInTime": "2024-07-25 07:13:36 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockInTime": "2024-07-25 07:13:36 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockInTime": "2024-07-25 07:13:36 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockInTime": "2024-07-25 07:13:36 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "michell flores",
+      "clockInTime": "2024-07-25 07:15:05 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "michell flores",
+      "clockInTime": "2024-07-25 07:15:05 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:55 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:55 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:56 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:56 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:57 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:57 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:57 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:57 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:58 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:58 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:58 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-07-25 07:15:58 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockInTime": "2024-07-25 07:19:48 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockInTime": "2024-07-25 07:25:15 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "ky,e",
+      "clockInTime": "2024-07-25 08:23:44 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "richard",
+      "clockInTime": "2024-07-25 04:33:09 PM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-08-16 09:09:20 PM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockInTime": "2024-08-16 10:23:48 PM",
+      "location": "Agua Viva West Chicago"
+    },
+    {
+      "employeeId": "jph",
+      "clockInTime": "2024-08-16 10:49:00 PM",
+      "location": "Office"
     }
   ],
   "clockouts": [
@@ -2165,6 +2295,81 @@
     {
       "employeeId": "jph",
       "clockOutTime": "2024-07-20 07:33:14 PM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockOutTime": "2024-07-25 07:14:08 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockOutTime": "2024-07-25 07:14:08 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "michell flores",
+      "clockOutTime": "2024-07-25 07:15:13 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "michell flores",
+      "clockOutTime": "2024-07-25 07:15:13 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockOutTime": "2024-07-25 07:16:22 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockOutTime": "2024-07-25 07:20:00 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockOutTime": "2024-07-25 07:20:00 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockOutTime": "2024-07-25 07:25:24 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "Caylan Wilcox",
+      "clockOutTime": "2024-07-25 07:25:24 AM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockOutTime": "2024-08-16 09:13:01 PM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "12345",
+      "clockOutTime": "2024-08-16 10:24:18 PM",
+      "location": "Agua Viva West Chicago"
+    },
+    {
+      "employeeId": "12345",
+      "clockOutTime": "2024-08-16 10:24:18 PM",
+      "location": "Agua Viva West Chicago"
+    },
+    {
+      "employeeId": "jph",
+      "clockOutTime": "2024-08-16 10:49:31 PM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockOutTime": "2024-08-16 10:49:31 PM",
+      "location": "Office"
+    },
+    {
+      "employeeId": "jph",
+      "clockOutTime": "2024-08-16 10:50:30 PM",
       "location": "Office"
     }
   ]
