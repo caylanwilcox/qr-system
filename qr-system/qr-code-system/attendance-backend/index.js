@@ -1,146 +1,70 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const fs = require('fs');
-const path = require('path');
 const cors = require('cors');
 const moment = require('moment-timezone');
+const db = require('./firebaseConfig'); // Import Firebase database instance
+
 const app = express();
 const PORT = process.env.PORT || 3003;
-
-const attendanceFilePath = path.join(__dirname, 'attendanceData.json');
 
 app.use(bodyParser.json());
 app.use(cors());
 
-const logRequest = (type, employeeId, location, time) => {
-  console.log(`Employee ${employeeId} ${type} at ${time} at location ${location}`);
-};
+app.get('/clock-in', async (req, res) => {
+  const { employeeId, name, location } = req.query;
+  console.log('Clock-in request received:', { employeeId, name, location });
 
-const saveData = (data) => {
-  fs.writeFileSync(attendanceFilePath, JSON.stringify(data, null, 2));
-};
-
-const loadData = () => {
-  if (fs.existsSync(attendanceFilePath)) {
-    const fileData = fs.readFileSync(attendanceFilePath);
-    try {
-      const parsedData = JSON.parse(fileData);
-      return {
-        clockins: parsedData.clockins || [],
-        clockouts: parsedData.clockouts || []
-      };
-    } catch (error) {
-      console.error('Error parsing JSON data:', error);
-      return { clockins: [], clockouts: [] };
-    }
-  }
-  return { clockins: [], clockouts: [] };
-};
-
-const isWithinTimeLimit = (lastTime, limitMinutes) => {
-  const currentTime = moment();
-  const lastDateTime = moment(lastTime, 'YYYY-MM-DD hh:mm:ss A');
-  const timeDifference = currentTime.diff(lastDateTime, 'minutes');
-  return timeDifference < limitMinutes;
-};
-
-app.get('/clock-in', (req, res) => {
-  const { employeeId, location } = req.query;
-  console.log('Clock-in request received:', { employeeId, location });
-
-  if (!employeeId || !location) {
-    console.log(`Invalid parameters: employeeId=${employeeId}, location=${location}`);
-    return res.status(400).send('Employee ID and location are required');
+  if (!employeeId || !location || !name) {
+    console.log(`Invalid parameters: employeeId=${employeeId}, name=${name}, location=${location}`);
+    return res.status(400).send('Employee ID, name, and location are required');
   }
 
   const clockInTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A');
 
   try {
-    const data = loadData();
-    console.log('Loaded data for clock-in:', data);
+    const ref = db.ref('clockins');
+    await ref.push({
+      employeeId,
+      name,
+      clockInTime,
+      location,
+    });
 
-    const lastClockIn = data.clockins.filter(clockin => clockin.employeeId === employeeId).pop();
-    if (lastClockIn) {
-      console.log(`Last clock-in time for ${employeeId}: ${lastClockIn.clockInTime}`);
-    }
-    if (lastClockIn && isWithinTimeLimit(lastClockIn.clockInTime, 5)) {
-      console.log(`Clock-in attempt too soon for ${employeeId}`);
-      return res.status(400).send('You can only clock in once every 5 minutes');
-    }
-
-    data.clockins.push({ employeeId, clockInTime, location });
-    saveData(data);
-    logRequest('clocked in', employeeId, location, clockInTime);
-    res.send(`Employee ${employeeId} clocked in at location ${location}`);
+    console.log(`Employee ${name} (${employeeId}) clocked in at location ${location} at ${clockInTime}`);
+    res.send(`Employee ${name} clocked in at ${clockInTime} at location ${location}`);
   } catch (error) {
     console.error('Error clocking in:', error);
     res.status(500).send('Error clocking in');
   }
 });
 
-app.get('/clock-out', (req, res) => {
-  const { employeeId, location } = req.query;
-  console.log('Clock-out request received:', { employeeId, location });
-
-  if (!employeeId || !location) {
-    console.log(`Invalid parameters: employeeId=${employeeId}, location=${location}`);
-    return res.status(400).send('Employee ID and location are required');
-  }
-
-  const clockOutTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A');
-
+app.get('/attendance', async (req, res) => {
+  const { location, employeeId } = req.query;
   try {
-    const data = loadData();
-    console.log('Loaded data for clock-out:', data);
+    const ref = db.ref('clockins');
+    let snapshot = await ref.once('value');
+    let data = snapshot.val();
+    
+    let attendance = Object.values(data || {});
 
-    const lastClockOut = data.clockouts.filter(clockout => clockout.employeeId === employeeId).pop();
-    if (lastClockOut) {
-      console.log(`Last clock-out time for ${employeeId}: ${lastClockOut.clockOutTime}`);
+    // Filter by location if provided
+    if (location) {
+      attendance = attendance.filter(record => record.location === location);
     }
 
-    data.clockouts.push({ employeeId, clockOutTime, location });
-    saveData(data);
-    logRequest('clocked out', employeeId, location, clockOutTime);
-    res.send(`Employee ${employeeId} clocked out at location ${location}`);
-  } catch (error) {
-    console.error('Error clocking out:', error);
-    res.status(500).send('Error clocking out');
-  }
-});
-
-app.get('/attendance', (req, res) => {
-  const { employeeId } = req.query;
-  try {
-    const data = loadData();
-    const attendance = {};
-
-    data.clockins.forEach(clockin => {
-      const { employeeId, clockInTime, location } = clockin;
-      if (!attendance[employeeId]) {
-        attendance[employeeId] = { days: 0, rank: 0, location: location, clockins: [], clockouts: [] };
-      }
-      attendance[employeeId].clockins.push({ clockInTime, location });
-    });
-
-    data.clockouts.forEach(clockout => {
-      const { employeeId, clockOutTime, location } = clockout;
-      if (!attendance[employeeId]) {
-        attendance[employeeId] = { days: 0, rank: 0, location: location, clockins: [], clockouts: [] };
-      }
-      attendance[employeeId].clockouts.push({ clockOutTime, location });
-    });
-
-    Object.keys(attendance).forEach(employeeId => {
-      const uniqueDays = new Set(attendance[employeeId].clockins.map(clockin => clockin.clockInTime.split(' ')[0]));
-      attendance[employeeId].days = uniqueDays.size;
-      attendance[employeeId].rank = Math.floor(attendance[employeeId].days / 1);
-    });
-
+    // Filter by employeeId if provided
     if (employeeId) {
-      return res.json(attendance[employeeId] || {});
+      attendance = attendance.filter(record => record.employeeId === employeeId);
     }
 
-    res.json(attendance);
+    console.log(`Filtered data for location "${location}" and employeeId "${employeeId}":`, attendance);
+
+    if (attendance.length === 0) {
+      console.log(`No records found for location: ${location} and employeeId: ${employeeId}`);
+      return res.json([]); 
+    }
+
+    res.json(attendance); 
   } catch (error) {
     console.error('Error fetching attendance:', error);
     res.status(500).send('Error fetching attendance');
