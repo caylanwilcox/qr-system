@@ -27,4 +27,30 @@
   .employee-list li:hover {
     background-color: #e0e0e0;
   }
+  .employee-list-container {
+    padding: 20px;
+  }
+  
+  .employee-list {
+    list-style-type: none;
+    padding: 0;
+  }
+  
+  .employee-item {
+    padding: 15px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    color: black;
+  }
+  
+  .employee-item p {
+    margin: 5px 0;
+    color: black;
+  }
+  
+  .employee-item strong {
+    color: black;
+  }
   

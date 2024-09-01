@@ -4,7 +4,6 @@ import './App.css';
 
 const Scanner = ({ setMessage, mode, location }) => {
   const [scanning, setScanning] = useState(true);
-  const [scannedResult, setScannedResult] = useState('');
   const [errors, setErrors] = useState([]);
   const lastErrorTimeRef = useRef(0);
   const modeRef = useRef(mode); // Create a ref to hold the mode
@@ -22,23 +21,42 @@ const Scanner = ({ setMessage, mode, location }) => {
       logError('No data scanned');
       return;
     }
-
+  
     console.log('Current mode in handleScan:', modeRef.current);
     console.log('Scanned data:', data);
-    setScannedResult(data);
-    setScanning(false);
-
-    const [employeeId, additionalData] = data.split('|');
-    if (!employeeId || !additionalData) {
+  
+    // Split the scanned data
+    const [employeeId, name] = data.split('|');
+  
+    // Log to check if name is being parsed correctly
+    console.log(`Parsed employeeId: ${employeeId}, name: ${name}`);
+  
+    if (!employeeId) {
       const errorMsg = `Invalid scanned data: ${data}`;
       console.error(errorMsg);
       logError(errorMsg);
       return;
     }
-
-    const url = `http://localhost:3003/${modeRef.current}?employeeId=${employeeId}&location=${location}`;
+  
+    if (!location) {
+      const errorMsg = `Missing location: ${location}`;
+      console.error(errorMsg);
+      logError(errorMsg);
+      return;
+    }
+  
+    if (!name) {
+      const errorMsg = `Name is missing in scanned data: ${data}`;
+      console.warn(errorMsg);
+      logError(errorMsg);
+      // Uncomment the following line if you want to prevent the fetch without a name
+      // return;
+    }
+  
+    console.log(`Location value before fetch: ${location}`);
+    const url = `http://localhost:3003/${modeRef.current}?employeeId=${employeeId}&name=${encodeURIComponent(name || '')}&location=${encodeURIComponent(location)}`;
     console.log(`Fetching URL: ${url}, Mode: ${modeRef.current}`);
-
+  
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -53,7 +71,7 @@ const Scanner = ({ setMessage, mode, location }) => {
       logError(`Error during fetch: ${error.message}`);
     }
   };
-
+  
   const handleError = (err) => {
     const currentTime = Date.now();
     if (err && currentTime - lastErrorTimeRef.current > ERROR_THROTTLE_TIME) {
@@ -64,7 +82,7 @@ const Scanner = ({ setMessage, mode, location }) => {
   };
 
   const logError = (message) => {
-    setErrors(prevErrors => [...prevErrors, message]);
+    setErrors((prevErrors) => [...prevErrors, message]);
   };
 
   return (
@@ -84,7 +102,6 @@ const Scanner = ({ setMessage, mode, location }) => {
           style={{ width: '100%' }}
         />
         {scanning && <p>Scanner is active. Please scan a QR code.</p>}
-        {scannedResult && <p>Scanned Result: {scannedResult}</p>}
       </div>
     </div>
   );
