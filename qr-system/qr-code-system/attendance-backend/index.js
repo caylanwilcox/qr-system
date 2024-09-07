@@ -11,7 +11,7 @@ app.use(bodyParser.json());
 app.use(cors());
 
 app.get('/clock-in', async (req, res) => {
-  const { employeeId, name, location } = req.query;
+  const { employeeId, name, location } = req.query;w
   console.log('Clock-in request received:', { employeeId, name, location });
 
   if (!employeeId || !location || !name) {

@@ -12,10 +12,18 @@ import photo from './download.png'
 function App() {
   const [message, setMessage] = useState('');
   const [mode, setMode] = useState('clock-in'); // Default mode is 'clock-in'
-  const [location, setLocation] = useState(''); // Add location state
+  const [location, setLocation] = 
+  
+  
+  
+  
+  
+  
+  
+useState(''); // Add location state
   const [theme, setTheme] = useState('light'); // Add theme state for light/dark mode
   const [settingsVisible, setSettingsVisible] = useState(false); // Manage visibility of settings
-
+  
   const locations = [
     'Agua Viva West Chicago',
     'Agua Viva Lyons',
