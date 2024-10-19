@@ -11,30 +11,29 @@ const EmployeeList = () => {
   useEffect(() => {
     const fetchEmployeeList = async () => {
       try {
-        const response = await fetch(`http://localhost:3003/attendance?location=${location}`);
+        // Fetch employee data from Firebase Realtime Database
+        const response = await fetch(`https://qr-system-1cea7-default-rtdb.firebaseio.com/attendance/${location}.json`);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         const data = await response.json();
         console.log('Fetched data for location:', data); // Log fetched data for debugging
 
-        // Transform data to include clock-in/out status
-        const employeeData = data.map(employee => {
-          const clockOut = data.find(item => item.employeeId === employee.employeeId && item.clockOutTime);
+        // Validate data and transform it to include clock-in/out status
+        if (!data || typeof data !== 'object') {
+          throw new Error('Unexpected data format received from server.');
+        }
+
+        const employeeData = Object.values(data).map(employee => {
+          const clockOut = employee.clockOutTime ? 'Clocked Out' : 'In Progress';
           return {
             employeeId: employee.employeeId,
             name: employee.name || 'No Name',
-            clockInOutStatus: clockOut ? 'Clocked Out' : 'In Progress'
+            clockInOutStatus: clockOut,
           };
         });
 
-        if (Array.isArray(employeeData)) {
-          setEmployeeList(employeeData);
-        } else {
-          setEmployeeList([]); // Set to an empty array if data is not an array
-          setError('Unexpected data format received from server.');
-        }
-
+        setEmployeeList(employeeData);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching employee list:', error);

@@ -1,0 +1,148 @@
+/* Container styles */
+.admin-container {
+  width: 100%;
+  height: 100vh; /* Full viewport height */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* Align content towards the top */
+  padding-top: 40px; /* Give space for title */
+  box-sizing: border-box;
+  position: relative;
+  background-color: #f4f7fc; /* Soft background color */
+}
+
+.Admin-header {
+  font-size: 2.5rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 30px;
+  font-weight: bold;
+}
+
+.gear-icon {
+  position: absolute;
+  top: 20px;
+  right: 20px; /* Changed position for more professional look */
+  cursor: pointer;
+}
+
+.scanner-settings {
+  text-align: center;
+  margin-top: 30px;
+  transition: all 0.3s ease-in-out;
+  opacity: 1;
+}
+
+.location-dropdown {
+  padding: 12px;
+  font-size: 16px;
+  margin-top: 15px;
+  width: 100%;
+  max-width: 350px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.button-group {
+  margin-top: 20px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+button {
+  padding: 12px 24px;
+  font-size: 16px;
+  border: none;
+  border-radius: 5px;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+.scanner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.qr-circle {
+  width: 450px;
+  height: 450px;
+  background-color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #ddd;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.message-container {
+  margin-top: 15px;
+  font-size: 1.2rem;
+  color: #333;
+  text-align: center;
+}
+
+/* Employee Info Styles */
+.employee-info-container {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.employee-img-container {
+  margin-bottom: 15px;
+}
+
+.employee-img {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #007bff;
+}
+
+.employee-details h2 {
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.employee-details p {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .qr-circle {
+    width: 300px;
+    height: 300px;
+  }
+  .employee-img {
+    width: 80px;
+    height: 80px;
+  }
+  .employee-details h2 {
+    font-size: 1.4rem;
+  }
+  .employee-details p {
+    font-size: 1rem;
+  }
+}

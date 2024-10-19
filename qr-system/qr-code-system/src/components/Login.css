@@ -1,0 +1,97 @@
+/* Container for the entire login form */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full screen height */
+    background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
+  }
+  
+  /* Box that holds the login form */
+  .login-box {
+    width: 400px;
+    padding: 40px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.1);
+    text-align: center;
+  }
+  
+  /* Style for the logo image */
+  .login-logo {
+    width: 150px;
+    margin-bottom: 20px;
+  }
+  
+  /* Header for the form */
+  .login-header {
+    font-size: 32px;
+    color: #333;
+    margin-bottom: 20px;
+    font-weight: bold;
+  }
+  
+  /* Form layout */
+  .login-form {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Group of labels and input fields */
+  .form-group {
+    margin-bottom: 20px;
+    text-align: left;
+  }
+  
+  /* Style for the labels */
+  .login-form label {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 5px;
+    display: block;
+    font-weight: 500;
+  }
+  
+  /* Styling the input fields */
+  .login-input {
+    padding: 15px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Highlight the input field when focused */
+  .login-input:focus {
+    border-color: #2980b9;
+    outline: none;
+    box-shadow: 0 0 8px rgba(41, 128, 185, 0.3);
+  }
+  
+  /* Styling the login button */
+  .login-button {
+    padding: 15px;
+    background-color: #2980b9;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-top: 10px;
+  }
+  
+  /* Hover effect for the button */
+  .login-button:hover {
+    background-color: #216994;
+  }
+  
+  /* Error message style */
+  .login-error {
+    color: #e74c3c;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  

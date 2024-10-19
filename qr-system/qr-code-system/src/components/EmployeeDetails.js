@@ -7,29 +7,34 @@ const EmployeeDetails = () => {
   const [attendanceDetails, setAttendanceDetails] = useState({
     records: [],
     days: 0,
-    rank: ''
+    rank: 'Unknown'
   });
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true); // Track loading state
+  const [error, setError] = useState(null); // Track any errors
 
   useEffect(() => {
     if (employeeId) {
-      fetch(`http://localhost:3003/attendance?employeeId=${employeeId}`)
-        .then(response => {
+      const fetchAttendanceDetails = async () => {
+        try {
+          const response = await fetch(`https://qr-system-1cea7-default-rtdb.firebaseio.com/attendance.json?orderBy="employeeId"&equalTo="${employeeId}"`);
+          
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-          return response.json();
-        })
-        .then(data => {
+
+          const data = await response.json();
           console.log("Fetched attendance details data:", data);
 
           // Validate data structure
-          if (!data || !Array.isArray(data)) {
+          if (!data || typeof data !== 'object') {
             throw new Error('Invalid data format received');
           }
 
+          // Flatten the object into an array of attendance records
+          const recordsArray = Object.values(data);
+
           // Group the clock-ins and clock-outs by day
-          const records = data.reduce((acc, clockin) => {
+          const records = recordsArray.reduce((acc, clockin) => {
             const date = clockin.clockInTime.split(' ')[0];
             let record = acc.find(r => r.date === date);
             if (!record) {
@@ -41,21 +46,33 @@ const EmployeeDetails = () => {
             return acc;
           }, []);
 
+          // Get unique days attended
           const uniqueDays = new Set(records.map(record => record.date));
           const daysAttended = uniqueDays.size;
+
+          // Assuming rank is somehow included in the employee's first record
+          const rank = records[0]?.rank || 'Unknown';
 
           setAttendanceDetails({
             records,
             days: daysAttended,
-            rank: records[0]?.rank || 'Unknown'
+            rank
           });
-        })
-        .catch(error => {
+          setLoading(false);
+        } catch (error) {
           console.error('Error fetching attendance details:', error);
           setError(error.message);
-        });
+          setLoading(false);
+        }
+      };
+
+      fetchAttendanceDetails();
     }
   }, [employeeId]);
+
+  if (loading) {
+    return <p>Loading attendance details...</p>;
+  }
 
   if (error) {
     return <p>Error fetching attendance details: {error}</p>;
