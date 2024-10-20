@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ref, onValue, update } from "firebase/database"; // Firebase Realtime Database methods
+import { ref, onValue } from "firebase/database"; // Firebase Realtime Database methods
 import { database } from '../services/firebaseConfig'; // Path to your Firebase configuration file
 import { Link } from 'react-router-dom'; // For linking to employee profiles
 import './ManageEmployees.css'; // Optional: Add styles if needed
@@ -78,7 +78,7 @@ const ManageEmployees = () => {
               .map((employee) => (
                 <div key={employee.id} className="employee-item">
                   {/* Employee Name Link */}
-                  <Link to={`/employee/${employee.id}`} className="employee-name">
+                  <Link to={`/admin/employee/${employee.id}`} className="employee-name">
                     {employee.name}
                   </Link>
                 </div>

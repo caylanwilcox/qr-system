@@ -8,18 +8,30 @@ const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
+    console.log('Setting up onAuthStateChanged listener');
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log('onAuthStateChanged triggered');
       if (firebaseUser) {
-        // Get custom claims (like role) from Firebase
-        const tokenResult = await getIdTokenResult(firebaseUser);
-        const role = tokenResult.claims.role || 'employee';  // Default to employee if role isn't set
-        setUser({ ...firebaseUser, role });
+        try {
+          // Get custom claims (like role) from Firebase
+          const tokenResult = await getIdTokenResult(firebaseUser);
+          const role = tokenResult.claims.role || 'employee';  // Default to employee if role isn't set
+          console.log('User authenticated:', firebaseUser);
+          console.log('User role:', role);
+          setUser({ ...firebaseUser, role });
+        } catch (error) {
+          console.error('Error getting token result:', error);
+        }
       } else {
+        console.log('No user authenticated');
         setUser(null);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      console.log('Cleaning up onAuthStateChanged listener');
+      unsubscribe();
+    };
   }, []);
 
   return (

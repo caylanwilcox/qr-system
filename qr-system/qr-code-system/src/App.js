@@ -42,6 +42,8 @@ function App() {
               <Route path="add-user" element={<AddUser />} />
               <Route path="account-settings" element={<AccountSettings />} />
               <Route path="qr-scanner" element={<QRScannerPage />} />
+              {/* Employee Profile Route inside Admin */}
+              <Route path="employee/:employeeId" element={<EmployeeProfile />} />
             </Route>
 
             {/* Employee Profile Route */}
