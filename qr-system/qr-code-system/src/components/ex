@@ -1,0 +1,56 @@
+// Dashboard.js
+import React from 'react';
+import './Dashboard.css'; // Import the CSS for styling
+
+const Dashboard = ({ locationAnalytics, topEmployees, locations }) => {
+  // Helper function to calculate company-wide average attendance
+  const calculateCompanyAverage = () => {
+    const totalLocations = Object.keys(locationAnalytics).length;
+    if (totalLocations === 0) return 'N/A';
+
+    const totalAttendance = Object.values(locationAnalytics).reduce((acc, loc) => {
+      const attendance = parseFloat(loc.averageAttendance) || 0;
+      return acc + attendance;
+    }, 0);
+
+    return (totalAttendance / totalLocations).toFixed(2) + '%';
+  };
+
+  return (
+    <div className="dashboard-grid">
+      {/* Overall KPIs */}
+      <div className="dashboard-summary">
+        <h2>Company Overview</h2>
+        <p>Total Employees: {Object.values(locationAnalytics).reduce((acc, loc) => acc + loc.totalEmployees, 0)}</p>
+        <p>Average Attendance: {calculateCompanyAverage()}</p>
+      </div>
+
+      {/* Location-specific data */}
+      {locations.map((location) => (
+        <div className="dashboard-location-data" key={location}>
+          <h2>{location}</h2>
+          <p>Total Employees: {locationAnalytics[location]?.totalEmployees || 'N/A'}</p>
+          <p>Average Attendance: {locationAnalytics[location]?.averageAttendance || 'N/A'}</p>
+        </div>
+      ))}
+
+      {/* Top Employees section */}
+      <div className="dashboard-top-employees">
+        <h2>Top Performing Employees</h2>
+        {topEmployees.length > 0 ? (
+          <ul>
+            {topEmployees.map((employee, index) => (
+              <li key={index}>
+                {employee.name} - Attendance Level: {employee.attendanceLevel}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No top performers found.</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

@@ -1,29 +1,15 @@
 /* Admin Dashboard Styles */
+
 .admin-dashboard {
   display: flex;
   min-height: 100vh;
-  font-family: 'Arial', sans-serif;
-  background-color: #F8F9FA; /* Light background */
+  font-family: "Roboto", sans-serif;
+  font-weight: 500;
+  ;  background-color: #000000; /* Light background */
 }
 
 /* Sidebar Styling */
-.admin-sidebar {
-  width: 250px;
-  background-color: #ffffff; /* White for a clean sidebar */
-  padding: 20px;
-  border-right: 1px solid #E0E0E0; /* Soft border */
-  height: 100vh;
-  position: fixed;
-  top: 0;
-  left: 0;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1); /* Shadow for depth */
-}
 
-.admin-sidebar h2 {
-  color: #4D4D4D;
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-}
 
 .admin-nav {
   list-style: none;
@@ -33,21 +19,15 @@
 
 .admin-nav li {
   margin-bottom: 15px;
+  margin-left: 10px;
 }
-
-.admin-nav a {
-  color: #4D4D4D; /* Soft gray color */
-  text-decoration: none;
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  border-radius: 8px;
-  transition: background-color 0.3s ease, transform 0.2s ease;
+.logo{
+  text-align-last: auto;
+  width: 100%;
 }
 
 .admin-nav a:hover {
-  background-color: #E0F7FA; /* Light teal hover effect */
+  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
   transform: translateX(5px); /* Shift effect */
 }
 
@@ -59,23 +39,26 @@
 /* Content Area */
 .admin-content {
   margin-left: 270px; /* Space for sidebar */
-  padding: 20px;
+  padding: 0px;
   flex: 1;
-  background-color: #F4F6F9;
+  flex-grow: 1;
+  background-color: #046ca4;
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+  overflow-y: auto; /* Allow scrolling if content exceeds viewport height */
 }
 
 /* Header with Profile Picture */
 .admin-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-bottom: 20px;
   background-color: #ffffff;
-  padding: 15px;
-  border-radius: 12px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
 }
-
+.logo{
+  padding-top: 20px;
+}
 .admin-header h1 {
   font-size: 1.8rem;
   margin: 0;
@@ -164,7 +147,7 @@
 }
 
 .dropdown-content button:hover {
-  background-color: #f0f0f0;
+  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
 }
 
 /* Mobile View Adjustments */
@@ -182,17 +165,12 @@
   }
 }
 /* Admin Dashboard Styles */
-.admin-dashboard {
-  display: flex;
-  min-height: 100vh;
-  font-family: 'Arial', sans-serif;
-  background-color: #F8F9FA; /* Light background */
-}
+
 
 .admin-sidebar {
-  width: 250px;
-  background-color: #ffffff; /* White for a clean sidebar */
-  padding: 20px;
+  width: 280px;
+  background-color: #0e0f10; /* White for a clean sidebar */
+  padding: 0px;
   border-right: 1px solid #E0E0E0;
   height: 100vh;
   position: fixed;
@@ -205,37 +183,47 @@
 }
 
 .admin-nav a {
-  color: #333; 
+  color: #ffffff; 
   text-decoration: none;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   padding: 10px;
+  width: 85%;
   display: block;
+  border-bottom:  2px solid linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
+  ;
   border-radius: 5px;
 }
 
 .admin-nav a.active {
-  background-color: #00ACC1;
+  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
   color: #fff;
 }
 
-.admin-content {
-  margin-left: 270px;
-  padding: 20px;
-  flex: 1;
-  background-color: #f4f6f9;
-}
 
+/* --------------------Header color---------------------  */
 .admin-header {
-  background-color: #fff;
+  
+  background: linear-gradient(135deg, #6dd5fa, #275c87); /* Beautiful background gradient */
+  color: #0b0a0a; /* White for a clean sidebar */;
+
   padding: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
 }
 
+.admin-header h1{
+  padding: 5px;
+  font-size: 2rem;
+font-weight: 700;
+
+color: #ffffff; /* White for a clean sidebar */;
+
+}
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  gap: 0px;
   margin-top: 20px;
 }
 

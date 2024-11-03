@@ -1,0 +1,23 @@
+.attendance-chart-container {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .quadrant-1 .large-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 90%;
+    height: 90%;
+    padding: 20px;
+    background-color: #1B2A49; /* Dark color to match example */
+    border-radius: 10px;
+  }
+  
+  .bar-chart {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  

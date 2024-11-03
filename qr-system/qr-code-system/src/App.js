@@ -14,7 +14,8 @@ const Settings = lazy(() => import('./components/Settings'));
 const AddUser = lazy(() => import('./components/AddUser'));
 const AccountSettings = lazy(() => import('./components/AccountSettings'));
 const NotFound = lazy(() => import('./components/NotFound'));
-const EmployeeProfile = lazy(() => import('./components/EmployeeProfile')); // Employee profile route
+const EmployeeProfile = lazy(() => import('./components/EmployeeProfile'));
+const UpdateEmployeesButton = lazy(() => import('./components/clearAndAddEmployees')); // Import the button component
 
 function App() {
   return (
@@ -40,9 +41,9 @@ function App() {
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
               <Route path="add-user" element={<AddUser />} />
+              <Route path="update-employees" element={<UpdateEmployeesButton />} /> {/* Add this line */}
               <Route path="account-settings" element={<AccountSettings />} />
               <Route path="qr-scanner" element={<QRScannerPage />} />
-              {/* Employee Profile Route inside Admin */}
               <Route path="employee/:employeeId" element={<EmployeeProfile />} />
             </Route>
 

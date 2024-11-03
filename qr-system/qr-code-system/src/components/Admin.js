@@ -3,10 +3,11 @@ import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { ref, onValue } from "firebase/database"; // Firebase Realtime Database methods
 import { database } from '../services/firebaseConfig'; // Your Firebase configuration file
 import './Admin.css';
-
+import Dashboard from './Dashboard'; // Import the Dashboard component
+import logo from '../logo.svg'; // Import the logo image
 const Admin = () => {
   const [locationAnalytics, setLocationAnalytics] = useState({});
-  const [topEmployees, setTopEmployees] = useState([]); // For tracking top-performing employees
+  const [topEmployees, setTopEmployees] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,7 +29,7 @@ const Admin = () => {
             const locationRef = ref(database, `attendance/${location}`);
             const dataSnapshot = await new Promise((resolve) => {
               onValue(locationRef, (snapshot) => {
-                resolve(snapshot);
+                resolve(snapshot); 
               });
             });
             const data = dataSnapshot.val();
@@ -91,7 +92,7 @@ const Admin = () => {
       case '/admin/qr-scanner':
         return 'QR Code Scanner';
       default:
-        return 'Dashboard Overview';
+        return ' Agua Viva United States';
     }
   };
 
@@ -100,13 +101,16 @@ const Admin = () => {
   return (
     <div className="admin-dashboard">
       <div className="admin-sidebar">
+      <img src={logo} alt="logo" className="logo" />
+
         <h2>Admin Panel</h2>
         <ul className="admin-nav">
           <li><Link to="/admin" className={isDashboard ? 'active' : ''}>Dashboard Overview</Link></li>
           <li><Link to="/admin/manage-employees">Manage Employees</Link></li>
           <li><Link to="/admin/reports">Attendance Reports</Link></li>
-          <li><Link to="/admin/settings">Settings</Link></li>
+          <li><Link to="/admin/account-settings">Settings</Link></li>
           <li><Link to="/admin/qr-scanner">QR Code Scanner</Link></li>
+          <li><Link to="/">Logout</Link></li>
         </ul>
       </div>
 
@@ -116,58 +120,18 @@ const Admin = () => {
         </div>
 
         {isDashboard ? (
-          <div className="dashboard-grid">
-            {/* Overall KPIs */}
-            <div className="dashboard-summary">
-              <h2>Company Overview</h2>
-              <p>Total Employees: {Object.values(locationAnalytics).reduce((acc, loc) => acc + loc.totalEmployees, 0)}</p>
-              <p>Average Attendance: {calculateCompanyAverage(locationAnalytics)}</p>
-            </div>
+          <Dashboard
+            locationAnalytics={locationAnalytics}
+            topEmployees={topEmployees}
+            locations={locations}
+          />
 
-            {/* Location-specific data */}
-            {locations.map((location) => (
-              <div className="dashboard-location-data" key={location}>
-                <h2>{location}</h2>
-                <p>Total Employees: {locationAnalytics[location]?.totalEmployees || 'N/A'}</p>
-                <p>Average Attendance: {locationAnalytics[location]?.averageAttendance || 'N/A'}</p>
-              </div>
-            ))}
-
-            {/* Top Employees section */}
-            <div className="dashboard-top-employees">
-              <h2>Top Performing Employees</h2>
-              {topEmployees.length > 0 ? (
-                <ul>
-                  {topEmployees.map((employee, index) => (
-                    <li key={index}>
-                      {employee.name} - Attendance Level: {employee.attendanceLevel}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No top performers found.</p>
-              )}
-            </div>
-          </div>
         ) : (
           <Outlet />
         )}
       </div>
     </div>
   );
-};
-
-// Helper function to calculate company-wide average attendance
-const calculateCompanyAverage = (locationAnalytics) => {
-  const totalLocations = Object.keys(locationAnalytics).length;
-  if (totalLocations === 0) return 'N/A';
-
-  const totalAttendance = Object.values(locationAnalytics).reduce((acc, loc) => {
-    const attendance = parseFloat(loc.averageAttendance) || 0;
-    return acc + attendance;
-  }, 0);
-
-  return (totalAttendance / totalLocations).toFixed(2) + '%';
 };
 
 export default Admin;
