@@ -6,6 +6,7 @@
   font-family: "Roboto", sans-serif;
   font-weight: 500;
   ;  background-color: #000000; /* Light background */
+ 
 }
 
 /* Sidebar Styling */
@@ -19,7 +20,6 @@
 
 .admin-nav li {
   margin-bottom: 15px;
-  margin-left: 10px;
 }
 .logo{
   text-align-last: auto;
@@ -38,7 +38,7 @@
 
 /* Content Area */
 .admin-content {
-  margin-left: 270px; /* Space for sidebar */
+  margin-left: 225px; /* Space for sidebar */
   padding: 0px;
   flex: 1;
   flex-grow: 1;
@@ -168,7 +168,7 @@
 
 
 .admin-sidebar {
-  width: 280px;
+  width: 230px;
   background-color: #0e0f10; /* White for a clean sidebar */
   padding: 0px;
   border-right: 1px solid #E0E0E0;
@@ -185,7 +185,7 @@
 .admin-nav a {
   color: #ffffff; 
   text-decoration: none;
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   padding: 10px;
   width: 85%;
   display: block;
