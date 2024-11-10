@@ -44,18 +44,26 @@ const EmployeeProfile = () => {
       return;
     }
 
+    const formattedScheduleDate = newScheduleDate; // Date is already in 'YYYY-MM-DD' from the date picker
+
+    // Check if the date is already assigned
+    if (assignedDates.includes(formattedScheduleDate)) {
+      alert('This date is already assigned to the employee.');
+      return;
+    }
+
     try {
       const updatedDetails = {
         ...employeeDetails,
         position: newPosition,
-        assignedDates: [...assignedDates, newScheduleDate],
+        assignedDates: [...assignedDates, formattedScheduleDate],
       };
 
       const employeeRef = ref(database, `attendance/Agua Viva Elgin R7/${employeeId}`);
       await update(employeeRef, updatedDetails);
 
       setEmployeeDetails(updatedDetails);
-      setAssignedDates([...assignedDates, newScheduleDate]);
+      setAssignedDates([...assignedDates, formattedScheduleDate]);
       alert('Employee reassigned successfully.');
     } catch (error) {
       console.error('Error updating employee details:', error);

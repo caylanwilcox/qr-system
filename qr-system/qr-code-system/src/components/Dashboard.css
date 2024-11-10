@@ -1,209 +1,356 @@
 /* General Styling */
 body {
-    font-family: Arial, sans-serif;
-    color: #ffffff;
-    margin: 0;
-  }
-  .quadrant-1 {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
+  font-family: Arial, sans-serif;
+  color: #ffffff;
+  margin: 0;
+}
+.quadrant-1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
 
-  }
-  
-  .quadrant-1 .large-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #18191a, #0f4c75); /* Beautiful background gradient */
-    padding: 20px; /* Adjust padding to reduce empty space */
-  }
-  
+.quadrant-1 .large-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; 
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #18191a, #0f4c75); /* Beautiful background gradient */
+  padding: 20px; /* Adjust padding to reduce empty space */
+}
+
 .metric-box.large-box {
-    height: 100%; /* Make sure the large boxes occupy full height */
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: stretch;
-    padding: 0; /* Remove extra padding to give chart more space */
-  }
-  .attendance-chart-container {
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    margin: 0;
-  }
-  .attendance-chart-container canvas {
-    max-width: 100% !important;
-    max-height: 100% !important;
-    object-fit: contain;
-  }
-  .dashboard {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 20px;
-    height: 100vh;
-  }
-  
+  height: 100%; /* Make sure the large boxes occupy full height */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
+  padding: 0; /* Remove extra padding to give chart more space */
+}
+.attendance-chart-container {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+.attendance-chart-container canvas {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain;
+}
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 20px;
+  height: 100vh;
+}
 
-  
-  /* Dashboard Container */
-  .dashboard-container {
-    width: 100%;
-    margin: 0 auto;
+/* Dashboard Container */
+.dashboard-container {
+  width: 100%;
+  margin: 0 auto;
+}
 
-  }
-  
-  .dashboard-header {
-    text-align: center;
-    margin-bottom: 20px;
-  }
-  
-  /* Dashboard Grid: 2x2 Quadrant Layout */
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 1.5fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    gap: 10px;
-    height: 100vh; /* Total height of the dashboard */
-  }
-  
-  /* Quadrant Styling */
-  .quadrant {
-    background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
-    border-radius: 15px;
-    padding: 20px; 
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  
-  /* Quadrant 2 Metric Box Layout */
-  /* Quadrant 2 Layout */
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* Dashboard Grid: 2x2 Quadrant Layout */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+  height: 100vh; /* Total height of the dashboard */
+}
+
+.stretch-vertical-grid {
+  grid-template-rows: 1fr 2fr;
+}
+
+/* Quadrant Styling */
+.quadrant {
+  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
+  border-radius: 15px;
+  padding: 20px; 
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.full-height {
+  height: 100%;
+}
+
+/* Quadrant 2 Metric Box Layout */
+/* Quadrant 2 Layout */
+/* Quadrant 2 Layout - Two Rows: Navigation on Top, Data Below */
 .quadrant-2 {
-    display: grid;
-    grid-template-columns: 1fr 2fr; /* Two columns: Left (1fr), Right (2fr) */
-    gap: 15px;
-    align-items: start;
-  } 
-  
-  /* Available Agents Styling */
-  .available-agents {
-    grid-row: span 2; /* Span across two rows to take full height */
-    height: 88%;;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background-color: #1b2a49;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  }
-  
-  /* Remaining Metrics Wrapper */
-  .remaining-metrics {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Two columns in the right side */
-    grid-template-rows: repeat(2, auto); /* Two rows */
-    gap: 15px;
-  }
-  
-  /* General Metric Box Styling */
-  .metric-box {
-    background: linear-gradient(135deg, #18191a, #09324d); /* Beautiful background gradient */
+  display: grid;
+  grid-template-rows: auto 1fr; /* Two rows: Top for nav, bottom for data */
+  gap: 15px;
+  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Background gradient */
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
 
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-    text-align: center;
+/* Quadrant Nav - Full Width, Centered */
+.quadrant-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 10px; /* Adjust spacing below the nav */
+}
+
+.quadrant-nav ul {
+  display: flex;
+  gap: 15px;
+  list-style: none;
+  padding: 0;
+  background-color: #2a3b5c;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.quadrant-nav ul li {
+  padding: 10px 20px;
+  cursor: pointer;
+  color: #ffffff;
+  transition: background-color 0.3s ease;
+}
+
+.quadrant-nav ul li.active {
+  font-weight: bold;
+  background-color: #1e2a44; /* Active tab background */
+  border-radius: 10px; /* Rounded corners on active tab */
+}
+
+.quadrant-nav ul li:hover {
+  background-color: #1b2a49;
+}
+
+/* Data Container for Metrics Below Navigation */
+.quadrant-inside {
+  display: grid;
+  grid-template-columns: 2fr 2fr; /* Adjust columns for layout */
+  gap: 15px;
+}
+
+
+/* Available Agents Styling */
+.available-agents {
+  grid-row: span 2; /* Span across two rows to take full height */
+  height: 88%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #1b2a49;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Remaining Metrics Wrapper */
+.remaining-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Two columns in the right side */
+  grid-template-rows: repeat(2, auto); /* Two rows */
+  gap: 15px;
+}
+
+/* General Metric Box Styling */
+.metric-box {
+  background: linear-gradient(34deg, #18191a, #0f4c75); /* Beautiful background gradient */
+
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.metric-content {
+  margin-top: 15px;
+}
+
+.metric-number {
+  font-size: 2.5em;
+  font-weight: bold;
+}
+.metric-number {
+  font-size: 2.5em;
+  font-weight: bold;
+}
+.large {
+  font-size: 3em; /* Larger size for more emphasis */
+}
+
+.orange {
+  color: #ffa500; /* Orange for wait time */
+}
+
+.green {
+  color: #44bd32; /* Green for positive metrics */
+}
+
+/* Chart Box Styling - Quadrants 1 & 4 */
+.chart-box {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.chart-placeholder {
+  height: 150px;
+  width: 90%;
+  background-color: #12192c;
+  color: #999999;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* Employee List - Quadrant 4 */
+.employee-list {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.employee {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  border-radius: 10px;
+  background-color: #2a3b5c;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.rank {
+  font-weight: bold;
+  color: #44bd32; /* Green for positive ranks */
+}
+/* Quadrant 3 Styling */
+.quadrant-3.full-height {
+  height: 100%;
+  flex: 1 1 auto; /* Allow stretching within the container */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 20px; /* Add some padding for better spacing */
+}
+
+/* Employee Ranks Styling Update */
+.employee-ranks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  background: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  width: 90%; /* Fill the width of the parent container */
+  height: auto; /* Allow the employee ranks section to adjust its height based on content */
+  overflow: hidden;
+}
+
+/* Individual Location Rank Cards */
+.location-rank {
+  background: linear-gradient(34deg, #1e2025, #0f4c75); /* More contrast in background gradient */
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Increase shadow for better visibility */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.location-rank:hover {
+  transform: translateY(-5px); /* Lift effect on hover */
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4); /* Stronger shadow on hover for a better 3D effect */
+}
+
+/* Header for Each Location */
+.location-rank h4 {
+  margin-bottom: 10px;
+  color: #ffffff;
+  font-size: 1.2rem; /* Increased font size for better readability */
+  text-align: center; /* Center-align the title for consistency */
+}
+
+/* Employee Rank Details */
+.location-rank p {
+  margin: 5px 0;
+  color: #dddddd;
+  font-size: 1rem; /* Keep font size consistent */
+  font-weight: 500;
+}
+
+/* Responsive Styling */
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    gap: 20px;
   }
-  
-  .metric-content {
-    margin-top: 15px;
+
+  .quadrant {
+    width: 100%;
   }
-  
-  .metric-number {
-    font-size: 2.5em;
-    font-weight: bold;
+
+  .location-rank {
+    padding: 10px; /* Reduce padding on smaller devices */
   }
-  .metric-number {
-    font-size: 2.5em;
-    font-weight: bold;
+
+  .location-rank h4 {
+    font-size: 1rem; /* Reduce font size for smaller screens */
   }
-  .large {
-    font-size: 3em; /* Larger size for more emphasis */
+
+  .location-rank p {
+    font-size: 0.9rem; /* Slightly smaller text for mobile readability */
   }
-  
-  .orange {
-    color: #ffa500; /* Orange for wait time */
+}
+
+
+/* Responsive Styling */
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    gap: 20px;
   }
-  
-  .green {
-    color: #44bd32; /* Green for positive metrics */
+
+  .quadrant {
+    width: 100%;
   }
-  
-  
-  /* Chart Box Styling - Quadrants 1 & 4 */
-  .chart-box {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-  }
-  
-  .chart-placeholder {
-    height: 150px;
-    width: 90%;
-    background-color: #12192c;
-    color: #999999;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 10px;
-  }
-  
-  /* Employee List - Quadrant 3 */
-  .employee-list {
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
+
+  .employee-ranks {
+    grid-template-columns: 1fr; /* Stack columns vertically on smaller screens */
     gap: 10px;
   }
-  
-  .employee {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px;
-    border-radius: 10px;
-    background-color: #2a3b5c;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+
+/* Responsive Styling */
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    gap: 20px;
   }
-  
-  .rank {
-    font-weight: bold;
-    color: #44bd32; /* Green for positive ranks */
+
+  .quadrant {
+    width: 100%;
   }
-  
-  /* Responsive Styling */
-  @media (max-width: 768px) {
-    .dashboard-grid {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto;
-      gap: 20px;
-    }
-  
-    .quadrant {
-      width: 100%;
-    }
-  }
-  
+}

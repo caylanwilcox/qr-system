@@ -3,12 +3,12 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const moment = require('moment-timezone');
-const admin = require('firebase-admin');  // Firebase Admin SDK for server-side operations
+const admin = require('firebase-admin'); // Firebase Admin SDK for server-side operations
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.applicationDefault(),
-  databaseURL: 'https://qr-system-1cea7-default-rtdb.firebaseio.com',  // Your Firebase Realtime Database URL
+  databaseURL: 'https://qr-system-1cea7-default-rtdb.firebaseio.com', // Your Firebase Realtime Database URL
 });
 
 // Get Firebase Admin Database reference for server-side usage
@@ -36,14 +36,14 @@ app.get('/clock-in', async (req, res) => {
   }
 
   // Generate clock-in time using moment.js with timezone support
-  const clockInTime = moment().tz('America/Chicago').format('YYYY-MM-DD hh:mm:ss A');
+  const clockInTime = moment().tz('America/Chicago').format('YYYY-MM-DD HH:mm:ss');
 
   try {
     // Dynamically reference the correct location path in Firebase Admin SDK
-    const ref = database.ref(`attendance/${location}`);
+    const ref = database.ref(`attendance/${location}/${employeeId}`);
     
-    // Push the new clock-in data to the correct location in the database
-    await ref.push({
+    // Update clock-in data in the database
+    await ref.update({
       employeeId,
       name,
       clockInTime
@@ -64,7 +64,7 @@ app.get('/clock-in', async (req, res) => {
  */
 app.get('/attendance', async (req, res) => {
   const { location, employeeId } = req.query;
-  
+
   // Validate location is provided
   if (!location) {
     return res.status(400).send('Location is required');
@@ -96,6 +96,54 @@ app.get('/attendance', async (req, res) => {
   } catch (error) {
     console.error('Error fetching attendance:', error);
     res.status(500).send('Error fetching attendance');
+  }
+});
+
+/**
+ * Endpoint to calculate absentees based on scheduled shifts.
+ * This endpoint will iterate over all attendance records to check if employees missed their shifts.
+ */
+app.post('/mark-absentees', async (req, res) => {
+  try {
+    // Reference to all attendance records
+    const ref = database.ref('attendance');
+    let snapshot = await ref.once('value');
+    let attendanceData = snapshot.val();
+
+    const currentTime = moment().tz('America/Chicago');
+
+    // Iterate through each location
+    Object.keys(attendanceData || {}).forEach(location => {
+      const employees = attendanceData[location];
+
+      // Iterate through each employee
+      Object.keys(employees).forEach(employeeId => {
+        const employee = employees[employeeId];
+        const { shiftStartTime, shiftEndTime, clockInTime } = employee;
+
+        // Only proceed if shift timings are present
+        if (shiftStartTime && shiftEndTime) {
+          const shiftEnd = moment.tz(`${currentTime.format('YYYY-MM-DD')} ${shiftEndTime}`, 'America/Chicago');
+          
+          // If the shift is over and no clockInTime, mark as absent
+          if (!clockInTime && currentTime.isAfter(shiftEnd)) {
+            console.log(`Employee ${employee.name} (${employeeId}) at location ${location} is marked as absent.`);
+
+            // Update employee record to indicate absence
+            const employeeRef = database.ref(`attendance/${location}/${employeeId}`);
+            employeeRef.update({
+              absent: true,
+              absentMarkedAt: currentTime.format('YYYY-MM-DD HH:mm:ss')
+            });
+          }
+        }
+      });
+    });
+
+    res.send('Absentees marked successfully.');
+  } catch (error) {
+    console.error('Error marking absentees:', error);
+    res.status(500).send('Error marking absentees');
   }
 });
 
