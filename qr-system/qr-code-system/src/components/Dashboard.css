@@ -2,25 +2,10 @@
 body {
   font-family: Arial, sans-serif;
   color: #ffffff;
+
   margin: 0;
 }
-.quadrant-1 {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
 
-.quadrant-1 .large-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center; 
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #18191a, #0f4c75); /* Beautiful background gradient */
-  padding: 20px; /* Adjust padding to reduce empty space */
-}
 
 .metric-box.large-box {
   height: 100%; /* Make sure the large boxes occupy full height */
@@ -28,7 +13,7 @@ body {
   flex-direction: column;
   justify-content: space-between;
   align-items: stretch;
-  padding: 0; /* Remove extra padding to give chart more space */
+  padding: 0px; /* Remove extra padding to give chart more space */
 }
 .attendance-chart-container {
   width: 100%;
@@ -52,20 +37,23 @@ body {
 /* Dashboard Container */
 .dashboard-container {
   width: 100%;
+  height: 100vh; /* Full viewport height */
+  overflow-y: hidden; /* Ensure scrolling for taller content */
   margin: 0 auto;
 }
-
 .dashboard-header {
   text-align: center;
   margin-bottom: 20px;
 }
-
+.employee-ranks-header{
+  color: #09293f;
+}
 /* Dashboard Grid: 2x2 Quadrant Layout */
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 10px;
+  gap: 20px;
   height: 100vh; /* Total height of the dashboard */
 }
 
@@ -75,87 +63,202 @@ body {
 
 /* Quadrant Styling */
 .quadrant {
-  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
-  border-radius: 15px;
-  padding: 20px; 
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  box-shadow: 0 4px 10px rgba(30, 30, 30, 0.2);
+margin-top: 2px;
+}
+.quadrant.quadrant-1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  height: 100%;
+  border: 0px;
+  width: 98%;
+  box-shadow: none !important;
+}
+.filter-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.filter-options button {
+  padding: 8px 12px;
+  background-color: #105485;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filter-options button.active {
+  background-color: #0a375c;
+}
+
+.date-range-inputs input {
+  margin-left: 10px;
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
 }
 
 .full-height {
   height: 100%;
 }
-
+.available-agents{
+  display:  flex;
+  justify-content: center;
+  align-items: center;
+}
 /* Quadrant 2 Metric Box Layout */
 /* Quadrant 2 Layout */
 /* Quadrant 2 Layout - Two Rows: Navigation on Top, Data Below */
+/* Redesigned Quadrant 2 */
+.quadrant /* Quadrant 2 Layout */
 .quadrant-2 {
   display: grid;
-  grid-template-rows: auto 1fr; /* Two rows: Top for nav, bottom for data */
-  gap: 15px;
-  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Background gradient */
-  border-radius: 15px;
-  padding: 20px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  grid-template-rows: auto 1fr;
+  box-shadow: 0 4px 10px rgba(20, 20, 20, 0.2);
+margin-top: 0px !important;
 }
 
-/* Quadrant Nav - Full Width, Centered */
+/* Navigation Styling */
 .quadrant-nav {
   display: flex;
   justify-content: center;
-  align-items: center;
-  margin-bottom: 10px; /* Adjust spacing below the nav */
+  padding: 10px;
+  padding-top: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .quadrant-nav ul {
   display: flex;
   gap: 15px;
   list-style: none;
-  padding: 0;
-  background-color: #2a3b5c;
-  border-radius: 10px;
+  padding-top: 10px;
   margin: 0;
 }
 
 .quadrant-nav ul li {
-  padding: 10px 20px;
+  display: flex;
+  justify-content: center;
+  font-size: 1.2rem;
+align-items: center;
+  position: relative;
+  padding: 10px 15px;
   cursor: pointer;
-  color: #ffffff;
-  transition: background-color 0.3s ease;
+  color: #09293f;
+  font-weight: 700;
+  transition: color 0.3s ease;
+}
+
+.quadrant-nav ul li.active,
+.quadrant-nav ul li:hover {
+  color: #00aaff;
+  font-weight: bold;
+}
+
+.quadrant-nav ul li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -5px;
+  width: 100%;
+  height: 2px;
+  background-color: #00aaff;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.quadrant-nav ul li.active::after,
+.quadrant-nav ul li:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
 }
 
 .quadrant-nav ul li.active {
-  font-weight: bold;
-  background-color: #1e2a44; /* Active tab background */
-  border-radius: 10px; /* Rounded corners on active tab */
+  text-shadow: 0 0 8px rgba(0, 170, 255, 0.6);
+  box-shadow: 0 0 10px rgba(0, 170, 255, 0.3);
 }
 
-.quadrant-nav ul li:hover {
-  background-color: #1b2a49;
-}
-
-/* Data Container for Metrics Below Navigation */
+/* Content Area - Centered and Structured */
 .quadrant-inside {
+border-radius: 10px;
+  height: 100%;
   display: grid;
-  grid-template-columns: 2fr 2fr; /* Adjust columns for layout */
-  gap: 15px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+justify-self: center;
+  padding: 20px 20px 20px 20px;
+  width: calc(90%);
+  margin: 10px auto;
+}
+.quadrant-inside h3{
+
+  color: rgb(255, 255, 255);
+ font-weight: 700;
 }
 
-
-/* Available Agents Styling */
-.available-agents {
-  grid-row: span 2; /* Span across two rows to take full height */
-  height: 88%;
+/* Metric Box Styling */
+.metric-box {
+  padding: 20px;
+  border-radius: 0px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  background-color: #1b2a49;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(34deg, #18191a, #105485);
+
+  justify-content: center;
+  text-align: center;
+}
+
+/* Metric Container */
+.metric-container h3 {
+  font-size: 4.5em;
+  color: #948f8f;
+}
+
+.metric-number {
+  font-size: 2.5em;
+  font-weight: bold;
+  color: #ffa500;
+  margin-top: 10px; /* Spacing between title and number */
+}
+/* Title in Metric Container */
+
+
+/* Number Positioned Below Title */
+
+/* Styling for the Metric Content */
+.metric-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Color Variations */
+.orange {
+  color: #ffa500;
+}
+
+.green {
+  color: #44bd32;
+}
+
+/* Responsive Styling for Mobile */
+@media (max-width: 768px) {
+  .quadrant-2 {
+    grid-template-rows: auto auto;
+  }
+  .quadrant-inside {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Remaining Metrics Wrapper */
@@ -163,15 +266,14 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr; /* Two columns in the right side */
   grid-template-rows: repeat(2, auto); /* Two rows */
-  gap: 15px;
+  gap: 10px;
 }
 
 /* General Metric Box Styling */
 .metric-box {
-  background: linear-gradient(34deg, #18191a, #0f4c75); /* Beautiful background gradient */
 
   padding: 20px;
-  border-radius: 10px;
+  border-radius: 6px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
@@ -180,20 +282,17 @@ body {
   margin-top: 15px;
 }
 
-.metric-number {
-  font-size: 2.5em;
-  font-weight: bold;
-}
+
 .metric-number {
   font-size: 2.5em;
   font-weight: bold;
 }
 .large {
-  font-size: 3em; /* Larger size for more emphasis */
+  font-size: x-large; /* Larger size for more emphasis */
 }
 
 .orange {
-  color: #ffa500; /* Orange for wait time */
+  color: #f8a203; /* Orange for wait time */
 }
 
 .green {

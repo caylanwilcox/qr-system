@@ -1,16 +1,23 @@
-/* Admin Dashboard Styles */
-
 .admin-dashboard {
   display: flex;
   min-height: 100vh;
   font-family: "Roboto", sans-serif;
   font-weight: 500;
-  ;  background-color: #000000; /* Light background */
- 
+  background-color: #000000;
 }
 
 /* Sidebar Styling */
-
+.admin-sidebar {
+  width: 15%;
+  background: linear-gradient(135deg, #18191a, #0f4c75);
+  padding: 10px;
+  border-right: 1px solid #E0E0E0;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+}
 
 .admin-nav {
   list-style: none;
@@ -21,230 +28,76 @@
 .admin-nav li {
   margin-bottom: 15px;
 }
-.logo{
-  text-align-last: auto;
-  width: 100%;
+
+.admin-nav a {
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 1.5rem;
+  padding: 10px;
+  
+  display: block;
+  border-radius: 5px;
+  width: 85%;
 }
 
+.admin-nav a.active,
 .admin-nav a:hover {
-  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
-  transform: translateX(5px); /* Shift effect */
-}
-
-.admin-nav a.active {
-  background-color: #00ACC1; /* Active link with teal background */
-  color: #fff; /* White text for active links */
+  background: linear-gradient(135deg, #6dd5fa, #2980b9);
+  transform: translateX(5px);
 }
 
 /* Content Area */
 .admin-content {
-  margin-left: 225px; /* Space for sidebar */
-  padding: 0;
-  flex: 1 1 auto; /* Allow flexible growth */
-  background-color: #046ca4;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
-  overflow-y: auto; /* Allow vertical scrolling if needed */
+  padding: 0px;
+  padding-left: 0px;
+  width: 100%;
+  flex: 1;
+background-color: rgb(245, 245, 245);  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
+
 /* Header with Profile Picture */
 .admin-header {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 20px;
-  background-color: #ffffff;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-}
-.logo{
-  padding-top: 20px;
-}
-.admin-header h1 {
-  font-size: 1.8rem;
-  margin: 0;
-  color: #333333;
-}
-
-/* Dashboard Layout */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  grid-template-rows: 1fr 2fr; /* Adjust for better vertical stretch */
-  gap: 10px;
-  height: 100%; /* Remove fixed height to allow full stretch */
-  flex: 1; /* Enable the entire dashboard grid to grow */
-}
-/* Dashboard Location Data Box Styling */
-.dashboard-location-data {
-  background-color: #ffffff;
+  background: linear-gradient(34deg, #18191a, #0f4c75);
+  color: #ffffff;
   padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); /* Softer shadow */
-  transition: box-shadow 0.3s ease, transform 0.2s ease;
-}
-
-.dashboard-location-data:hover {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1); /* Slight hover effect */
-  transform: translateY(-3px); /* Slight hover shift */
-}
-
-.dashboard-location-data h2 {
-  font-size: 1.4rem;
-  color: #007BFF; /* Bright blue for headings */
-  margin-bottom: 10px;
-}
-
-.dashboard-location-data p {
-  font-size: 1rem;
-  color: #666666;
-}
-
-/* Profile Icon Wrapper */
-.profile-icon-wrapper {
-  position: relative;
-}
-
-/* Profile Icon */
-.profile-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  cursor: pointer;
-  overflow: hidden;
-  background-color: #ffffff;
-}
-
-.profile-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-/* Dropdown Menu */
-.dropdown-content {
-  position: absolute;
-  top: 50px;
-  right: 0;
-  background-color: white;
-  border: 1px solid #ccc;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  border-radius: 5px;
-  padding: 10px;
-  width: 150px;
-  z-index: 1000;
+  border-radius: 0px;
+  margin-bottom: 0px;
 }
 
-.dropdown-content button {
-  display: block;
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 10px;
-  text-align: left;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background-color 0.3s ease;
-}
-
-.dropdown-content button:hover {
-  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
-}
-
-/* Mobile View Adjustments */
+/* Adjusted Responsive Font Sizes */
 @media (max-width: 768px) {
   .admin-sidebar {
-    width: 220px;
+    width: 15%;
+    height: auto;
+    position: relative;
   }
-
   .admin-content {
-    margin-left: 240px;
+    margin-left: 0;
+    width: 100%;
   }
-
   .admin-header h1 {
     font-size: 1.4rem;
   }
-}
-/* Admin Dashboard Styles */
-
-
-.admin-sidebar {
-  width: 230px;
-  background-color: #0e0f10; /* White for a clean sidebar */
-  padding: 0px;
-  border-right: 1px solid #E0E0E0;
-  height: 100vh;
-  position: fixed;
-  top: 0;
-  left: 0;
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.admin-nav li {
-  margin-bottom: 15px;
-}
-
-.admin-nav a {
-  color: #ffffff; 
-  text-decoration: none;
-  font-size: 1.1rem;
-  padding: 10px;
-  width: 85%;
-  display: block;
-  border-bottom:  2px solid linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
-  ;
-  border-radius: 5px;
-}
-
-.admin-nav a.active {
-  background: linear-gradient(135deg, #6dd5fa, #2980b9); /* Beautiful background gradient */
-  color: #fff;
-}
-
-
-/* --------------------Header color---------------------  */
-.admin-header {
-  
-  background: linear-gradient(135deg, #6dd5fa, #275c87); /* Beautiful background gradient */
-  color: #0b0a0a; /* White for a clean sidebar */;
-
-  padding: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-  margin-bottom: 20px;
-}
-
-.admin-header h1{
-  padding: 5px;
-  font-size: 2rem;
-font-weight: 700;
-
-color: #ffffff; /* White for a clean sidebar */;
-
-}
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 0px;
-  margin-top: 20px;
-}
-
-.dashboard-location-data, .dashboard-summary, .dashboard-top-employees {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.dashboard-location-data:hover {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-}
-
-h2 {
-  color: #00ACC1; /* Aqua color for headings */
-  margin-bottom: 10px;
-}
-
-p, li {
-  color: #666;
-  font-size: 1rem;
+@media (min-width: 1200px) {
+  .admin-sidebar {
+    width: 15%;
+  }
+  .admin-content {
+    margin-left: 15%;
+  }
 }

@@ -1,38 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { ref, onValue } from "firebase/database"; // Firebase Realtime Database methods
-import { database } from '../services/firebaseConfig'; // Path to your Firebase configuration file
-import { Link } from 'react-router-dom'; // For linking to employee profiles
-import './ManageEmployees.css'; // Optional: Add styles if needed
+import { ref, onValue } from "firebase/database";
+import { database } from '../services/firebaseConfig';
+import { Link } from 'react-router-dom';
+import './ManageEmployees.css';
 
 const ManageEmployees = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(""); // Search term state
+  const [searchTerm, setSearchTerm] = useState(""); 
+  const [selectedLocation, setSelectedLocation] = useState(null); 
   const [locations] = useState([
     'Agua Viva West Chicago',
     'Agua Viva Lyons',
-
     'Agua Viva Elgin R7',
     'Agua Viva Joliet',
     'Agua Viva Wheeling',
-  ]); // Predefined locations
+  ]);
 
   useEffect(() => {
-    // Fetch employee data from Firebase Realtime Database
     const fetchEmployeeData = () => {
-      const employeesRef = ref(database, 'attendance'); // Refers to the attendance node
+      const employeesRef = ref(database, 'attendance');
 
       onValue(employeesRef, (snapshot) => {
         const data = snapshot.val();
         const employeeList = [];
 
-        // Loop through each location and gather all employees
         for (const location in data) {
           for (const employeeId in data[location]) {
             employeeList.push({
               id: employeeId,
               location,
-              ...data[location][employeeId], // Spread employee details (name, clockInTime, clockOutTime)
+              ...data[location][employeeId],
             });
           }
         }
@@ -45,19 +43,27 @@ const ManageEmployees = () => {
     fetchEmployeeData();
   }, []);
 
-  // Filter employees by search term
   const filteredEmployees = employees.filter((employee) =>
     employee.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleLocationClick = (location) => {
+    setSelectedLocation(selectedLocation === location ? null : location);
+  };
 
   if (loading) {
     return <div>Loading employee data...</div>;
   }
 
   return (
-    <div>
-      <h2>Manage Employees</h2>
-      
+    <div className='manage-dashboard'>
+      {/* Back Arrow for navigating back */}
+      {selectedLocation && (
+        <button onClick={() => setSelectedLocation(null)} className="back-arrow">
+          ← Back
+        </button>
+      )}
+
       {/* Search Bar */}
       <div className="search-bar">
         <input
@@ -68,24 +74,63 @@ const ManageEmployees = () => {
         />
       </div>
 
-      {/* Display Employees by Location */}
-      {locations.map((location) => (
-        <div key={location} className="location-section">
-          <h3>{location}</h3>
-          <div className="employee-grid">
-            {filteredEmployees
-              .filter((employee) => employee.location === location)
-              .map((employee) => (
-                <div key={employee.id} className="employee-item">
-                  {/* Employee Name Link */}
-                  <Link to={`/admin/employee/${employee.id}`} className="employee-name">
-                    {employee.name}
-                  </Link>
-                </div>
-              ))}
-          </div>
+      {/* Location Cards or Employee Table */}
+      {selectedLocation ? (
+        // Employee table for selected location
+        <div className="employee-table">
+          <div className="table-title">{selectedLocation} - Employee Stats</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Rank</th>
+                <th>Attendance Streak</th>
+                <th>Absence Streak</th>
+                <th>Avg. On-Time %</th>
+                <th>Avg. Hours Stayed</th>
+                <th>Total Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEmployees
+                .filter((employee) => employee.location === selectedLocation)
+                .map((employee) => (
+                  <tr key={employee.id} className={employee.clockInTime ? "green-text" : "red-text"}>
+                    <td>
+                      <Link to={`/admin/employee/${employee.id}`} className="employee-name">
+                        {employee.name}
+                      </Link>
+                    </td>
+                    <td>{employee.clockInTime ? "Clocked In" : "Not Clocked In"}</td>
+                    <td>
+                      {employee.rank}
+                      {employee.rankUp && <span className="rank-arrow">↑</span>}
+                    </td>
+                    <td>{employee.attendanceStreak || 0} days</td>
+                    <td>{employee.absenceStreak || 0} days</td>
+                    <td>{((employee.daysOnTime / employee.totalDays) * 100).toFixed(2)}%</td>
+                    <td>{employee.averageHoursStayed || "N/A"}</td>
+                    <td>{employee.totalDays || 0}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
-      ))}
+      ) : (
+        // Location cards
+        <div className="location-grid">
+          {locations.map((location) => (
+            <div
+              key={location}
+              className="location-card"
+              onClick={() => handleLocationClick(location)}
+            >
+              <span className="location-name">{location}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
