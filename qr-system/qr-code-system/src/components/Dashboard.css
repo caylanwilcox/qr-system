@@ -81,8 +81,10 @@ margin-top: 2px;
 }
 .filter-options {
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 10px;
+  padding: 10px 0;
   margin-top: 10px;
 }
 
@@ -194,9 +196,9 @@ border-radius: 10px;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 justify-self: center;
-  padding: 20px 20px 20px 20px;
+  padding: 10px 20px 40px 20px;
   width: calc(90%);
-  margin: 10px auto;
+  margin: 0px auto 0px auto;
 }
 .quadrant-inside h3{
 
