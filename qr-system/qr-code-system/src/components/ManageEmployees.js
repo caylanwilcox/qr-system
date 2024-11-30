@@ -15,33 +15,42 @@ const ManageEmployees = () => {
     'Agua Viva Elgin R7',
     'Agua Viva Joliet',
     'Agua Viva Wheeling',
+    'Retreat'
   ]);
-
   useEffect(() => {
     const fetchEmployeeData = () => {
       const employeesRef = ref(database, 'attendance');
-
+  
       onValue(employeesRef, (snapshot) => {
         const data = snapshot.val();
         const employeeList = [];
-
+  
         for (const location in data) {
           for (const employeeId in data[location]) {
+            const employeeData = data[location][employeeId];
+  
+            // Ensure required fields are present, or set defaults
+            if (!employeeData || !employeeData.name) {
+              console.warn(`Employee ${employeeId} at location ${location} is missing a name.`);
+              continue; // Skip invalid employees
+            }
+  
             employeeList.push({
               id: employeeId,
               location,
-              ...data[location][employeeId],
+              ...employeeData,
             });
           }
         }
-
+  
         setEmployees(employeeList);
         setLoading(false);
       });
     };
-
+  
     fetchEmployeeData();
   }, []);
+  
 
   const filteredEmployees = employees.filter((employee) =>
     employee.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -64,15 +73,7 @@ const ManageEmployees = () => {
         </button>
       )}
 
-      {/* Search Bar */}
-      <div className="search-bar">
-        <input
-          type="text"
-          placeholder="Search employees..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+    
 
       {/* Location Cards or Employee Table */}
       {selectedLocation ? (

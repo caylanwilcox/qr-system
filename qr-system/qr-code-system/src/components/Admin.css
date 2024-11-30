@@ -3,7 +3,6 @@
   min-height: 100vh;
   font-family: "Roboto", sans-serif;
   font-weight: 500;
-  background-color: #000000;
 }
 
 /* Sidebar Styling */
@@ -49,6 +48,7 @@
 /* Content Area */
 .admin-content {
   padding: 0px;
+  height: 100%;
   padding-left: 0px;
   width: 100%;
   flex: 1;

@@ -1,14 +1,34 @@
-// Required imports for Express.js
+// Load environment variables from .env file
+require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
 const cors = require('cors');
 const moment = require('moment-timezone');
-const admin = require('firebase-admin'); // Firebase Admin SDK for server-side operations
+const admin = require('firebase-admin');
 
-// Initialize Firebase Admin SDK
+// Check if the DATABASE_URL is properly loaded
+if (!process.env.DATABASE_URL) {
+  console.error('Error: DATABASE_URL environment variable is not defined. Make sure .env file is properly loaded and DATABASE_URL is set.');
+  process.exit(1); // Stop execution
+}
+
+// Create a service account object using environment variables
+const serviceAccount = {
+  type: process.env.TYPE,
+  project_id: process.env.PROJECT_ID,
+  private_key_id: process.env.PRIVATE_KEY_ID,
+  private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n'), // Convert newline characters correctly
+  client_email: process.env.CLIENT_EMAIL,
+  client_id: process.env.CLIENT_ID,
+  auth_uri: process.env.AUTH_URI,
+  token_uri: process.env.TOKEN_URI,
+  auth_provider_x509_cert_url: process.env.AUTH_PROVIDER_X509_CERT_URL,
+  client_x509_cert_url: process.env.CLIENT_X509_CERT_URL,
+};
+
+// Initialize Firebase Admin SDK using the credentials from environment variables
 admin.initializeApp({
-  credential: admin.credential.applicationDefault(),
-  databaseURL: 'https://qr-system-1cea7-default-rtdb.firebaseio.com', // Your Firebase Realtime Database URL
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: process.env.DATABASE_URL, // Use the database URL from the environment variables
 });
 
 // Get Firebase Admin Database reference for server-side usage
@@ -18,133 +38,119 @@ const database = admin.database();
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-app.use(bodyParser.json());
-app.use(cors());
+// Middleware Setup
+app.use(express.json()); // Parse incoming JSON requests
+app.use(cors()); // Enable CORS for cross-origin requests
 
-/**
- * Endpoint to clock-in an employee.
- * Expects employeeId, name, and location in the query parameters.
- */
-app.get('/clock-in', async (req, res) => {
-  const { employeeId, name, location } = req.query;
-  console.log('Clock-in request received:', { employeeId, name, location });
-
-  // Validate request parameters
-  if (!employeeId || !location || !name) {
-    console.log(`Invalid parameters: employeeId=${employeeId}, name=${name}, location=${location}`);
-    return res.status(400).send('Employee ID, name, and location are required');
-  }
-
-  // Generate clock-in time using moment.js with timezone support
-  const clockInTime = moment().tz('America/Chicago').format('YYYY-MM-DD HH:mm:ss');
-
-  try {
-    // Dynamically reference the correct location path in Firebase Admin SDK
-    const ref = database.ref(`attendance/${location}/${employeeId}`);
-    
-    // Update clock-in data in the database
-    await ref.update({
-      employeeId,
-      name,
-      clockInTime
-    });
-
-    // Log and send confirmation response
-    console.log(`Employee ${name} (${employeeId}) clocked in at location ${location} at ${clockInTime}`);
-    res.send(`Employee ${name} clocked in at ${clockInTime} at location ${location}`);
-  } catch (error) {
-    console.error('Error clocking in:', error);
-    res.status(500).send('Error clocking in');
-  }
+// Logging Middleware
+app.use((req, res, next) => {
+  console.log(`Incoming request: ${req.method} ${req.url}`);
+  console.log('Request body:', req.body);
+  next();
 });
 
 /**
- * Endpoint to fetch attendance records.
- * Can filter by location and/or employeeId if provided in the query parameters.
+ * Endpoint to clock-in or clock-out an employee.
+ * Expects employeeId, location, mode, name, and timestamp in the request body.
  */
-app.get('/attendance', async (req, res) => {
-  const { location, employeeId } = req.query;
-
-  // Validate location is provided
-  if (!location) {
-    return res.status(400).send('Location is required');
-  }
-
+app.post('/clock-in', async (req, res) => {
   try {
-    // Reference the correct location in Firebase Admin SDK
-    const ref = database.ref(`attendance/${location}`);
-    let snapshot = await ref.once('value');
-    let data = snapshot.val();
+    const { employeeId, location, mode, name, timestamp } = req.body;
 
-    let attendance = Object.values(data || {});
+    console.log('Clock-in/out request received:', { employeeId, location, mode, name, timestamp });
 
-    // Filter by employeeId if provided
-    if (employeeId) {
-      attendance = attendance.filter(record => record.employeeId === employeeId);
+    // Validate input parameters
+    if (!employeeId || !location || !mode || !timestamp) {
+      console.error('Invalid parameters received:', { employeeId, location, mode, timestamp });
+      return res.status(400).json({ success: false, message: 'All parameters (employeeId, location, mode, timestamp) are required' });
     }
 
-    console.log(`Filtered data for location "${location}" and employeeId "${employeeId}":`, attendance);
+    // Use Unix timestamp as a key to avoid special character issues
+    const formattedTime = moment(timestamp).unix();
+    console.log('Formatted time (safe for Firebase key):', formattedTime);
 
-    // Return empty array if no records found
-    if (attendance.length === 0) {
-      console.log(`No records found for location: ${location} and employeeId: ${employeeId}`);
-      return res.json([]);
+    // Reference to the employee's data in Firebase
+    const employeeRef = database.ref(`attendance/${location}/${employeeId}`);
+    let employeeData;
+
+    try {
+      console.log('Fetching employee data from Firebase...');
+      employeeData = await employeeRef.once('value').then(snapshot => snapshot.val());
+
+      if (!employeeData) {
+        console.error(`Employee with ID ${employeeId} not found at location ${location}`);
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+      }
+
+      console.log('Employee data received:', employeeData);
+
+      if (mode === 'clock-in') {
+        console.log('Attempting to clock in the employee...');
+
+        // Update the employee record with clock-in information
+        const updatedData = {
+          [`clockInTimes.${formattedTime}`]: formattedTime, // Clock-in times recorded with Unix timestamp
+          lastLocation: location,
+          name: name, // Optional: if you want to keep updating the employee's name in the record
+          totalDays: (employeeData.totalDays || 0) + 1, // Increment the total days
+          daysOnTime: (employeeData.daysOnTime || 0) + 1, // Assuming this clock-in is on-time
+        };
+
+        console.log('Data to be updated in Firebase:', updatedData);
+
+        // Try to perform the update in Firebase
+        await employeeRef.update(updatedData);
+
+        console.log(`Employee ${employeeData.name} (${employeeId}) clocked in at ${formattedTime} at ${location}`);
+        return res.json({
+          success: true,
+          message: `Employee ${employeeData.name} clocked in at ${formattedTime} at location ${location}`,
+          employeeName: employeeData.name,
+          employeePhoto: employeeData.photo || '',
+        });
+      } else if (mode === 'clock-out') {
+        console.log('Attempting to clock out the employee...');
+
+        // Update the employee record with clock-out information
+        const updatedData = {
+          [`clockOutTimes.${formattedTime}`]: formattedTime, // Clock-out times recorded under Unix timestamp
+        };
+
+        console.log('Data to be updated in Firebase:', updatedData);
+
+        await employeeRef.update(updatedData);
+
+        console.log(`Employee ${employeeData.name} (${employeeId}) clocked out at ${formattedTime} at ${location}`);
+        return res.json({
+          success: true,
+          message: `Employee ${employeeData.name} clocked out at ${formattedTime} at location ${location}`,
+        });
+      } else {
+        console.error('Invalid mode specified:', mode);
+        return res.status(400).json({ success: false, message: 'Invalid mode specified' });
+      }
+
+    } catch (error) {
+      console.error('Error while fetching or updating employee data:', error);
+      return res.status(500).json({ success: false, message: 'Error accessing or updating employee data', error: error.message });
     }
-
-    // Return the filtered attendance data
-    res.json(attendance);
   } catch (error) {
-    console.error('Error fetching attendance:', error);
-    res.status(500).send('Error fetching attendance');
+    console.error('Unexpected error during clock-in/out process:', error);
+    return res.status(500).json({ success: false, message: 'Unexpected server error during clock-in/out' });
   }
 });
 
-/**
- * Endpoint to calculate absentees based on scheduled shifts.
- * This endpoint will iterate over all attendance records to check if employees missed their shifts.
- */
-app.post('/mark-absentees', async (req, res) => {
-  try {
-    // Reference to all attendance records
-    const ref = database.ref('attendance');
-    let snapshot = await ref.once('value');
-    let attendanceData = snapshot.val();
 
-    const currentTime = moment().tz('America/Chicago');
+// Dummy Test Endpoint to verify server connectivity
+app.post('/test', (req, res) => {
+  console.log('Test endpoint hit. Request body:', req.body);
+  res.json({ success: true, message: 'Test endpoint is working!' });
+});
 
-    // Iterate through each location
-    Object.keys(attendanceData || {}).forEach(location => {
-      const employees = attendanceData[location];
-
-      // Iterate through each employee
-      Object.keys(employees).forEach(employeeId => {
-        const employee = employees[employeeId];
-        const { shiftStartTime, shiftEndTime, clockInTime } = employee;
-
-        // Only proceed if shift timings are present
-        if (shiftStartTime && shiftEndTime) {
-          const shiftEnd = moment.tz(`${currentTime.format('YYYY-MM-DD')} ${shiftEndTime}`, 'America/Chicago');
-          
-          // If the shift is over and no clockInTime, mark as absent
-          if (!clockInTime && currentTime.isAfter(shiftEnd)) {
-            console.log(`Employee ${employee.name} (${employeeId}) at location ${location} is marked as absent.`);
-
-            // Update employee record to indicate absence
-            const employeeRef = database.ref(`attendance/${location}/${employeeId}`);
-            employeeRef.update({
-              absent: true,
-              absentMarkedAt: currentTime.format('YYYY-MM-DD HH:mm:ss')
-            });
-          }
-        }
-      });
-    });
-
-    res.send('Absentees marked successfully.');
-  } catch (error) {
-    console.error('Error marking absentees:', error);
-    res.status(500).send('Error marking absentees');
-  }
+// Endpoint for Firebase-independent testing
+app.post('/simulate-clock-in', (req, res) => {
+  console.log('Simulated clock-in request received:', req.body);
+  return res.json({ success: true, message: 'Simulated clock-in success!' });
 });
 
 // Start the server

@@ -1,0 +1,29 @@
+.filter-bar ul {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    list-style: none;
+    padding: 10px;
+  }
+  
+  .filter-bar li {
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #ffffff;
+    background: linear-gradient(135deg, #4ca1af, #2c3e50);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .filter-bar li.active {
+    background: linear-gradient(135deg, #6dd5fa, #3282b8);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    font-weight: bold;
+  }
+  
+  .filter-bar li:hover {
+    transform: scale(1.05);
+  }
+  

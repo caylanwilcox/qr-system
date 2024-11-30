@@ -1,132 +1,64 @@
-// Required imports for Firebase Admin SDK
-const admin = require('firebase-admin');
-const moment = require('moment-timezone');
+import { ref, set } from "firebase/database";
+import { database } from "./firebaseConfig";
 
-// Initialize Firebase Admin SDK using service account
-const serviceAccount = require('./serviceAccountKey.json'); // Path to your service account key file
+const locations = [
+  "Agua Viva Elgin R7",
+  "Agua Viva Joliet",
+  "Agua Viva Lyons",
+  "Agua Viva West Chicago",
+  "Agua Viva Wheeling"
+];
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: 'https://qr-system-1cea7-default-rtdb.firebaseio.com',  // Your Firebase Realtime Database URL
-});
+const positions = ["Junior", "Intermediate", "Senior", "Manager", "Position A", "Position B"];
 
-// Get Firebase Admin Database reference for server-side usage
-const database = admin.database();
+const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-// Populate Employee Data and Scheduling Module
-async function populateEmployeeData() {
-  try {
-    console.log('Starting to populate employee data...');
+const getRandomClockInTime = () => {
+  // Simulate clock-in times between 7:00 AM and 9:00 AM (randomly generate)
+  const date = new Date();
+  date.setHours(getRandomInt(7, 9));
+  date.setMinutes(getRandomInt(0, 59));
+  date.setSeconds(0);
+  return date.toISOString();
+};
 
-    // Clear existing attendance and schedule data
-    const attendanceRef = database.ref('attendance');
-    const scheduleRef = database.ref('schedule');
-    await attendanceRef.remove();
-    await scheduleRef.remove();
-    console.log('Cleared all existing attendance and schedule data.');
+const populateEmployees = async () => {
+  const employeesPerLocation = 10; // Number of employees per location
+  const rankUpProbability = 0.2; // 20% chance of ranking up
+  const newData = {};
 
-    // List of locations including Retreat
-    const locations = [
-      'Agua Viva Elgin R7',
-      'Agua Viva Joliet',
-      'Agua Viva Lyons',
-      'Agua Viva West Chicago',
-      'Agua Viva Wheeling',
-      'Retreat' // Newly added location
-    ];
+  locations.forEach((location) => {
+    newData[location] = {}; // Initialize location in the database
 
-    // Dummy employee names
-    const employeeNames = [
-      'Alice Johnson',
-      'Bob Smith',
-      'Charlie Brown',
-      'Diana Prince',
-      'Ethan Hunt',
-      'Fiona Gallagher',
-      'George Clooney',
-      'Hannah Montana',
-      'Ian Somerhalder',
-      'Julia Roberts'
-    ];
+    for (let i = 0; i < employeesPerLocation; i++) {
+      const employeeId = `employee_${i + 1}`;
+      const clockInTime = getRandomClockInTime();
+      const daysScheduledPresent = getRandomInt(4, 6); // Between 4 to 6 days scheduled to work
+      const daysScheduledMissed = getRandomInt(0, 2); // Between 0 to 2 days missed
+      const daysOnTime = getRandomInt(2, daysScheduledPresent); // On time days cannot exceed scheduled present days
+      const daysLate = daysScheduledPresent - daysOnTime; // Late days calculated from scheduled present days
 
-    // Generate random employees and schedules for each location
-    for (const location of locations) {
-      const locationAttendanceRef = database.ref(`attendance/${location}`);
-      const locationScheduleRef = database.ref(`schedule/${location}`);
+      const rankUp = Math.random() < rankUpProbability; // Random chance for rank up
 
-      for (let i = 0; i < employeeNames.length; i++) {
-        let employeeName = employeeNames[i];
-        let employeeId = `Employee${i + 1}_${location.replace(/\s+/g, '_')}`;
-
-        // Create attendance history for the past 3 days
-        let attendanceHistory = {};
-        for (let d = 0; d < 3; d++) {
-          let date = moment().subtract(d, 'days').format('YYYY-MM-DD');
-          let clockInTime = null;
-          let clockOutTime = null;
-          let onTime = false;
-          let rankUp = Math.random() < 0.3; // Randomly determine if rank-up
-
-          if (d === 0 && i === 0) {
-            // Employee 1: Clocked in on time
-            clockInTime = '08:00 AM';
-            clockOutTime = '04:00 PM';
-            onTime = true;
-          } else if (d === 0 && i === 1) {
-            // Employee 2: Clocked in late
-            clockInTime = '08:30 AM';
-            clockOutTime = '04:00 PM';
-            onTime = false;
-          } else if (d === 0 && i === 2) {
-            // Employee 3: Did not show up
-            clockInTime = null;
-            clockOutTime = null;
-          } else {
-            // Other employees: Random clock-in times
-            clockInTime = moment().subtract(d, 'days').set({ hour: 8, minute: Math.floor(Math.random() * 30) }).tz('America/Chicago').format('hh:mm:ss A');
-            clockOutTime = moment().subtract(d, 'days').set({ hour: 16 }).tz('America/Chicago').format('hh:mm:ss A');
-            onTime = Math.random() > 0.5;
-          }
-
-          attendanceHistory[date] = {
-            clockInTime: clockInTime,
-            clockOutTime: clockOutTime,
-            onTime: onTime,
-            rankUp: rankUp
-          };
-        }
-
-        // Push attendance data
-        await locationAttendanceRef.child(employeeId).set({
-          name: employeeName,
-          attendanceHistory: attendanceHistory
-        });
-
-        // Create a schedule for each employee for the next 3 days
-        for (let d = 0; d < 3; d++) {
-          let date = moment().add(d, 'days').format('YYYY-MM-DD');
-          await locationScheduleRef.push({
-            employeeId: employeeId,
-            date: date,
-            expectedClockIn: '08:00 AM',
-            expectedClockOut: '04:00 PM'
-          });
-        }
-      }
-      console.log(`Successfully populated employee data and schedule for location: ${location}`);
+      // Add randomized employee data
+      newData[location][employeeId] = {
+        name: `Employee ${i + 1}`,
+        position: positions[getRandomInt(0, positions.length - 1)],
+        clockInTime: clockInTime,
+        daysScheduledPresent: daysScheduledPresent,
+        daysScheduledMissed: daysScheduledMissed,
+        daysOnTime: daysOnTime,
+        daysLate: daysLate,
+        rankUp: rankUp
+      };
     }
+  });
 
-    console.log('Employee data and schedules populated successfully.');
-  } catch (error) {
-    console.error('Error populating employee data:', error);
-  }
-}
+  // Push data to Firebase
+  const attendanceRef = ref(database, "attendance");
+  await set(attendanceRef, newData);
 
-// Run the function
-populateEmployeeData().then(() => {
-  console.log('Script finished executing.');
-  process.exit(0);
-}).catch((error) => {
-  console.error('Error executing script:', error);
-  process.exit(1);
-});
+  console.log("Employees populated successfully!");
+};
+
+populateEmployees().catch((error) => console.error("Error populating employees:", error));

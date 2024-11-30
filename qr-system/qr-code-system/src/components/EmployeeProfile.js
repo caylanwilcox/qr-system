@@ -1,23 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
-import './EmployeeProfile.css';  // Import the CSS file
-import { database } from '../services/firebaseConfig'; // Your Firebase configuration file
-import { ref, get, update } from 'firebase/database';
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
+import { database } from "../services/firebaseConfig";
+import { ref, get, update } from "firebase/database";
+import QRCode from "qrcode.react";
+import { jsPDF } from "jspdf";
+import "./EmployeeProfile.css";
 
 const EmployeeProfile = () => {
-  const { employeeId } = useParams(); // Get employeeId from the URL
+  const { employeeId } = useParams();
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [calendarValue, setCalendarValue] = useState(new Date());
-  const [newPosition, setNewPosition] = useState('');
-  const [newScheduleDate, setNewScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState("09:00");
   const [assignedDates, setAssignedDates] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Fields to update
+  const [newPosition, setNewPosition] = useState("");
+  const [newRank, setNewRank] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
 
   useEffect(() => {
-    // Fetch employee data based on employeeId from Firebase
     const fetchEmployeeDetails = async () => {
+      setError(null);
       try {
         const employeeRef = ref(database, `attendance/Agua Viva Elgin R7/${employeeId}`);
         const snapshot = await get(employeeRef);
@@ -25,12 +35,18 @@ const EmployeeProfile = () => {
           const data = snapshot.val();
           setEmployeeDetails(data);
           setAssignedDates(data.assignedDates || []);
+          setAttendanceRecords(data.attendanceRecords || []);
+          setNewPosition(data.position || "");
+          setNewRank(data.rank || "");
+          setNewEmail(data.email || "");
+          setNewPhone(data.phone || "");
         } else {
-          console.error('No data available');
+          setError("No data available for this employee.");
         }
-        setLoading(false);
       } catch (error) {
-        console.error('Error fetching employee details:', error);
+        console.error("Error fetching employee details:", error);
+        setError("An error occurred while fetching employee details.");
+      } finally {
         setLoading(false);
       }
     };
@@ -38,127 +54,193 @@ const EmployeeProfile = () => {
     fetchEmployeeDetails();
   }, [employeeId]);
 
+  const checkAttendanceStatus = (scheduleDate, clockInTime) => {
+    if (!clockInTime) return "Absent";
+
+    const [scheduledDate, scheduledTime] = scheduleDate.split(" at ");
+    const scheduledDateTime = new Date(`${scheduledDate} ${scheduledTime}`);
+    const clockInDateTime = new Date(clockInTime);
+
+    return clockInDateTime > scheduledDateTime ? "Late" : "On Time";
+  };
+
   const handleReassign = async () => {
-    if (!newPosition || !newScheduleDate) {
-      alert('Please enter both a new position and schedule date.');
+    if (!scheduleTime) {
+      alert("Please select a time.");
       return;
     }
 
-    const formattedScheduleDate = newScheduleDate; // Date is already in 'YYYY-MM-DD' from the date picker
-
-    // Check if the date is already assigned
-    if (assignedDates.includes(formattedScheduleDate)) {
-      alert('This date is already assigned to the employee.');
+    const formattedSchedule = `${calendarValue.toDateString()} at ${scheduleTime}`;
+    if (assignedDates.includes(formattedSchedule)) {
+      alert("This date and time are already assigned.");
       return;
     }
 
+    setIsSaving(true);
+    try {
+      const updatedDetails = {
+        ...employeeDetails,
+        assignedDates: [...assignedDates, formattedSchedule],
+      };
+
+      const employeeRef = ref(database, `attendance/Agua Viva Elgin R7/${employeeId}`);
+      await update(employeeRef, { assignedDates: updatedDetails.assignedDates });
+
+      setEmployeeDetails(updatedDetails);
+      setAssignedDates(updatedDetails.assignedDates);
+      alert("Schedule added successfully.");
+    } catch (error) {
+      console.error("Error updating schedule:", error);
+      alert("An error occurred while updating the schedule.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateDetails = async () => {
+    setIsSaving(true);
     try {
       const updatedDetails = {
         ...employeeDetails,
         position: newPosition,
-        assignedDates: [...assignedDates, formattedScheduleDate],
+        rank: newRank,
+        email: newEmail,
+        phone: newPhone,
       };
 
       const employeeRef = ref(database, `attendance/Agua Viva Elgin R7/${employeeId}`);
-      await update(employeeRef, updatedDetails);
+      await update(employeeRef, {
+        position: newPosition,
+        rank: newRank,
+        email: newEmail,
+        phone: newPhone,
+      });
 
       setEmployeeDetails(updatedDetails);
-      setAssignedDates([...assignedDates, formattedScheduleDate]);
-      alert('Employee reassigned successfully.');
+      alert("Employee details updated successfully.");
     } catch (error) {
-      console.error('Error updating employee details:', error);
+      console.error("Error updating employee details:", error);
+      alert("An error occurred while updating employee details.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const tileClassName = ({ date, view }) => {
-    if (view === 'month') {
-      const formattedDate = date.toISOString().split('T')[0];
-      if (assignedDates.includes(formattedDate)) {
-        return 'react-calendar__tile--assigned';
-      }
-    }
-    return null;
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Employee Badge", 20, 20);
+    doc.text(`Name: ${employeeDetails.name}`, 20, 40);
+    doc.text(`Rank: ${employeeDetails.rank}`, 20, 60);
+    doc.text(`Position: ${employeeDetails.position}`, 20, 80);
+    doc.text(`Email: ${employeeDetails.email}`, 20, 100);
+    doc.text(`Phone: ${employeeDetails.phone}`, 20, 120);
+
+    const qrCanvas = document.querySelector("canvas");
+    const qrDataURL = qrCanvas.toDataURL("image/png");
+    doc.addImage(qrDataURL, "PNG", 20, 130, 50, 50);
+
+    doc.save(`${employeeDetails.name}_Badge.pdf`);
   };
 
-  const onTileClick = (value) => {
-    const formattedDate = value.toISOString().split('T')[0];
-    if (assignedDates.includes(formattedDate)) {
-      alert(`Assigned on ${formattedDate}`);
-    } else {
-      setCalendarValue(value); // Just select the date without assignment
-    }
-  };
-
-  if (loading) {
-    return <p>Loading employee details...</p>;
-  }
-
-  if (!employeeDetails) {
-    return <p>No employee details found for {employeeId}</p>;
-  }
+  if (loading) return <p>Loading employee details...</p>;
+  if (error) return <p className="error-message">{error}</p>;
+  if (!employeeDetails) return <p>No employee details found for {employeeId}</p>;
 
   return (
     <div className="employee-profile-container">
-      <div className="employee-profile-header">
-        <div className="header-content">
-          <img 
-            src={employeeDetails.profilePicture || 'default-profile.png'}
-            alt={`${employeeDetails.name}'s profile`}
-            className="profile-picture"
-          />
-          <div className="header-text">
-            <h1>{employeeDetails.name}</h1>
-            <p><strong>Employee ID:</strong> {employeeId}</p>
-          </div>
-        </div>
+      <div className="profile-header">
+        <h1>{employeeDetails.name}</h1>
+        <p>Employee ID: {employeeId}</p>
       </div>
-      <div className="employee-profile-details">
-        <div className="employee-info">
-          <h2>Details</h2>
-          <p><strong>Rank:</strong> {employeeDetails.rank || 'N/A'}</p>
-          <p><strong>Position:</strong> {employeeDetails.position || 'N/A'}</p>
-          <p><strong>Email:</strong> {employeeDetails.email || 'N/A'}</p>
-          <p><strong>Phone:</strong> {employeeDetails.phone || 'N/A'}</p>
-          <h2>Attendance</h2>
-          <p><strong>Clock In:</strong> {employeeDetails.clockInTime || 'N/A'}</p>
-          <p><strong>Clock Out:</strong> {employeeDetails.clockOutTime || 'N/A'}</p>
-        </div>
-        <div className="employee-schedule">
-          <h2>Schedule & Reassign</h2>
-          <Calendar
-            onChange={setCalendarValue}
-            value={calendarValue}
-            tileClassName={tileClassName}
-            onClickDay={onTileClick}
+
+      <div className="profile-content">
+        <div className="profile-details">
+          <h2>Employee Details</h2>
+          <label>Position:</label>
+          <input
+            type="text"
+            value={newPosition}
+            onChange={(e) => setNewPosition(e.target.value)}
+            placeholder="Enter new position"
           />
-          <div className="reassign-section">
-            <h3>Reassign Employee</h3>
-            <label htmlFor="newPosition">New Position:</label>
-            <input 
-              type="text" 
-              id="newPosition" 
-              value={newPosition} 
-              onChange={(e) => setNewPosition(e.target.value)}
-              placeholder="Enter new position" 
-            />
-            <label htmlFor="newSchedule">New Schedule Date:</label>
-            <input 
-              type="date" 
-              id="newSchedule" 
-              value={newScheduleDate}
-              onChange={(e) => setNewScheduleDate(e.target.value)}
-            />
-            <button className="reassign-button" onClick={handleReassign}>Reassign</button>
-          </div>
-          <div className="upcoming-schedule">
-            <h3>Upcoming Schedule</h3>
+          <label>Rank:</label>
+          <input
+            type="text"
+            value={newRank}
+            onChange={(e) => setNewRank(e.target.value)}
+            placeholder="Enter new rank"
+          />
+          <label>Email:</label>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="Enter new email"
+          />
+          <label>Phone:</label>
+          <input
+            type="tel"
+            value={newPhone}
+            onChange={(e) => setNewPhone(e.target.value)}
+            placeholder="Enter new phone"
+          />
+          <button className="btn" onClick={handleUpdateDetails} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Update Details"}
+          </button>
+          <QRCode value={JSON.stringify({ employeeId, name: employeeDetails.name, location: "Agua Viva Elgin R7" })} />
+          <button className="btn" onClick={generatePDF}>Download Badge</button>
+        </div>
+
+        <div className="profile-calendar">
+          <h2>Schedule</h2>
+          <Calendar onChange={setCalendarValue} value={calendarValue} />
+          <label>Time:</label>
+          <input
+            type="time"
+            value={scheduleTime}
+            onChange={(e) => setScheduleTime(e.target.value)}
+          />
+          <button className="btn" onClick={handleReassign} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Add Schedule"}
+          </button>
+          <h3>Upcoming Dates</h3>
+          {assignedDates.length > 0 ? (
             <ul>
-              {assignedDates.sort().map((date) => (
-                <li key={date}>{date}</li>
+              {assignedDates.sort().map((date, index) => (
+                <li key={index}>{date}</li>
               ))}
             </ul>
-          </div>
+          ) : (
+            <p>No upcoming schedules.</p>
+          )}
         </div>
+      </div>
+
+      <div className="attendance-section">
+        <h2>Attendance Records</h2>
+        {attendanceRecords.length > 0 ? (
+          <table className="attendance-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Clock-In Time</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendanceRecords.map((record, index) => (
+                <tr key={index}>
+                  <td>{record.date}</td>
+                  <td>{record.clockInTime || "N/A"}</td>
+                  <td>{checkAttendanceStatus(record.date, record.clockInTime)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No attendance records available.</p>
+        )}
       </div>
     </div>
   );

@@ -7,7 +7,6 @@
   font-size: 18px;
   font-weight: bold;
   text-align: center;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Pop-out shadow */
   border-top-left-radius: 0px;
   border-top-right-radius: 0px;
 }
@@ -22,7 +21,6 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2); /* Shadow for pop-out effect */
   border-radius: 8px;
 }
 

@@ -1,120 +1,159 @@
-import React, { useState, useRef, useEffect } from 'react';
+// Scanner.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import './App.css';
 
-const Scanner = ({ setMessage, mode, location }) => {
+const SCAN_STATES = {
+  UNKNOWN: 0,
+  NOT_STARTED: 1,
+  SCANNING: 2,
+  PAUSED: 3,
+};
+
+const Scanner = ({ setMessage, mode, location, onClockIn }) => {
   const [errors, setErrors] = useState([]);
-  const lastErrorTimeRef = useRef(0);
-  const modeRef = useRef(mode); // Holds the mode value
-  const ERROR_THROTTLE_TIME = 5000; // 5 seconds
-  const qrScannerRef = useRef(null); // Ref for html5-qrcode instance
+  const qrScannerRef = useRef(null);
+  const modeRef = useRef(mode);
 
   useEffect(() => {
-    modeRef.current = mode; // Update ref whenever mode changes
-    console.log('Scanner component received mode:', mode);
+    modeRef.current = mode;
   }, [mode]);
 
   useEffect(() => {
-    if (!qrScannerRef.current) {
-      qrScannerRef.current = new Html5Qrcode("qr-reader");
-      startScanning();
-    }
-    
-    // Cleanup on component unmount
+    const html5QrCode = new Html5Qrcode('qr-reader');
+    qrScannerRef.current = html5QrCode;
+
+    const startScanner = async () => {
+      try {
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          {
+            fps: 15,
+            qrbox: 300,
+          },
+          handleScan,
+          handleError
+        );
+        console.log('Scanner started successfully.');
+      } catch (err) {
+        console.error('Error starting QR scanner:', err);
+        logError(`Error starting scanner: ${err.message || err}`);
+      }
+    };
+
+    startScanner();
+
     return () => {
       if (qrScannerRef.current) {
-        qrScannerRef.current.stop().then(() => {
+        const scannerState = qrScannerRef.current.getState();
+        console.log('Scanner state during cleanup:', scannerState);
+
+        if (
+          scannerState === SCAN_STATES.SCANNING ||
+          scannerState === SCAN_STATES.PAUSED
+        ) {
+          qrScannerRef.current
+            .stop()
+            .then(() => {
+              console.log('QR scanner stopped.');
+              qrScannerRef.current.clear();
+              qrScannerRef.current = null;
+            })
+            .catch((err) => {
+              console.error('Error stopping scanner:', err);
+            });
+        } else {
+          qrScannerRef.current.clear();
           qrScannerRef.current = null;
-          console.log("QR scanner stopped.");
-        }).catch(console.error);
+        }
       }
     };
   }, []);
-
-  const startScanning = () => {
-    qrScannerRef.current.start(
-      { facingMode: "environment" }, // Use back camera
-      { fps: 10, qrbox: 250 }, // Optional settings
-      handleScan,
-      handleError
-    ).catch((err) => {
-      console.error("Error starting QR scanner:", err);
-      logError(`Error starting scanner: ${err.message}`);
-    });
-  };
-
-  const handleScan = async (data) => {
-    if (!data) {
-      console.log('No data scanned');
+  const handleScan = async (decodedText) => {
+    if (!decodedText) {
       setMessage('No data scanned');
       logError('No data scanned');
       return;
     }
   
-    console.log('Current mode in handleScan:', modeRef.current);
-    console.log('Scanned data:', data);
+    console.log('Scanned data:', decodedText);
   
-    // Split the scanned data
-    const [employeeId, name] = data.split('|');
-    console.log(`Parsed employeeId: ${employeeId}, name: ${name}`);
-  
-    if (!employeeId) {
-      const errorMsg = `Invalid scanned data: ${data}`;
-      console.error(errorMsg);
-      logError(errorMsg);
+    // Parse the scanned data
+    let scannedData;
+    try {
+      scannedData = JSON.parse(decodedText);
+    } catch (e) {
+      console.error('Error parsing scanned data:', e);
+      setMessage('Error parsing scanned data');
       return;
     }
   
-    if (!location) {
-      const errorMsg = `Missing location: ${location}`;
+    const { employeeId, name, location } = scannedData;
+  
+    if (!employeeId || !location) {
+      const errorMsg = `Invalid scanned data: employeeId or location is missing.`;
       console.error(errorMsg);
       logError(errorMsg);
+      setMessage(errorMsg);
       return;
     }
   
-    if (!name) {
-      const errorMsg = `Name is missing in scanned data: ${data}`;
-      console.warn(errorMsg);
-      logError(errorMsg);
-    }
-  
-    const url = `http://localhost:3003/${modeRef.current}?employeeId=${employeeId}&name=${encodeURIComponent(name || '')}&location=${encodeURIComponent(location)}`;
-    console.log(`Fetching URL: ${url}, Mode: ${modeRef.current}`);
+    // Prepare the data payload for the backend
+    const clockInData = {
+      employeeId,
+      location,
+      name,
+      mode: modeRef.current,
+      timestamp: new Date().toISOString(),
+    };
   
     try {
-      const response = await fetch(url);
+      const response = await fetch('http://localhost:3003/clock-in', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(clockInData),
+      });
+  
       if (!response.ok) {
         throw new Error(`${response.status}: ${response.statusText}`);
       }
-      const result = await response.text();
-      setMessage(result);
-      console.log('Server response:', result);
+  
+      const result = await response.json();
+      setMessage(result.message);
+  
+      // If clock-in was successful, use the provided callback to show data in the UI
+      if (result.success && modeRef.current === 'clock-in') {
+        onClockIn({
+          name: result.employeeName,
+          photo: result.employeePhoto || '',
+        });
+      }
     } catch (error) {
       console.error('Error during fetch:', error);
       setMessage('Error during clock-in/out process: ' + error.message);
       logError(`Error during fetch: ${error.message}`);
     }
   };
-
+  
   const handleError = (err) => {
-    const currentTime = Date.now();
-    if (err && currentTime - lastErrorTimeRef.current > ERROR_THROTTLE_TIME) {
-      console.error('Scanner error:', err);
-      lastErrorTimeRef.current = currentTime;
-      logError(`Scanner error: ${err.message}`);
+    const knownErrors = ['NotFoundException']; // List of errors to suppress
+    if (knownErrors.some((errorType) => err.message?.includes(errorType))) {
+      // Suppress these errors to avoid console spam
+      return;
     }
+  
+    console.error('Scanner error:', err); // Log other unexpected errors
+    logError(`Scanner error: ${err.message || err}`);
   };
+  
 
   const logError = (message) => {
     setErrors((prevErrors) => [...prevErrors, message]);
   };
 
   return (
-    <div className="scanner-container">
-      <div id="qr-reader" style={{ width: '100%' }}>
-        <p>Scanner is active. Please scan a QR code.</p>
-      </div>
-    </div>
+    <div id="qr-reader"></div>
   );
 };
 
