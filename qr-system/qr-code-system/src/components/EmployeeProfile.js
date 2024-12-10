@@ -4,6 +4,8 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { database } from "../services/firebaseConfig";
 import { ref, get, update } from "firebase/database";
+import { auth } from "../services/firebaseConfig";
+import { updateEmail, updatePassword } from "firebase/auth";
 import QRCode from "qrcode.react";
 import { jsPDF } from "jspdf";
 import "./EmployeeProfile.css";
@@ -18,12 +20,16 @@ const EmployeeProfile = () => {
   const [assignedDates, setAssignedDates] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [updatingAccount, setUpdatingAccount] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Fields to update
+  // Editable fields
   const [newPosition, setNewPosition] = useState("");
-  const [newRank, setNewRank] = useState("");
+  const [newRank, setNewRank] = useState("1");
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     const fetchEmployeeDetails = async () => {
@@ -31,15 +37,29 @@ const EmployeeProfile = () => {
       try {
         const employeeRef = ref(database, `attendance/Agua Viva Elgin R7/${employeeId}`);
         const snapshot = await get(employeeRef);
+
         if (snapshot.exists()) {
           const data = snapshot.val();
+          const today = new Date();
+
+          // Filter out past dates from assigned dates
+          const validDates = (data.assignedDates || []).filter(
+            (date) => new Date(date).setHours(0, 0, 0, 0) >= today.setHours(0, 0, 0, 0)
+          );
+
           setEmployeeDetails(data);
-          setAssignedDates(data.assignedDates || []);
-          setAttendanceRecords(data.attendanceRecords || []);
+          setAssignedDates(validDates);
+          const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
+          setAttendanceRecords(records);
           setNewPosition(data.position || "");
-          setNewRank(data.rank || "");
+          setNewRank(data.rank || "1");
           setNewEmail(data.email || "");
           setNewPhone(data.phone || "");
+
+          // Update database if any invalid dates were filtered
+          if (validDates.length !== (data.assignedDates || []).length) {
+            await update(employeeRef, { assignedDates: validDates });
+          }
         } else {
           setError("No data available for this employee.");
         }
@@ -54,14 +74,13 @@ const EmployeeProfile = () => {
     fetchEmployeeDetails();
   }, [employeeId]);
 
-  const checkAttendanceStatus = (scheduleDate, clockInTime) => {
-    if (!clockInTime) return "Absent";
-
-    const [scheduledDate, scheduledTime] = scheduleDate.split(" at ");
-    const scheduledDateTime = new Date(`${scheduledDate} ${scheduledTime}`);
-    const clockInDateTime = new Date(clockInTime);
-
-    return clockInDateTime > scheduledDateTime ? "Late" : "On Time";
+  const formatAttendanceRecords = (clockInTimes = {}, clockOutTimes = {}) => {
+    const dates = Array.from(new Set([...Object.keys(clockInTimes), ...Object.keys(clockOutTimes)]));
+    return dates.map((date) => ({
+      date: new Date(parseInt(date, 10) * 1000).toLocaleDateString(),
+      clockInTime: clockInTimes[date] ? new Date(clockInTimes[date] * 1000).toLocaleTimeString() : "N/A",
+      clockOutTime: clockOutTimes[date] ? new Date(clockOutTimes[date] * 1000).toLocaleTimeString() : "N/A",
+    }));
   };
 
   const handleReassign = async () => {
@@ -97,53 +116,47 @@ const EmployeeProfile = () => {
     }
   };
 
-  const handleUpdateDetails = async () => {
-    setIsSaving(true);
+  const handleUpdateAccount = async () => {
+    if (!username && !password) {
+      alert("Please provide either a username or password to update.");
+      return;
+    }
+
+    setUpdatingAccount(true);
     try {
-      const updatedDetails = {
-        ...employeeDetails,
-        position: newPosition,
-        rank: newRank,
-        email: newEmail,
-        phone: newPhone,
-      };
-
-      const employeeRef = ref(database, `attendance/Agua Viva Elgin R7/${employeeId}`);
-      await update(employeeRef, {
-        position: newPosition,
-        rank: newRank,
-        email: newEmail,
-        phone: newPhone,
-      });
-
-      setEmployeeDetails(updatedDetails);
-      alert("Employee details updated successfully.");
+      if (username) {
+        await updateEmail(auth.currentUser, username);
+      }
+      if (password) {
+        await updatePassword(auth.currentUser, password);
+      }
+      alert("Account updated successfully.");
     } catch (error) {
-      console.error("Error updating employee details:", error);
-      alert("An error occurred while updating employee details.");
+      console.error("Error updating account:", error);
+      alert("Failed to update account. Please try again.");
     } finally {
-      setIsSaving(false);
+      setUpdatingAccount(false);
     }
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Employee Badge", 20, 20);
-    doc.text(`Name: ${employeeDetails.name}`, 20, 40);
-    doc.text(`Rank: ${employeeDetails.rank}`, 20, 60);
-    doc.text(`Position: ${employeeDetails.position}`, 20, 80);
-    doc.text(`Email: ${employeeDetails.email}`, 20, 100);
-    doc.text(`Phone: ${employeeDetails.phone}`, 20, 120);
+    const doc = new jsPDF({ orientation: "portrait", unit: "in", format: [3.5, 2] }); // Flashcard size
+    doc.setFontSize(10);
+    doc.text(`Name: ${employeeDetails.name}`, 0.5, 0.3);
+    doc.text(`Rank: ${employeeDetails.rank}`, 0.5, 0.5);
+    doc.text(`Position: ${employeeDetails.position}`, 0.5, 0.7);
 
     const qrCanvas = document.querySelector("canvas");
     const qrDataURL = qrCanvas.toDataURL("image/png");
-    doc.addImage(qrDataURL, "PNG", 20, 130, 50, 50);
-
+    doc.addImage(qrDataURL, "PNG", 1.25, 0.75, 1, 1); // Center the QR code properly
     doc.save(`${employeeDetails.name}_Badge.pdf`);
   };
 
-  if (loading) return <p>Loading employee details...</p>;
+  const nextAssignedDate = assignedDates.length
+    ? assignedDates.sort((a, b) => new Date(a) - new Date(b))[0]
+    : null;
+
+  if (loading) return <p className="loading">Loading employee details...</p>;
   if (error) return <p className="error-message">{error}</p>;
   if (!employeeDetails) return <p>No employee details found for {employeeId}</p>;
 
@@ -154,93 +167,90 @@ const EmployeeProfile = () => {
         <p>Employee ID: {employeeId}</p>
       </div>
 
-      <div className="profile-content">
-        <div className="profile-details">
-          <h2>Employee Details</h2>
-          <label>Position:</label>
-          <input
-            type="text"
-            value={newPosition}
-            onChange={(e) => setNewPosition(e.target.value)}
-            placeholder="Enter new position"
-          />
-          <label>Rank:</label>
-          <input
-            type="text"
-            value={newRank}
-            onChange={(e) => setNewRank(e.target.value)}
-            placeholder="Enter new rank"
-          />
-          <label>Email:</label>
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="Enter new email"
-          />
-          <label>Phone:</label>
-          <input
-            type="tel"
-            value={newPhone}
-            onChange={(e) => setNewPhone(e.target.value)}
-            placeholder="Enter new phone"
-          />
-          <button className="btn" onClick={handleUpdateDetails} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Update Details"}
-          </button>
-          <QRCode value={JSON.stringify({ employeeId, name: employeeDetails.name, location: "Agua Viva Elgin R7" })} />
-          <button className="btn" onClick={generatePDF}>Download Badge</button>
-        </div>
-
-        <div className="profile-calendar">
-          <h2>Schedule</h2>
-          <Calendar onChange={setCalendarValue} value={calendarValue} />
-          <label>Time:</label>
-          <input
-            type="time"
-            value={scheduleTime}
-            onChange={(e) => setScheduleTime(e.target.value)}
-          />
-          <button className="btn" onClick={handleReassign} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Add Schedule"}
-          </button>
-          <h3>Upcoming Dates</h3>
-          {assignedDates.length > 0 ? (
-            <ul>
-              {assignedDates.sort().map((date, index) => (
-                <li key={index}>{date}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>No upcoming schedules.</p>
-          )}
-        </div>
+      <div className="profile-details">
+        <h2>Personal Information</h2>
+        <label>Position:</label>
+        <input type="text" value={newPosition} onChange={(e) => setNewPosition(e.target.value)} />
+        <label>Rank:</label>
+        <select value={newRank} onChange={(e) => setNewRank(e.target.value)}>
+          <option value="1">1 - Entry Level</option>
+          <option value="2">2 - Intermediate</option>
+          <option value="3">3 - Senior</option>
+          <option value="4">4 - Manager</option>
+          <option value="5">5 - Director</option>
+        </select>
+        <label>Email:</label>
+        <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+        <label>Phone:</label>
+        <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
       </div>
 
-      <div className="attendance-section">
-        <h2>Attendance Records</h2>
-        {attendanceRecords.length > 0 ? (
-          <table className="attendance-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Clock-In Time</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attendanceRecords.map((record, index) => (
-                <tr key={index}>
-                  <td>{record.date}</td>
-                  <td>{record.clockInTime || "N/A"}</td>
-                  <td>{checkAttendanceStatus(record.date, record.clockInTime)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p>No attendance records available.</p>
-        )}
+      <div className="account-management">
+        <h2>Account Management</h2>
+        <label>Username (Email):</label>
+        <input type="email" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <label>Password:</label>
+        <div className="password-input">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button onClick={() => setShowPassword(!showPassword)}>
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
+        <button onClick={handleUpdateAccount} disabled={updatingAccount}>
+          {updatingAccount ? "Updating Account..." : "Update Account"}
+        </button>
+      </div>
+      <div className="profile-calendar">
+  <h2>Assigned Schedule</h2>
+  {nextAssignedDate && (
+    <p>
+      <strong>Next Assignment:</strong> {nextAssignedDate}
+    </p>
+  )}
+  <div className="calendar-container">
+    <Calendar
+      onChange={setCalendarValue}
+      value={calendarValue}
+      tileClassName={({ date }) => {
+        const isAssignedDate = assignedDates.some(
+          (assignedDate) => new Date(assignedDate).toDateString() === date.toDateString()
+        );
+        const isImportantDate = assignedDates.some(
+          (assignedDate) =>
+            new Date(assignedDate).toDateString() === date.toDateString() &&
+            new Date(assignedDate).getTime() > new Date().getTime() // Highlight future dates
+        );
+
+        if (isImportantDate) return "highlight-important";
+        if (isAssignedDate) return "highlight-assigned";
+        return null;
+      }}
+    />
+    <div className="assigned-dates">
+      <h3>Assigned Dates</h3>
+      <ul>
+        {assignedDates.map((date, index) => (
+          <li key={index}>{date}</li>
+        ))}
+      </ul>
+    </div>
+  </div>
+  <label>Time:</label>
+  <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
+  <button onClick={handleReassign} disabled={isSaving}>
+    {isSaving ? "Saving..." : "Add Schedule"}
+  </button>
+</div>
+
+
+      <div className="badge-section">
+        <h2>QR Badge</h2>
+        <QRCode value={JSON.stringify({ employeeId, name: employeeDetails.name })} />
+        <button onClick={generatePDF}>Print Badge</button>
       </div>
     </div>
   );

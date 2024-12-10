@@ -246,7 +246,7 @@ const Dashboard = () => {
    
 
         <div className="quadrant quadrant-3 full-height">
-          <h3 className="employee-ranks-header">Employee Ranks Per Location</h3>
+          <h3 className="employee-ranks-header">Rank</h3>
           <div className="employee-ranks">
             {Object.keys(employeeRanksByLocation).map((location) => (
               <div key={location} className="location-rank">
