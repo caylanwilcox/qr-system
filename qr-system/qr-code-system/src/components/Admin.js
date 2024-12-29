@@ -4,13 +4,26 @@ import { ref, onValue } from "firebase/database";
 import { database } from '../services/firebaseConfig';
 import './Admin.css';
 import Dashboard from './Dashboard';
-import logo from '../logo.svg';
+import logo from './logo.png';
+import {
+  Home,
+  Users,
+  FileText,
+  Settings,
+  QrCode,
+  LogOut,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 
 const Admin = () => {
   const [locationAnalytics, setLocationAnalytics] = useState({});
   const [topEmployees, setTopEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const locations = [
     'Agua Viva West Chicago',
@@ -20,18 +33,32 @@ const Admin = () => {
     'Agua Viva Joliet',
     'Agua Viva Wheeling',
   ];
-
+  const navItems = [
+    { path: '/admin', icon: <Home size={24} />, text: 'Dashboard Overview' },
+    { path: '/admin/manage-employees', icon: <Users size={24} />, text: 'Manage Employees' },
+    { path: '/admin/reports', icon: <FileText size={24} />, text: 'Attendance Reports' },
+    { path: '/admin/settings', icon: <Settings size={24} />, text: 'Settings' },
+    { path: '/admin/qr-scanner', icon: <QrCode size={24} />, text: 'QR Code Scanner' },
+  ];
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
   useEffect(() => {
     const fetchLocationAnalytics = async () => {
+      setLoading(true);
       try {
         const allLocationsData = await Promise.all(
           locations.map(async (location) => {
             const locationRef = ref(database, `attendance/${location}`);
-            const dataSnapshot = await new Promise((resolve) => {
-              onValue(locationRef, (snapshot) => resolve(snapshot));
+            return new Promise((resolve) => {
+              onValue(locationRef, (snapshot) => {
+                const data = snapshot.val();
+                resolve({ location, data: data ? Object.values(data) : [] });
+              }, (error) => {
+                console.error(`Error fetching data for ${location}:`, error);
+                resolve({ location, data: [] });
+              });
             });
-            const data = dataSnapshot.val();
-            return { location, data: data ? Object.values(data) : [] };
           })
         );
 
@@ -41,15 +68,24 @@ const Admin = () => {
         }, {});
 
         setLocationAnalytics(analytics);
-
-        const topPerformers = calculateTopEmployees(allLocationsData);
-        setTopEmployees(topPerformers);
+        setTopEmployees(calculateTopEmployees(allLocationsData));
+        setError(null);
       } catch (error) {
         console.error('Error fetching location analytics:', error);
+        setError('Failed to fetch data. Please try again later.');
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchLocationAnalytics();
+
+    return () => {
+      locations.forEach(location => {
+        const locationRef = ref(database, `attendance/${location}`);
+        onValue(locationRef, () => {});
+      });
+    };
   }, []);
 
   const calculateLocationAnalytics = (data) => {
@@ -57,14 +93,19 @@ const Admin = () => {
     const totalClockedIn = data.filter((employee) => employee.clockInTime).length;
     const averageAttendance = totalEmployees > 0
       ? ((totalClockedIn / totalEmployees) * 100).toFixed(2) + '%'
-      : 'N/A';
+      : '0%';
     return { totalEmployees, totalClockedIn, averageAttendance };
   };
 
   const calculateTopEmployees = (allLocationsData) => {
     let topEmployees = [];
-    allLocationsData.forEach(({ data }) => {
-      const highPerformers = data.filter((employee) => employee.attendanceLevel === 'high');
+    allLocationsData.forEach(({ location, data }) => {
+      const highPerformers = data
+        .filter((employee) => employee.attendanceLevel === 'high')
+        .map(employee => ({
+          ...employee,
+          location
+        }));
       topEmployees = [...topEmployees, ...highPerformers];
     });
     return topEmployees;
@@ -76,42 +117,71 @@ const Admin = () => {
       case '/admin/reports': return 'Attendance Reports';
       case '/admin/settings': return 'Settings';
       case '/admin/qr-scanner': return 'QR Code Scanner';
-      default: return 'Agua Viva United States';
+      default: return 'Dashboard Overview';
     }
   };
 
-  const isDashboard = location.pathname === '/admin';
+  const renderContent = () => {
+    if (error) {
+      return <div className="error-message">{error}</div>;
+    }
+
+    if (loading) {
+      return <div className="loading-message">Loading data...</div>;
+    }
+
+    if (location.pathname === '/admin') {
+      return (
+        <Dashboard
+          locationAnalytics={locationAnalytics}
+          topEmployees={topEmployees}
+          locations={locations}
+        />
+      );
+    }
+
+    return <Outlet />;
+  };
 
   return (
-    <div className="admin-dashboard">
-      <div className="admin-sidebar">
-        <img src={logo} alt="logo" className="logo" />
-        <h2>Admin Panel</h2>
-        <ul className="admin-nav">
-          <li><Link to="/admin" className={isDashboard ? 'active' : ''}>Dashboard Overview</Link></li>
-          <li><Link to="/admin/manage-employees">Manage Employees</Link></li>
-          <li><Link to="/admin/reports">Attendance Reports</Link></li>
-          <li><Link to="/admin/settings">Settings</Link></li>
-          <li><Link to="/admin/qr-scanner">QR Code Scanner</Link></li>
-          <li><Link to="/">Logout</Link></li>
-        </ul>
-      </div>
-
-      <div className="admin-content">
-        <div className="admin-header">
-          <h1>{getPageTitle()}</h1>
+    <div className="admin-layout">
+      <aside className={`admin-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header">
+          <img src={logo} alt="logo" className="sidebar-logo" />
+          <h2>Admin Panel</h2>
+          <button className="toggle-sidebar" onClick={toggleSidebar}>
+            {isSidebarCollapsed ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
+          </button>
         </div>
-
-        {isDashboard ? (
-          <Dashboard
-            locationAnalytics={locationAnalytics}
-            topEmployees={topEmployees}
-            locations={locations}
-          />
-        ) : (
-          <Outlet />
-        )}
-      </div>
+        <nav className="sidebar-nav">
+          <ul>
+            {navItems.map((item) => (
+              <li key={item.path}>
+                <Link
+                  to={item.path}
+                  className={location.pathname === item.path ? 'active' : ''}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  <span className="nav-text">{item.text}</span>
+                </Link>
+              </li>
+            ))}
+            <li className="logout-item">
+              <Link to="/">
+                <span className="nav-icon"><LogOut size={24} /></span>
+                <span className="nav-text">Logout</span>
+              </Link>
+            </li>
+          </ul>
+        </nav>
+      </aside>
+      <main className={`admin-main ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>        <header className="main-header">
+          <h1>{getPageTitle()}</h1>
+        </header>
+        <div className="main-content">
+          {renderContent()}
+        </div>
+      </main>
     </div>
   );
 };

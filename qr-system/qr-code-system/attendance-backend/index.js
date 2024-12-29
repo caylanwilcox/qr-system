@@ -50,6 +50,147 @@ app.use((req, res, next) => {
 });
 
 /**
+ * Process attendance records by month
+ */
+const processAttendanceRecords = (clockInTimes = {}, clockOutTimes = {}, shiftDurations = {}) => {
+  const recordsByMonth = {};
+  
+  // Process each clock-in record
+  Object.entries(clockInTimes).forEach(([timestamp, clockIn]) => {
+    const date = moment.unix(clockIn);
+    const monthYear = date.format('YYYY-MM');
+    
+    if (!recordsByMonth[monthYear]) {
+      recordsByMonth[monthYear] = [];
+    }
+    
+    const clockOut = clockOutTimes[timestamp];
+    const duration = shiftDurations[timestamp];
+    const hoursWorked = duration ? (duration / 3600).toFixed(2) : null;
+    
+    recordsByMonth[monthYear].push({
+      date: date.format('YYYY-MM-DD'),
+      fullDate: date.format('MMMM D, YYYY'),
+      dayOfWeek: date.format('dddd'),
+      clockIn: date.format('h:mm:ss A'),
+      clockOut: clockOut ? moment.unix(clockOut).format('h:mm:ss A') : null,
+      hoursWorked,
+      timestamp: parseInt(timestamp),
+      status: clockOut ? 'Completed' : 'In Progress'
+    });
+  });
+
+  // Sort months and records
+  const sortedMonths = Object.keys(recordsByMonth).sort().reverse();
+  sortedMonths.forEach(month => {
+    recordsByMonth[month].sort((a, b) => b.timestamp - a.timestamp);
+  });
+
+  return { months: sortedMonths, records: recordsByMonth };
+};
+
+/**
+ * Process assigned dates by month
+ */
+const processAssignedDates = (dates = []) => {
+  const datesByMonth = {};
+  const now = moment();
+  
+  dates.forEach(dateStr => {
+    if (!dateStr) return; // Skip empty dates
+    
+    const date = moment(dateStr, "YYYY-MM-DD HH:mm");
+    if (!date.isValid()) return; // Skip invalid dates
+    
+    const monthYear = date.format('YYYY-MM');
+    
+    if (!datesByMonth[monthYear]) {
+      datesByMonth[monthYear] = [];
+    }
+    
+    // Determine status based on current time
+    const status = date.isSame(now, 'day') ? 'Today' : 
+                   date.isBefore(now, 'day') ? 'Past' : 'Upcoming';
+    
+    datesByMonth[monthYear].push({
+      date: dateStr,
+      fullDate: date.format('MMMM D, YYYY'),
+      dayOfWeek: date.format('dddd'),
+      time: date.format('h:mm A'),
+      status,
+      isPast: date.isBefore(now, 'day')
+    });
+  });
+
+  // Sort months and dates
+  const sortedMonths = Object.keys(datesByMonth).sort();
+  sortedMonths.forEach(month => {
+    datesByMonth[month].sort((a, b) => moment(a.date).diff(moment(b.date)));
+  });
+
+  return { months: sortedMonths, dates: datesByMonth };
+};
+
+/**
+ * Get employee data endpoint
+ */
+app.get('/api/employees/:location/:employeeId', async (req, res) => {
+  try {
+    const { location, employeeId } = req.params;
+    const employeeRef = database.ref(`attendance/${location}/${employeeId}`);
+    const snapshot = await employeeRef.once('value');
+
+    if (!snapshot.exists()) {
+      return res.status(404).json({ success: false, message: "Employee not found." });
+    }
+
+    const data = snapshot.val();
+    
+    // Process attendance and schedule data
+    const attendance = processAttendanceRecords(
+      data.clockInTimes, 
+      data.clockOutTimes,
+      data.shiftDurations
+    );
+    const schedule = processAssignedDates(data.assignedDates);
+
+    // Calculate attendance statistics
+    const currentMonth = moment().format('YYYY-MM');
+    const currentMonthRecords = attendance.records[currentMonth] || [];
+    const totalHoursThisMonth = currentMonthRecords.reduce((total, record) => {
+      return total + (record.hoursWorked ? parseFloat(record.hoursWorked) : 0);
+    }, 0);
+
+    res.json({
+      success: true,
+      data: {
+        employeeDetails: {
+          name: data.name,
+          position: data.position,
+          rank: data.rank,
+          email: data.email,
+          phone: data.phone
+        },
+        attendance,
+        schedule,
+        statistics: {
+          totalHoursThisMonth: totalHoursThisMonth.toFixed(2),
+          totalShiftsThisMonth: currentMonthRecords.length,
+          upcomingShifts: schedule.dates[currentMonth]?.filter(d => d.status === 'Upcoming').length || 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching employee data:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error.", 
+      error: error.message 
+    });
+  }
+});
+
+/**
  * Clock-in/Clock-out endpoint
  */
 app.post('/clock-in', async (req, res) => {
@@ -63,11 +204,15 @@ app.post('/clock-in', async (req, res) => {
       return res.status(404).json({ success: false, message: "Employee not found." });
     }
 
-    const activeShift = employeeData.clockInTimes && !employeeData.clockOutTimes;
-    const assignedDates = employeeData.assignedDates || [];
+    // Check for active shift
+    const clockInTimes = employeeData.clockInTimes || {};
+    const clockOutTimes = employeeData.clockOutTimes || {};
+    const lastClockInTimestamp = Object.keys(clockInTimes).pop();
+    const hasActiveShift = lastClockInTimestamp && 
+                          !clockOutTimes[lastClockInTimestamp];
 
     // Prevent duplicate clock-ins
-    if (mode === 'clock-in' && activeShift) {
+    if (mode === 'clock-in' && hasActiveShift) {
       return res.status(400).json({
         success: false,
         message: "Cannot clock in. Please clock out first.",
@@ -76,7 +221,9 @@ app.post('/clock-in', async (req, res) => {
 
     // Check if clocking in after the assigned time
     const today = moment().format("YYYY-MM-DD");
+    const assignedDates = employeeData.assignedDates || [];
     const assignedToday = assignedDates.find((date) => date.startsWith(today));
+    
     if (assignedToday) {
       const assignedTime = moment(assignedToday, "YYYY-MM-DD HH:mm");
       if (moment().isAfter(assignedTime)) {
@@ -92,23 +239,46 @@ app.post('/clock-in', async (req, res) => {
       await employeeRef.update({
         [`clockInTimes/${formattedTime}`]: formattedTime,
       });
-      return res.json({ success: true, message: "Clocked in successfully!" });
+      return res.json({ 
+        success: true, 
+        message: "Clocked in successfully!",
+        timestamp: formattedTime
+      });
     }
 
     // Process Clock-Out
     if (mode === 'clock-out') {
-      const lastClockIn = Object.keys(employeeData.clockInTimes || {}).pop();
-      const duration = formattedTime - lastClockIn;
+      if (!hasActiveShift) {
+        return res.status(400).json({
+          success: false,
+          message: "No active shift found to clock out from.",
+        });
+      }
+
+      const duration = formattedTime - lastClockInTimestamp;
       await employeeRef.update({
-        [`clockOutTimes/${formattedTime}`]: formattedTime,
-        [`shiftDurations/${lastClockIn}`]: duration,
+        [`clockOutTimes/${lastClockInTimestamp}`]: formattedTime,
+        [`shiftDurations/${lastClockInTimestamp}`]: duration,
       });
-      return res.json({ success: true, message: `Clocked out successfully! Shift duration: ${duration} seconds.` });
+      
+      const hoursWorked = (duration / 3600).toFixed(2);
+      return res.json({ 
+        success: true, 
+        message: `Clocked out successfully! Shift duration: ${hoursWorked} hours.`,
+        timestamp: formattedTime,
+        duration: duration,
+        hoursWorked: hoursWorked
+      });
     }
 
     res.status(400).json({ success: false, message: "Invalid mode." });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Server error.", error: error.message });
+    console.error('Clock-in/out error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error.", 
+      error: error.message 
+    });
   }
 });
 

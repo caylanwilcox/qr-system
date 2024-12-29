@@ -1,21 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { ref, onValue } from "firebase/database"; 
-import { database } from '../services/firebaseConfig'; 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { ref, onValue } from "firebase/database";
+import { database } from '../services/firebaseConfig';
+import { Loader2, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import './Dashboard.css';
-import AttendanceChart from './AttendanceChart';
 
 const Dashboard = () => {
-  const [totalNotClockedIn, setTotalNotClockedIn] = useState(0);
-  const [totalClockedIn, setTotalClockedIn] = useState(0);
-  const [onTimeFraction, setOnTimeFraction] = useState(0);
-  const [lateFraction, setLateFraction] = useState(0);
-  const [presentFraction, setPresentFraction] = useState(0);
-  const [rankingUpEmployees, setRankingUpEmployees] = useState([]);
-  const [employeeRanksByLocation, setEmployeeRanksByLocation] = useState({});
-  const [perLocationMetrics, setPerLocationMetrics] = useState({});
+  const [metrics, setMetrics] = useState({
+    total: { notClockedIn: 0, clockedIn: 0, onTime: 0, late: 0 },
+    perLocation: {},
+    rankingUp: [],
+    ranksByLocation: {}
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("All");
-  const [is24Hours, setIs24Hours] = useState(true);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [timeFilter, setTimeFilter] = useState({
+    type: '24h',
+    dateRange: { start: '', end: '' }
+  });
+  const [isDataFetched, setIsDataFetched] = useState(false);
 
   const locationMap = {
     "All": "All",
@@ -24,137 +27,207 @@ const Dashboard = () => {
     "Lyons": "Agua Viva Lyons",
     "West Chicago": "Agua Viva West Chicago",
     "Wheeling": "Agua Viva Wheeling",
-    "Retreat": "Retreat", // Add Retreat here
-    
+    "Retreat": "Retreat",
   };
+
+  const calculateFraction = useCallback((numerator, denominator) => {
+    if (!denominator) return 0;
+    const result = (numerator / denominator) * 100;
+    return isNaN(result) ? 0 : result;
+  }, []);
 
   const handleTabClick = (tabName) => {
     setActiveTab(tabName);
+    // Reset error state when changing tabs
+    setError(null);
   };
 
-  const calculateFraction = (numerator, denominator) => (denominator ? numerator / denominator : 0);
+  const handleTimeFilterChange = (type) => {
+    setTimeFilter(prev => ({
+      ...prev,
+      type,
+      // Reset date range when switching to 24h
+      dateRange: type === '24h' ? { start: '', end: '' } : prev.dateRange
+    }));
+  };
 
-  const processEmployeeMetrics = (employee, location, metrics) => {
-    if (employee.daysScheduledPresent > 0 || employee.daysScheduledMissed > 0) {
-      // Update total metrics
-      metrics.total.notClockedIn += employee.daysScheduledMissed || 0;
-      metrics.total.clockedIn += employee.daysScheduledPresent || 0;
-      metrics.total.onTime += employee.daysOnTime || 0;
-      metrics.total.late += employee.daysLate || 0;
+  const handleDateRangeChange = (field, value) => {
+    setTimeFilter(prev => ({
+      ...prev,
+      dateRange: { ...prev.dateRange, [field]: value }
+    }));
+  };
 
-      // Update per-location metrics
-      metrics.perLocation[location].notClockedIn += employee.daysScheduledMissed || 0;
-      metrics.perLocation[location].clockedIn += employee.daysScheduledPresent || 0;
-      metrics.perLocation[location].onTime += employee.daysOnTime || 0;
-      metrics.perLocation[location].late += employee.daysLate || 0;
+  const validateDateRange = useCallback(() => {
+    const { start, end } = timeFilter.dateRange;
+    if (timeFilter.type === 'range' && (!start || !end)) {
+      throw new Error('Please select both start and end dates');
     }
-
-    if (employee.rankUp) {
-      metrics.rankingUp.push(employee.name);
+    if (start && end && new Date(start) > new Date(end)) {
+      throw new Error('Start date must be before end date');
     }
+  }, [timeFilter]);
 
-    if (employee.position) {
-      metrics.ranksByLocation[location][employee.position] =
-        (metrics.ranksByLocation[location][employee.position] || 0) + 1;
+  const processEmployeeMetrics = useCallback((employee, location, metrics) => {
+    try {
+      if (employee.daysScheduledPresent > 0 || employee.daysScheduledMissed > 0) {
+        // Update total metrics
+        metrics.total.notClockedIn += employee.daysScheduledMissed || 0;
+        metrics.total.clockedIn += employee.daysScheduledPresent || 0;
+        metrics.total.onTime += employee.daysOnTime || 0;
+        metrics.total.late += employee.daysLate || 0;
+
+        // Update per-location metrics
+        metrics.perLocation[location] = metrics.perLocation[location] || {
+          notClockedIn: 0,
+          clockedIn: 0,
+          onTime: 0,
+          late: 0
+        };
+        metrics.perLocation[location].notClockedIn += employee.daysScheduledMissed || 0;
+        metrics.perLocation[location].clockedIn += employee.daysScheduledPresent || 0;
+        metrics.perLocation[location].onTime += employee.daysOnTime || 0;
+        metrics.perLocation[location].late += employee.daysLate || 0;
+      }
+
+      if (employee.rankUp) {
+        metrics.rankingUp.push({ name: employee.name, location });
+      }
+
+      if (employee.position) {
+        metrics.ranksByLocation[location] = metrics.ranksByLocation[location] || {};
+        metrics.ranksByLocation[location][employee.position] =
+          (metrics.ranksByLocation[location][employee.position] || 0) + 1;
+      }
+
+    } catch (error) {
+      console.error(`Error processing metrics for employee in ${location}:`, error);
+      throw new Error(`Failed to process employee metrics for ${location}`);
     }
-  };
+    return metrics;
+  }, []);
 
-  const safelyUpdateState = (metrics) => {
-    const { total, perLocation, rankingUp, ranksByLocation } = metrics;
-
-    setTotalNotClockedIn(total.notClockedIn);
-    setTotalClockedIn(total.clockedIn);
-    setOnTimeFraction(calculateFraction(total.onTime, total.clockedIn));
-    setLateFraction(calculateFraction(total.late, total.clockedIn));
-    setPresentFraction(calculateFraction(total.clockedIn, total.notClockedIn + total.clockedIn));
-    setRankingUpEmployees([...new Set(rankingUp)]); // Remove duplicates
-    setEmployeeRanksByLocation(ranksByLocation);
-    setPerLocationMetrics(perLocation);
-  };
-
-  const isWithinLast24Hours = (timestamp) => {
-    const now = new Date();
-    return is24Hours && now - timestamp <= 24 * 60 * 60 * 1000;
-  };
-
-  const isWithinDateRange = (timestamp) => {
-    return !is24Hours &&
-      dateRange.start &&
-      dateRange.end &&
-      timestamp >= new Date(dateRange.start) &&
-      timestamp <= new Date(dateRange.end);
-  };
+  const isWithinTimeFilter = useCallback((timestamp) => {
+    if (!timestamp) return false;
+    
+    if (timeFilter.type === '24h') {
+      const now = new Date();
+      return now - new Date(timestamp) <= 24 * 60 * 60 * 1000;
+    }
+    
+    if (timeFilter.type === 'range') {
+      const date = new Date(timestamp);
+      return date >= new Date(timeFilter.dateRange.start) &&
+             date <= new Date(timeFilter.dateRange.end);
+    }
+    
+    return false;
+  }, [timeFilter]);
 
   useEffect(() => {
+    let isMounted = true;
     const attendanceRef = ref(database, "attendance");
-    const unsubscribe = onValue(attendanceRef, (snapshot) => {
+    
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
-        const data = snapshot.val();
-        if (!data) throw new Error("No data available");
-
-        const metrics = {
-          total: { notClockedIn: 0, clockedIn: 0, onTime: 0, late: 0 },
-          perLocation: {},
-          rankingUp: [],
-          ranksByLocation: {},
-        };
-
-        const activeDatabaseKey = locationMap[activeTab] || null;
-        const filteredData =
-          activeDatabaseKey === "All" ? data : { [activeDatabaseKey]: data[activeDatabaseKey] };
+        validateDateRange();
         
-        Object.entries(filteredData).forEach(([location, locationData]) => {
-          if (!metrics.ranksByLocation[location]) {
-            metrics.ranksByLocation[location] = { junior: 0, intermediate: 0, senior: 0 };
-          }
-          if (!metrics.perLocation[location]) {
-            metrics.perLocation[location] = { notClockedIn: 0, clockedIn: 0, onTime: 0, late: 0 };
-          }
+        const unsubscribe = onValue(attendanceRef, (snapshot) => {
+          if (!isMounted) return;
+          
+          try {
+            const data = snapshot.val();
+            if (!data) throw new Error("No attendance data available");
 
-          Object.values(locationData).forEach((employee) => {
-            const employeeTimestamp = new Date(employee.clockInTime);
+            const metrics = {
+              total: { notClockedIn: 0, clockedIn: 0, onTime: 0, late: 0 },
+              perLocation: {},
+              rankingUp: [],
+              ranksByLocation: {},
+            };
 
-            if (isWithinLast24Hours(employeeTimestamp) || isWithinDateRange(employeeTimestamp)) {
-              processEmployeeMetrics(employee, location, metrics);
-            }
-          });
+            const activeDatabaseKey = locationMap[activeTab];
+            const filteredData = activeDatabaseKey === "All" 
+              ? data 
+              : { [activeDatabaseKey]: data[activeDatabaseKey] };
+
+            Object.entries(filteredData).forEach(([location, locationData]) => {
+              if (!locationData) return;
+
+              Object.values(locationData).forEach((employee) => {
+                if (isWithinTimeFilter(employee.clockInTime)) {
+                  processEmployeeMetrics(employee, location, metrics);
+                }
+              });
+            });
+
+            setMetrics(metrics);
+            setIsDataFetched(true);
+            setError(null);
+          } catch (error) {
+            console.error("Error processing attendance data:", error);
+            setError(error.message);
+          } finally {
+            setLoading(false);
+          }
+        }, (error) => {
+          console.error("Database error:", error);
+          if (isMounted) {
+            setError("Failed to connect to the database. Please try again later.");
+            setLoading(false);
+          }
         });
 
-        safelyUpdateState(metrics);
+        return () => {
+          unsubscribe();
+        };
       } catch (error) {
-        console.error("Error processing attendance data:", error);
+        if (isMounted) {
+          setError(error.message);
+          setLoading(false);
+        }
       }
-    });
+    };
 
-    return () => unsubscribe();
-  }, [is24Hours, dateRange, activeTab]);
+    fetchData();
 
-  const getPerLocationFraction = (locationMetrics, numeratorKey, denominatorKey) => {
-    const numerator = locationMetrics?.[numeratorKey] || 0;
-    const denominator = locationMetrics?.[denominatorKey] || 0;
-    return calculateFraction(numerator, denominator);
-  };
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, timeFilter, processEmployeeMetrics, isWithinTimeFilter, validateDateRange, locationMap]);
 
-  const perLocationPresentFraction = (locationMetrics) => {
-    const clockedIn = locationMetrics?.clockedIn || 0;
-    const notClockedIn = locationMetrics?.notClockedIn || 0;
-    return calculateFraction(clockedIn, clockedIn + notClockedIn);
-  };
+  const locationMetrics = activeTab === "All" ? null : metrics.perLocation[locationMap[activeTab]];
 
-  const locationMetrics = activeTab === "All" ? null : perLocationMetrics[locationMap[activeTab]] || {};
+  if (loading) {
+    return (
+      <div className="loading-overlay">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+        <p className="mt-2">Loading dashboard data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-container">
+      {error && (
+        <div className="error-banner">
+          <AlertCircle className="h-5 w-5 text-red-500" />
+          <span>{error}</span>
+        </div>
+      )}
+      
       <div className="dashboard-grid">
-        {/* Quadrant 2 (Top Left) */}
         <div className="quadrant quadrant-2">
           <nav className="quadrant-nav">
             <ul>
-              {["All", "Elgin", "Joliet", "Lyons", "West Chicago", "Wheeling", "Retreat"].map((tabName) => (
+              {Object.keys(locationMap).map((tabName) => (
                 <li
                   key={tabName}
                   onClick={() => handleTabClick(tabName)}
-                  className={activeTab === tabName ? "active" : ""}
+                  className={`nav-item ${activeTab === tabName ? 'active' : ''}`}
                 >
                   {tabName}
                 </li>
@@ -163,79 +236,99 @@ const Dashboard = () => {
           </nav>
 
           <div className="filter-options">
-            <button onClick={() => setIs24Hours(true)} className={is24Hours ? 'active' : ''}>
+            <button 
+              onClick={() => handleTimeFilterChange('24h')} 
+              className={`filter-btn ${timeFilter.type === '24h' ? 'active' : ''}`}
+            >
+              <Clock className="h-4 w-4 mr-2" />
               Last 24 Hours
             </button>
-            <button onClick={() => setIs24Hours(false)} className={!is24Hours ? 'active' : ''}>
+            <button 
+              onClick={() => handleTimeFilterChange('range')} 
+              className={`filter-btn ${timeFilter.type === 'range' ? 'active' : ''}`}
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" />
               Date Range
             </button>
-            {!is24Hours && (
+            
+            {timeFilter.type === 'range' && (
               <div className="date-range-inputs">
                 <input
                   type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                  value={timeFilter.dateRange.start}
+                  onChange={(e) => handleDateRangeChange('start', e.target.value)}
+                  className="date-input"
+                  max={timeFilter.dateRange.end || undefined}
                 />
                 <input
                   type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                  value={timeFilter.dateRange.end}
+                  onChange={(e) => handleDateRangeChange('end', e.target.value)}
+                  className="date-input"
+                  min={timeFilter.dateRange.start || undefined}
                 />
               </div>
             )}
           </div>
 
           <div className="quadrant-inside">
-            {activeTab === "All" ? (
-              <div className="metric-box available-agents">
-                <h3>Total Absent</h3>
-                <div className="metric-content">
-                  <p className="metric-number large orange">{totalNotClockedIn}</p>
-                </div>
+            <div className="metric-box total-absent">
+              <h3>{activeTab === "All" ? "Total Absent" : `${activeTab} - Total Absent`}</h3>
+              <div className="metric-content">
+                <p className="metric-number large warning">
+                  {activeTab === "All" 
+                    ? metrics.total.notClockedIn 
+                    : locationMetrics?.notClockedIn || 0}
+                </p>
               </div>
-            ) : (
-              <div className="metric-box available-agents">
-                <h3>{activeTab} - Total Absent</h3>
-                <div className="metric-content">
-                  <p className="metric-number large orange">{locationMetrics?.notClockedIn || 0}</p>
-                </div>
-              </div>
-            )}
+            </div>
 
-            <div className="remaining-metrics">
+            <div className="metrics-grid">
               <div className="metric-box">
                 <h3>Total Clocked In</h3>
                 <div className="metric-content">
-                  <p className="metric-number green">{activeTab === "All" ? totalClockedIn : locationMetrics?.clockedIn || 0}</p>
+                  <p className="metric-number success">
+                    {activeTab === "All" 
+                      ? metrics.total.clockedIn 
+                      : locationMetrics?.clockedIn || 0}
+                  </p>
                 </div>
               </div>
+              
               <div className="metric-box">
                 <h3>% On Time</h3>
                 <div className="metric-content">
-                  <p className="metric-number green">
-                    {activeTab === "All"
-                      ? (onTimeFraction * 100).toFixed(2)
-                      : (calculateFraction(locationMetrics.onTime, locationMetrics.clockedIn) * 100).toFixed(2)}%
+                  <p className="metric-number success">
+                    {calculateFraction(
+                      activeTab === "All" ? metrics.total.onTime : locationMetrics?.onTime || 0,
+                      activeTab === "All" ? metrics.total.clockedIn : locationMetrics?.clockedIn || 0
+                    ).toFixed(2)}%
                   </p>
                 </div>
               </div>
+
               <div className="metric-box">
                 <h3>% Late</h3>
                 <div className="metric-content">
-                  <p className="metric-number orange">
-                    {activeTab === "All"
-                      ? (lateFraction * 100).toFixed(2)
-                      : (calculateFraction(locationMetrics.late, locationMetrics.clockedIn) * 100).toFixed(2)}%
+                  <p className="metric-number warning">
+                    {calculateFraction(
+                      activeTab === "All" ? metrics.total.late : locationMetrics?.late || 0,
+                      activeTab === "All" ? metrics.total.clockedIn : locationMetrics?.clockedIn || 0
+                    ).toFixed(2)}%
                   </p>
                 </div>
               </div>
+
               <div className="metric-box">
                 <h3>% Present</h3>
                 <div className="metric-content">
-                  <p className="metric-number green">
-                    {activeTab === "All"
-                      ? (presentFraction * 100).toFixed(2)
-                      : (perLocationPresentFraction(locationMetrics) * 100).toFixed(2)}%
+                  <p className="metric-number success">
+                    {calculateFraction(
+                      activeTab === "All" ? metrics.total.clockedIn : locationMetrics?.clockedIn || 0,
+                      activeTab === "All"
+                        ? metrics.total.clockedIn + metrics.total.notClockedIn
+                        : (locationMetrics?.clockedIn || 0) + (locationMetrics?.notClockedIn || 0)
+                    ).toFixed(2)}%
                   </p>
                 </div>
               </div>
@@ -243,25 +336,30 @@ const Dashboard = () => {
           </div>
         </div>
 
-   
-
-        <div className="quadrant quadrant-3 full-height">
-          <h3 className="employee-ranks-header">Rank</h3>
+        <div className="quadrant quadrant-3">
+          <h3 className="rank-header">Employee Rankings</h3>
           <div className="employee-ranks">
-            {Object.keys(employeeRanksByLocation).map((location) => (
-              <div key={location} className="location-rank">
+            {Object.entries(metrics.ranksByLocation).map(([location, ranks]) => (
+              <div key={location} className="location-rank-card">
                 <h4>{location}</h4>
-                <p>Junior: {employeeRanksByLocation[location].junior}</p>
-                <p>Intermediate: {employeeRanksByLocation[location].intermediate}</p>
-                <p>Senior: {employeeRanksByLocation[location].senior}</p>
+                <div className="rank-stats">
+                  <div className="rank-item">
+                    <span className="rank-label">Junior:</span>
+                    <span className="rank-value">{ranks.junior || 0}</span>
+                  </div>
+                  <div className="rank-item">
+                    <span className="rank-label">Intermediate:</span>
+                    <span className="rank-value">{ranks.intermediate || 0}</span>
+                  </div>
+                  <div className="rank-item">
+                    <span className="rank-label">Senior:</span>
+                    <span className="rank-value">{ranks.senior || 0}</span>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </div>
-
-      
-        
-    
       </div>
     </div>
   );

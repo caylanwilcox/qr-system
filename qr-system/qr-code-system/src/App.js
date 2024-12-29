@@ -2,7 +2,8 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from './services/PrivateRoute';
 import AuthProvider from './services/authContext';
-
+import './components/App.css';
+import './index.css'
 const Login = lazy(() => import('./components/Login'));
 const Admin = lazy(() => import('./components/Admin'));
 const Profile = lazy(() => import('./components/Profile'));
