@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { ref, onValue } from "firebase/database";
+import { Calendar as CalendarIcon } from 'lucide-react';
+
 import { database } from '../services/firebaseConfig';
 import './Admin.css';
 import Dashboard from './Dashboard';
@@ -10,6 +12,8 @@ import {
   Users,
   FileText,
   Settings,
+  CalendarDays,
+  Calendar,
   QrCode,
   LogOut,
   ChevronLeft,
@@ -36,6 +40,7 @@ const Admin = () => {
   const navItems = [
     { path: '/admin', icon: <Home size={24} />, text: 'Dashboard Overview' },
     { path: '/admin/manage-employees', icon: <Users size={24} />, text: 'Manage Employees' },
+    { path: '/admin/scheduler', icon: <Calendar size={24} />, text: 'Schedule Manager' }, // Add scheduler nav item
     { path: '/admin/reports', icon: <FileText size={24} />, text: 'Attendance Reports' },
     { path: '/admin/settings', icon: <Settings size={24} />, text: 'Settings' },
     { path: '/admin/qr-scanner', icon: <QrCode size={24} />, text: 'QR Code Scanner' },
@@ -117,6 +122,7 @@ const Admin = () => {
       case '/admin/reports': return 'Attendance Reports';
       case '/admin/settings': return 'Settings';
       case '/admin/qr-scanner': return 'QR Code Scanner';
+      case '/admin/scheduler': return 'Schedule Manager';
       default: return 'Dashboard Overview';
     }
   };

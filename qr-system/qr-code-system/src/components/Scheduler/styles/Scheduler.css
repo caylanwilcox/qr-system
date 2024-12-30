@@ -1,0 +1,296 @@
+/* src/components/Scheduler/styles/Scheduler.css */
+.scheduler-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: transparent;
+  }
+  
+  .scheduler-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .scheduler-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #f3f4f6;
+    margin: 0;
+  }
+  
+  .create-event-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .create-event-btn:hover {
+    background-color: #2563eb;
+    transform: translateY(-1px);
+  }
+  
+  .scheduler-main {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    padding: 1rem;
+  }
+  
+  .scheduler-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    border-top-color: #3b82f6;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .scheduler-loading p {
+    margin-top: 1rem;
+    color: #f3f4f6;
+  }
+  
+  .scheduler-error {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    margin: 1rem;
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 0.375rem;
+    color: #fee2e2;
+  }
+  
+  /* Dark mode styles */
+  @media (prefers-color-scheme: dark) {
+    .scheduler-header {
+      background: rgba(17, 24, 39, 0.8);
+      border-bottom-color: rgba(255, 255, 255, 0.05);
+    }
+  
+    .scheduler-title {
+      color: #f9fafb;
+    }
+  
+    .create-event-btn {
+      background-color: #4f46e5;
+    }
+  
+    .create-event-btn:hover {
+      background-color: #4338ca;
+    }
+  
+    .scheduler-error {
+      background-color: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fecaca;
+    }
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .scheduler-header {
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem;
+    }
+  
+    .scheduler-title {
+      font-size: 1.25rem;
+    }
+  
+    .create-event-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  
+    .scheduler-main {
+      padding: 0.5rem;
+    }
+  }
+  
+  /* Custom Scrollbar */
+  .scheduler-container ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scheduler-container ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scheduler-container ::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+  
+  .scheduler-container ::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+  
+  /* Glass Effect Enhancements */
+  .scheduler-header {
+    position: relative;
+    z-index: 10;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  .scheduler-main {
+    position: relative;
+    z-index: 5;
+  }
+  
+  /* Animation for loading states */
+  .scheduler-loading {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  /* Error message animation */
+  .scheduler-error {
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  @keyframes slideIn {
+    from {
+      transform: translateY(-10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  /* Button focus states */
+  .create-event-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+  }
+  
+  /* Accessibility improvements */
+  @media (prefers-reduced-motion: reduce) {
+    .loading-spinner,
+    .scheduler-loading,
+    .scheduler-error,
+    .create-event-btn {
+      animation: none;
+      transition: none;
+    }
+  }.scheduler-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: transparent}
+  
+  .scheduler-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(13, 25, 48, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .scheduler-title {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin: 0;
+  }
+  
+  .create-event-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .create-event-btn:hover {
+    background-color: #2563eb;
+    transform: translateY(-1px);
+  }
+  
+  .scheduler-main {
+    flex: 1;
+    background: transparent;
+    padding: 0;
+    position: relative;
+    border-radius: 8px;
+    margin: 0rem;
+    overflow: hidden;
+  }
+  
+  /* Loading and Error States */
+  .scheduler-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.9);
+  }
+  
+  .scheduler-error {
+    margin: 1rem;
+    padding: 1rem;
+    background-color: #fee2e2;
+    border-radius: 0.375rem;
+    color: #991b1b;
+  }

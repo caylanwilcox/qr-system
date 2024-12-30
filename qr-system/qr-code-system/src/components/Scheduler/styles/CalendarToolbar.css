@@ -1,0 +1,205 @@
+/* CalendarToolbar.css */
+.calendar-container {
+    width: 100%;
+    height: calc(100vh - 80px);
+    background: rgba(13, 25, 48, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+  
+  .calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(13, 25, 48, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  .toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  /* Button Base Styles */
+  .toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    height: 2.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .toolbar-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  /* Today Button */
+  .today-button {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  .today-button:hover {
+    background: rgba(59, 130, 246, 0.3);
+  }
+  
+  /* Navigation Controls */
+  .nav-buttons {
+    display: flex;
+    gap: 1px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .nav-button {
+    padding: 0.5rem;
+    border: none;
+    background: transparent;
+  }
+  
+  .nav-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  /* Date Display */
+  .toolbar-date {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    padding: 0 0.75rem;
+  }
+  
+  /* View Controls */
+  .view-buttons {
+    display: flex;
+    gap: 1px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .view-button {
+    border: none;
+    background: transparent;
+    min-width: 80px;
+  }
+  
+  .view-button.active {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  /* Create Event Button */
+  .create-event-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    height: 2.5rem;
+    background: rgb(59, 130, 246);
+    color: white;
+    border: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .create-event-button:hover {
+    background: rgb(37, 99, 235);
+  }
+  
+  .button-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.5rem;
+  }
+  
+  /* Calendar Grid Styles */
+  .rbc-calendar {
+    background: transparent;
+    height: calc(100% - 4rem);
+    padding: 1rem;
+  }
+  
+  .rbc-month-view {
+    border: none;
+    background: rgba(13, 25, 48, 0.6);
+  }
+  
+  .rbc-header {
+    padding: 0.75rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 25, 48, 0.8);
+  }
+  
+  .rbc-month-row {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  .rbc-date-cell {
+    padding: 0.5rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .rbc-off-range-bg {
+    background: rgba(13, 25, 48, 0.4);
+  }
+  
+  .rbc-today {
+    background: rgba(59, 130, 246, 0.1);
+  }
+  
+  /* Events */
+  .rbc-event {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .rbc-event:hover {
+    background: rgba(59, 130, 246, 0.3);
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .calendar-header {
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem;
+    }
+  
+    .toolbar-section {
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+  
+    .create-event-button {
+      width: 100%;
+    }
+  }
+  
+  /* High Contrast & Accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    .toolbar-button,
+    .create-event-button {
+      transition: none;
+    }
+  }
+  
+  @media (forced-colors: active) {
+    .toolbar-button,
+    .create-event-button {
+      border: 2px solid currentColor;
+    }
+  }

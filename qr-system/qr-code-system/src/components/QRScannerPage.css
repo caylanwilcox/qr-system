@@ -10,12 +10,12 @@
   padding-top: 40px;
   box-sizing: border-box;
   position: relative;
-  background-color: #f4f7fc;
+  background-color: transparent;
 }
 
 .Admin-header {
   font-size: 2.5rem;
-  color: #333;
+  color: #ffffff;
   text-align: center;
   margin-bottom: 30px;
   font-weight: bold;
@@ -25,7 +25,7 @@
   position: absolute;
   top: 20px;
   right: 20px;
-  color:darkgrey;
+  color:rgb(255, 255, 255);
   cursor: pointer;
 }
 
@@ -34,6 +34,10 @@
   margin-top: 30px;
   transition: all 0.3s ease-in-out;
   opacity: 1;
+}
+
+.scanner-settings h2,p {
+ color: white;
 }
 
 .location-dropdown {
@@ -97,7 +101,7 @@ button:hover {
 .message-container {
   margin-top: 15px;
   font-size: 1.2rem;
-  color: #0e0d0d;
+  color: #ffffff;
   text-align: center;
 }
 
@@ -127,13 +131,13 @@ button:hover {
 
 .employee-details h2 {
   font-size: 1.8rem;
-  color: #333;
+  color: #ffffff ;
   margin-bottom: 10px;
 }
 
 .employee-details p {
   font-size: 1.2rem;
-  color: #666;
+  color: #ffffff;
 }
 
 @media (max-width: 768px) {

@@ -285,7 +285,7 @@ const Dashboard = () => {
 
             <div className="metrics-grid">
               <div className="metric-box">
-                <h3>Total Clocked In</h3>
+                <h3>Total Present</h3>
                 <div className="metric-content">
                   <p className="metric-number success">
                     {activeTab === "All" 

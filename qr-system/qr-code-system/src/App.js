@@ -17,6 +17,7 @@ const AccountSettings = lazy(() => import('./components/AccountSettings'));
 const NotFound = lazy(() => import('./components/NotFound'));
 const EmployeeProfile = lazy(() => import('./components/EmployeeProfile'));
 const UpdateEmployeesButton = lazy(() => import('./components/clearAndAddEmployees')); // Import the button component
+const Scheduler = lazy(() => import('./components/Scheduler/SchedulerContainer'));
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
               <Route path="add-user" element={<AddUser />} />
+              <Route path="/admin/scheduler" element={<Scheduler />} />
               <Route path="update-employees" element={<UpdateEmployeesButton />} /> {/* Add this line */}
               <Route path="account-settings" element={<AccountSettings />} />
               <Route path="qr-scanner" element={<QRScannerPage />} />

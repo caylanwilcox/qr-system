@@ -1,0 +1,176 @@
+/* MainCalendar.css */
+.main-calendar-wrapper {
+  height: calc(100vh - 100px);
+  margin: 0rem;
+  background: rgba(13, 25, 48, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.main-calendar {
+  height: 100%;
+  background: transparent;
+}
+
+/* Calendar Base */
+.rbc-calendar {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: transparent;
+  padding: 0.5rem;
+}
+
+/* Month View */
+.rbc-month-view {
+  border: none;
+  background: rgba(13, 25, 48, 0.4);
+}
+
+.rbc-header {
+  padding: 1rem 0.5rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(13, 25, 48, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rbc-month-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 120px;
+}
+
+.rbc-date-cell {
+  padding: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  text-align: right;
+}
+
+.rbc-date-cell.rbc-now {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.rbc-off-range-bg {
+  background: rgba(13, 25, 48, 0.3);
+}
+
+.rbc-today {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* Events */
+.rbc-event {
+  background: rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 2px;
+  padding: 0.25rem 0.5rem;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  margin: 1px;
+  min-height: 24px;
+}
+
+.rbc-event:hover {
+  background: rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.rbc-event.rbc-selected {
+  background: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+}
+
+.rbc-event-content {
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* Time Grid */
+.rbc-time-view {
+  background: rgba(13, 25, 48, 0.4);
+  border: none;
+}
+
+.rbc-time-header {
+  background: rgba(13, 25, 48, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rbc-time-content {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  min-height: 48px;
+}
+
+.rbc-time-slot {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+}
+
+.rbc-current-time-indicator {
+  background: #3b82f6;
+  height: 2px;
+}
+
+/* More Link */
+.rbc-show-more {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  font-size: 0.85rem;
+  padding: 0.25rem;
+}
+
+/* Selection States */
+.rbc-selection-bg {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.rbc-selected-cell {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Additional States */
+.rbc-off-range {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.rbc-day-slot .rbc-event {
+  border: none;
+}
+
+/* Time Column */
+.rbc-time-gutter .rbc-timeslot-group {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rbc-time-column {
+  background: rgba(13, 25, 48, 0.4);
+}
+
+/* Day/Week View Specific */
+.rbc-time-header-content {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* All Day Events */
+.rbc-allday-cell {
+  background: rgba(13, 25, 48, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
