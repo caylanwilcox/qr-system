@@ -7,13 +7,10 @@
   position: relative;
 }
 
-/* Loading Overlay */
+/* Loading and Error */
 .loading-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -26,10 +23,10 @@
 
 .loading-overlay p {
   margin-top: 1rem;
-  color: rgba(255, 255, 255, 0.9);  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
 }
 
-/* Error Banner */
 .error-banner {
   background: rgba(220, 38, 38, 0.2);
   border: 1px solid rgba(220, 38, 38, 0.3);
@@ -41,39 +38,33 @@
   align-items: center;
   gap: 0.75rem;
 }
+
 /* Dashboard Grid */
 .dashboard-grid {
   display: grid;
-  background-color: transparent;
   grid-template-columns: 1.5fr 1fr;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: none;
+  padding: none;
   height: 100%;
   overflow: hidden;
+  background-color: transparent;
 }
 
-/* Glass effect base styles */
+/* Quadrants */
 .quadrant {
-  background: rgba(13, 25, 48, 0.7);
-  backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(0, 0, 0, 0);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-  border-radius: 1.25rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-/* Enhance text readability on glass background */
-.quadrant h3, 
-.quadrant h4 {
+.quadrant h3, .quadrant h4 {
   color: rgba(255, 255, 255, 0.95);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* Navigation styles with glass effect */
-/* Navigation Improvements */
+/* Navigation */
 .quadrant-nav {
   padding: 1.25rem 1.25rem 0.5rem;
 }
@@ -83,6 +74,7 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
 .nav-item {
   color: rgba(255, 255, 255, 0.7);
   padding: 0.5rem 1rem;
@@ -116,19 +108,18 @@
   background: rgba(59, 130, 246, 0.8);
 }
 
-/* Filter Options Enhancement */
-/* Enhanced Filter Options */
+/* Filter Options */
 .filter-options {
   display: flex;
   align-items: center;
   gap: 1rem;
+  width:  95%;
+border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 1rem;
-  background: rgba(13, 25, 48, 0.3);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
-/* Time Filter Buttons */
 .filter-btn {
   position: relative;
   display: inline-flex;
@@ -148,12 +139,8 @@
 .filter-btn::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    45deg,
+  inset: 0;
+  background: linear-gradient(45deg,
     rgba(255, 255, 255, 0) 0%,
     rgba(255, 255, 255, 0.05) 50%,
     rgba(255, 255, 255, 0) 100%
@@ -179,55 +166,7 @@
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
 }
 
-/* Status Filter Buttons */
-.status-btn {
-  position: relative;
-  padding: 0.6rem 1.2rem;
-  border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid transparent;
-  overflow: hidden;
-}
-
-.status-btn::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(59, 130, 246, 0.5),
-    transparent
-  );
-  transform: scaleX(0);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.status-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  transform: translateY(-1px);
-}
-
-.status-btn:hover::after {
-  transform: scaleX(1);
-}
-
-.status-btn.active {
-  background: rgba(59, 130, 246, 0.25);
-  color: white;
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
-}
-
-/* Date Inputs Enhancement */
+/* Date Range Inputs */
 .date-range-inputs {
   display: flex;
   gap: 0.75rem;
@@ -256,7 +195,6 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 
-/* Custom date input calendar icon color */
 .date-input::-webkit-calendar-picker-indicator {
   filter: invert(1) brightness(0.8);
   opacity: 0.7;
@@ -267,7 +205,8 @@
 .date-input::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
-/* Main Content Area */
+
+/* Metrics */
 .quadrant-inside {
   padding: 1.5rem;
   display: flex;
@@ -276,14 +215,12 @@
   overflow-y: auto;
 }
 
-/* Metrics Grid */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  padding: 1.5rem;
 }
-/* Metric boxes with glass effect */
+
 .metric-box {
   background: rgba(13, 25, 48, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -298,20 +235,13 @@
   transform: translateY(-2px);
   box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
 }
-.metric-box h3 {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  letter-spacing: 0.3px;
-}
 
 .total-absent {
   border-left: 4px solid rgba(245, 158, 11, 0.7);
   background: rgba(245, 158, 11, 0.1);
+  width: 49%;
 }
 
-/* Enhanced Metric Numbers */
 .metric-number {
   font-size: 2rem;
   font-weight: 700;
@@ -332,50 +262,55 @@
   color: #fbbf24;
   text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
 }
-/* Employee Rankings */
+
+/* Employee List Section */
 .quadrant-3 {
-  display: flex;
-  flex-direction: column;
+  background-color: transparent;
+  backdrop-filter: none;
 }
 
 .rank-header {
   color: rgba(255, 255, 255, 0.95);
   font-size: 1.5rem;
   font-weight: 600;
-  padding: 1.5rem;
+  padding: 1.25rem 1.25rem 0.72rem;
   letter-spacing: 0.3px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.employee-ranks {
+.employees-list {
   padding: 1.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.5rem;
   overflow-y: auto;
+  height: calc(100% - 4rem);
 }
-/* Employee rankings with glass effect */
-.location-rank-card h4 {
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
+
+/* Individual Employee Cards */
+.employees-list > div {
+  transition: all 0.3s ease;
 }
-.location-rank-card:hover {
+
+.employees-list > div:hover {
   transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
-.rank-label {
-  color: rgba(255, 255, 255, 0.7);
+/* Scrollbars */
+.quadrant-inside::-webkit-scrollbar,
+.employees-list::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
 }
 
-.rank-value {
-  color: rgba(255, 255, 255, 0.95);
-  font-weight: 600;
+.quadrant-inside::-webkit-scrollbar-thumb,
+.employees-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }
 
+.quadrant-inside::-webkit-scrollbar-thumb:hover,
+.employees-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
 
 /* Responsive Design */
 @media (max-width: 1024px) {
@@ -383,50 +318,45 @@
     grid-template-columns: 1fr;
   }
   
-  .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .quadrant-3 {
+    max-height: 600px;
   }
 }
 
-@media (max-width: 640px) {
-  .dashboard-grid {
-    padding: 1rem;
-    gap: 1rem;
-  }
-
+@media (max-width: 768px) {
   .filter-options {
     flex-direction: column;
     align-items: stretch;
   }
-
+  
   .date-range-inputs {
     flex-direction: column;
   }
-
+  
   .metrics-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .employee-ranks {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .dashboard-container {
+    height: auto;
+    overflow: auto;
+  }
+
+  .dashboard-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  
+  .employees-list > div {
+    flex-direction: column;
+  }
+  
+  .employees-list .flex.items-center.space-x-6 {
+    margin-top: 1rem;
+    justify-content: space-around;
   }
 }
-.quadrant-inside::-webkit-scrollbar,
-.employee-ranks::-webkit-scrollbar {
-  width: 6px;
-  background: transparent;
-}
-
-.quadrant-inside::-webkit-scrollbar-thumb,
-.employee-ranks::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.quadrant-inside::-webkit-scrollbar-thumb:hover,
-.employee-ranks::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-
-

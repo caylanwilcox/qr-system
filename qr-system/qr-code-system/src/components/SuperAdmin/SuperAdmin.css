@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  font-family: var(--font-primary);
+}
+
+.metric-number {
+  font-family: var(--font-mono);
+}
+
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background-image: url('../AVB.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.admin-sidebar {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  width: 250px;
+  height: 100vh;
+  position: fixed;
+  color: white;
+  z-index: 50;
+  transition: width 0.3s ease;
+}
+
+.admin-sidebar.collapsed {
+  width: 70px;
+}
+
+.sidebar-header {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-logo {
+  width: 120px;
+  height: auto;
+  transition: width 0.3s ease;
+}
+
+.collapsed .sidebar-logo {
+  width: 40px;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+.collapsed .sidebar-header h2 {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+.toggle-sidebar {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 5px;
+  transition: color 0.3s;
+}
+
+.sidebar-nav {
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  transition: all 0.3s;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-nav a:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+}
+
+.sidebar-nav a.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-left: 3px solid white;
+}
+
+.nav-icon {
+  min-width: 24px;
+}
+
+.nav-text {
+  transition: opacity 0.3s;
+}
+
+.collapsed .nav-text {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+.logout-item {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+}
+
+.logout-item a {
+  color: #ef4444;
+}
+
+.admin-main {
+  flex: 1;
+  margin-left: 250px;
+  min-height: 100vh;
+  transition: margin-left 0.3s;
+}
+
+.admin-main.sidebar-collapsed {
+  margin-left: 70px;
+}
+
+.main-header {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.header-content {
+  padding: 12px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-content h1 {
+  margin: 0;
+  font-size: 1.rem;
+  color: white;
+  font-weight: 500;
+}
+
+.current-date {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.weather-strip {
+  display: flex;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 20px;
+  overflow-x: auto;
+}
+
+.weather-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: fit-content;
+}
+
+.weather-day:last-child {
+  border-right: none;
+}
+
+.day-name {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
+}
+
+.temperature {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .admin-sidebar {
+    width: 70px;
+  }
+  
+  .admin-main {
+    margin-left: 70px;
+  }
+  
+  .weather-strip {
+    padding: 10px;
+  }
+  
+  .nav-text,
+  .sidebar-header h2 {
+    display: none;
+  }
+  
+  .sidebar-logo {
+    width: 40px;
+  }
+}@import 'react-big-calendar/lib/css/react-big-calendar.css';

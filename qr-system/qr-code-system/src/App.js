@@ -1,90 +1,119 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from './services/PrivateRoute';
 import AuthProvider from './services/authContext';
+import { SchedulerProvider } from './components/Scheduler/context/SchedulerContext';
 import './components/App.css';
-import './index.css'
-const Login = lazy(() => import('./components/Login'));
-const Admin = lazy(() => import('./components/Admin'));
-const Profile = lazy(() => import('./components/Profile'));
-const UserDashboard = lazy(() => import('./components/UserDashboard'));
-const QRScannerPage = lazy(() => import('./components/QRScannerPage'));
-const ManageEmployees = lazy(() => import('./components/ManageEmployees'));
-const Reports = lazy(() => import('./components/Reports'));
-const Settings = lazy(() => import('./components/Settings'));
-const AddUser = lazy(() => import('./components/AddUser'));
-const AccountSettings = lazy(() => import('./components/AccountSettings'));
-const NotFound = lazy(() => import('./components/NotFound'));
-const EmployeeProfile = lazy(() => import('./components/EmployeeProfile'));
-const UpdateEmployeesButton = lazy(() => import('./components/clearAndAddEmployees')); // Import the button component
-const Scheduler = lazy(() => import('./components/Scheduler/SchedulerContainer'));
+import './index.css';
+import './components/glass-theme.css';
+
+
+// Scheduler Module
+import Scheduler from './components/Scheduler/SchedulerContainer';
+
+// Admin Module - Main components
+import SuperAdmin from './components/SuperAdmin/SuperAdmin';
+import LocationAdminDashboard from './components/LocationAdminDashboard';
+import ManageEmployees from './components/ManageEmployees';
+import Reports from './components/Reports';
+import Settings from './components/Settings';
+import AddUser from './components/AddUser';
+import AccountSettings from './components/AccountSettings';
+import QRScannerPage from './components/QRScannerPage';
+import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
+import ClearAndAddEmployees from './components/clearAndAddEmployees';
+
+// Core components that need lazy loading
+const Login = React.lazy(() => import('./components/Login'));
+const Profile = React.lazy(() => import('./components/Profile'));
+const UserDashboard = React.lazy(() => import('./components/UserDashboard'));
+const NotFound = React.lazy(() => import('./components/NotFound'));
 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Suspense fallback={<div>Loading...</div>}>
-          <Routes>
-            {/* Default route redirect to login */}
-            <Route path="/" element={<Navigate to="/login" />} />
-            <Route path="/login" element={<Login />} />
+      <SchedulerProvider>
+        <Router>
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+          </div>}>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<Navigate to="/login" />} />
+              <Route path="/login" element={<Login />} />
 
-            {/* Admin Routes Protected by Role */}
-            <Route
-              path="/admin"
-              element={
-                <PrivateRoute requiredRole="admin">
-                  <Admin />
-                </PrivateRoute>
-              }
-            >
-              {/* Nested routes inside the Admin panel */}
-              <Route path="manage-employees" element={<ManageEmployees />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="add-user" element={<AddUser />} />
-              <Route path="/admin/scheduler" element={<Scheduler />} />
-              <Route path="update-employees" element={<UpdateEmployeesButton />} /> {/* Add this line */}
-              <Route path="account-settings" element={<AccountSettings />} />
-              <Route path="qr-scanner" element={<QRScannerPage />} />
-              <Route path="employee/:employeeId" element={<EmployeeProfile />} />
-            </Route>
+              {/* Super Admin Routes */}
+              <Route
+                path="/super-admin/*"
+                element={
+                  <PrivateRoute requiredRole="SUPER_ADMIN">
+                    <SuperAdmin />
+                  </PrivateRoute>
+                }
+              >
+                <Route path="manage-employees" element={<ManageEmployees />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="add-user" element={<AddUser />} />
+                <Route path="scheduler" element={<Scheduler />} />
+                <Route path="update-employees" element={<ClearAndAddEmployees />} />
+                <Route path="account-settings" element={<AccountSettings />} />
+                <Route path="qr-scanner" element={<QRScannerPage />} />
+                <Route path="users/:employeeId" element={<EmployeeProfile />} />
+              </Route>
 
-            {/* Employee Profile Route */}
-            <Route
-              path="/employee/:employeeId"
-              element={
-                <PrivateRoute requiredRole="employee">
-                  <EmployeeProfile />
-                </PrivateRoute>
-              }
-            />
+              {/* Location Admin Routes */}
+              <Route
+                path="/location-admin/*"
+                element={
+                  <PrivateRoute requiredRole="ADMIN">
+                    <LocationAdminDashboard />
+                  </PrivateRoute>
+                }
+              >
+                <Route path="employees" element={<ManageEmployees />} />
+                <Route path="scheduler" element={<Scheduler />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="account-settings" element={<AccountSettings />} />
+                <Route path="qr-scanner" element={<QRScannerPage />} />
+              </Route>
 
-            {/* Employee Profile */}
-            <Route
-              path="/profile"
-              element={
-                <PrivateRoute requiredRole="employee">
-                  <Profile />
-                </PrivateRoute>
-              }
-            />
+              {/* Employee Routes */}
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute requiredRole="EMPLOYEE">
+                    <UserDashboard />
+                  </PrivateRoute>
+                }
+              />
 
-            {/* Employee Dashboard */}
-            <Route
-              path="/user-dashboard"
-              element={
-                <PrivateRoute requiredRole="employee">
-                  <UserDashboard />
-                </PrivateRoute>
-              }
-            />
+              <Route
+                path="/profile"
+                element={
+                  <PrivateRoute requiredRole="EMPLOYEE">
+                    <Profile />
+                  </PrivateRoute>
+                }
+              />
 
-            {/* Not Found Route */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </Router>
+              {/* Shared Routes */}
+              <Route
+                path="/account-settings"
+                element={
+                  <PrivateRoute>
+                    <AccountSettings />
+                  </PrivateRoute>
+                }
+              />
+
+              {/* Not Found Route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </Router>
+      </SchedulerProvider>
     </AuthProvider>
   );
 }

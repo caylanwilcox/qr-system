@@ -1,7 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+@layer base {
+  body {
+    @apply bg-[#0a1120] text-white min-h-screen;
+    background: linear-gradient(135deg, #0a1120 0%, #132237 100%);
+  }
+}
 body {
   font-family: Arial, sans-serif;
-  background-color: #f7f7f7;
   margin: 0;
   padding: 0;
 }
@@ -11,7 +19,6 @@ body {
 }
 
 .App.light {
-  background-color: #fafafa;
   color: #000;
 }
 

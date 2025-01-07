@@ -1,0 +1,269 @@
+[
+    {
+      "name": "Alex Gutierrez",
+      "lastName": "Salcedo",
+      "service": "No",
+      "phone": "(331) 385 3542"
+    },
+    {
+      "name": "Alfonso Nocelotl",
+      "lastName": "Velazquez",
+      "service": "No",
+      "phone": "(331) 454 3729"
+    },
+    {
+      "name": "Alvaro Aponte",
+      "lastName": "Peña",
+      "service": "No",
+      "phone": "(612) 261 5858"
+    },
+    {
+      "name": "Antonia Cardenas",
+      "lastName": "",
+      "service": "No",
+      "phone": "(630) 618 1870"
+    },
+    {
+      "name": "Araceli Flores",
+      "lastName": "",
+      "service": "Coordinador de Oracion y Meditacion",
+      "phone": "(630) 373 5570"
+    },
+    {
+      "name": "Benjamin Elizalde",
+      "lastName": "Ruiz",
+      "service": "No",
+      "phone": "(630) 639 9409"
+    },
+    {
+      "name": "Blanca Rubio",
+      "lastName": "",
+      "service": "No",
+      "phone": "(630) 823 1892"
+    },
+    {
+      "name": "Blanca Ramos",
+      "lastName": "Garcia",
+      "service": "No",
+      "phone": "(630) 945 6204"
+    },
+    {
+      "name": "Cecilia Magallanes",
+      "lastName": "",
+      "service": "No",
+      "phone": "(331) 274 8628"
+    },
+    {
+      "name": "Crisanto Mendez",
+      "lastName": "Ayala",
+      "service": "Coordinador de Alabanza",
+      "phone": "(630) 506 7174"
+    },
+    {
+      "name": "Diana Xique",
+      "lastName": "Magaña",
+      "service": "No",
+      "phone": "(630) 644 8402"
+    },
+    {
+      "name": "Diana Cruz",
+      "lastName": "",
+      "service": "No",
+      "phone": "(630) 303 7954"
+    },
+    {
+      "name": "Edi Ferro",
+      "lastName": "",
+      "service": "No",
+      "phone": "(815) 766 4323"
+    },
+    {
+      "name": "Edith Morales",
+      "lastName": "Beltran",
+      "service": "No",
+      "phone": "(331) 274 6707"
+    },
+    {
+      "name": "Eli Nocelotl",
+      "lastName": "",
+      "service": "Coordinador JAV",
+      "phone": "(331) 758 2607"
+    },
+    {
+      "name": "Elizabeth Perez",
+      "lastName": "",
+      "service": "No",
+      "phone": "(219) 292 1128"
+    },
+    {
+      "name": "Elssy Chavez",
+      "lastName": "Orozco",
+      "service": "Tesoreria de Grupo",
+      "phone": "(630) 456 0323"
+    },
+    {
+      "name": "Erendira Bedolla",
+      "lastName": "Sanchez",
+      "service": "No",
+      "phone": "(630) 731 6730"
+    },
+    {
+      "name": "Erik Hernandez",
+      "lastName": "Gonzalez",
+      "service": "No",
+      "phone": "(630) 742 5374"
+    },
+    {
+      "name": "Francisco Lopez",
+      "lastName": "",
+      "service": "Alterno Coordinador de Hacienda",
+      "phone": "(630) 806 5994"
+    },
+    {
+      "name": "Gerardo Nuñez",
+      "lastName": "",
+      "service": "No",
+      "phone": "(630) 677 5994"
+    },
+    {
+      "name": "Guadalupe Pantoja",
+      "lastName": "",
+      "service": "No",
+      "phone": "(708) 341 1823"
+    },
+    {
+      "name": "Ines Aguilar",
+      "lastName": "Flores",
+      "service": "No",
+      "phone": "(773) 980 0663"
+    },
+    {
+      "name": "Janet Gonzalez",
+      "lastName": "A",
+      "service": "No",
+      "phone": "(630) 888 9208"
+    },
+        {
+          "name": "Javier Arreguin",
+          "lastName": "",
+          "service": "No",
+          "phone": "(630) 901 3858"
+        },
+        {
+          "name": "Jeovanni Sarmiento",
+          "lastName": "",
+          "service": "No",
+          "phone": "(773) 615 7634"
+        },
+        {
+          "name": "Jhon Jairo Gutierrez",
+          "lastName": "",
+          "service": "No",
+          "phone": "(630) 788 7291"
+        },
+        {
+          "name": "Jorge Alberto Garcia",
+          "lastName": "Guerrero",
+          "service": "Atraccion Externa",
+          "phone": "(630) 345 2395"
+        },
+        {
+          "name": "Jose Muñoz",
+          "lastName": "",
+          "service": "No",
+          "phone": "(331) 454 1438"
+        },
+        {
+          "name": "Jose E Cruz",
+          "lastName": "Gallardo",
+          "service": "No",
+          "phone": "(630) 401 9540"
+        },
+        {
+          "name": "Josefina Cielo",
+          "lastName": "",
+          "service": "No",
+          "phone": "(630) 450 7387"
+        },
+        {
+          "name": "Joselyn Gallardo",
+          "lastName": "Rivera",
+          "service": "Atraccion Interna JAV",
+          "phone": "(331) 431 7434"
+        },
+        {
+          "name": "Juanis Rios",
+          "lastName": "Peña",
+          "service": "No",
+          "phone": "(630) 450 4968"
+        },
+        {
+          "name": "Juliana Elizondo",
+          "lastName": "Almaraz",
+          "service": "No",
+          "phone": "(630) 236 1227"
+        },
+        {
+          "name": "Julissa Rodriguez",
+          "lastName": "Varela",
+          "service": "No",
+          "phone": "(630) 518 0437"
+        },
+        {
+          "name": "Kike Rios",
+          "lastName": "Peña",
+          "service": "Atraccion Interna",
+          "phone": "(630) 450 6517"
+        },
+        {
+          "name": "Laura Muñoz",
+          "lastName": "",
+          "service": "No",
+          "phone": "(331) 431 9066"
+        },
+        {
+          "name": "Liz A",
+          "lastName": "",
+          "service": "No",
+          "phone": "(331) 262 3294"
+        },
+        {
+          "name": "Lolis Rivera",
+          "lastName": "Nuñez",
+          "service": "No",
+          "phone": "(331) 575 4269"
+        },
+        {
+          "name": "Luly Ch",
+          "lastName": "",
+          "service": "No",
+          "phone": "(630) 809 6107"
+        },
+        {
+          "name": "Maria Camacho",
+          "lastName": "",
+          "service": "No",
+          "phone": "(331) 575 6486"
+        },
+        {
+          "name": "Maria Ruiz",
+          "lastName": "Aguilera",
+          "service": "No",
+          "phone": "(630) 340 6616"
+        },
+        {
+          "name": "Maria de Jesus Hernandez",
+          "lastName": "",
+          "service": "Preparador de Primeros Inventarios",
+          "phone": "(630) 854 3328"
+        },
+        {
+          "name": "Maria del Carmen Quiroz",
+          "lastName": "Loza",
+          "service": "Relaciones Publicas",
+          "phone": "(313) 805 5805"
+        }
+      ]
+      
+  
+  

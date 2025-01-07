@@ -1,42 +1,48 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../services/firebaseConfig'; // Import your Firebase config file
+import { useAuth } from '../services/authContext';
 import './Login.css';
-import logo from './download.png'; // Import the logo image
+import logo from './download.png';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate(); // This is used for navigation after login
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
 
   const handleLogin = async (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      const idTokenResult = await user.getIdTokenResult();
-      const role = idTokenResult.claims.role;
+      const user = await signIn(email, password);
+      console.log('Login successful, user role:', user.role);
 
-      if (role === 'admin') {
-        navigate('/admin'); 
-      } else {
-        navigate('/user-dashboard'); 
+      // Navigate based on role
+      switch (user.role) {
+        case 'SUPER_ADMIN':
+          navigate('/super-admin');
+          break;
+        case 'ADMIN':
+          navigate('/location-admin');
+          break;
+        default:
+          navigate('/dashboard');
       }
-
     } catch (error) {
+      console.error('Login error:', error);
       setError('Failed to sign in. Please check your email or password.');
-      console.error(error.message); 
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="login-container">
       <div className="login-box">
-        {/* Logo Image */}
         <img src={logo} alt="Company Logo" className="login-logo" />
         
         <h1 className="login-header">Login</h1>
@@ -49,6 +55,7 @@ const Login = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
             />
           </div>
           <div className="form-group">
@@ -59,10 +66,17 @@ const Login = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={loading}
             />
           </div>
           {error && <p className="login-error">{error}</p>}
-          <button type="submit" className="login-button">Login</button>
+          <button 
+            type="submit" 
+            className="login-button"
+            disabled={loading}
+          >
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
         </form>
       </div>
     </div>

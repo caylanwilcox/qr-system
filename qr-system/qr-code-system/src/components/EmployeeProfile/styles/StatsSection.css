@@ -1,0 +1,167 @@
+/* src/components/EmployeeProfile/styles/StatsSection.css */
+
+.stat-card {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: transform 0.2s ease;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-2px);
+  }
+  
+  .stat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-secondary);
+  }
+  
+  .stat-header h3 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  
+  .stats-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0.5rem 0;
+  }
+  
+  .stats-period {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  
+  .trend-indicator {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 1rem;
+    margin-top: 0.5rem;
+    text-align: center;
+  }
+  
+  /* Trends Section */
+  .trends-section {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    padding: 0 1.5rem 1.5rem;
+  }
+  
+  .monthly-comparison,
+  .attendance-insights {
+    padding: 1.5rem;
+  }
+  
+  .monthly-comparison h4,
+  .attendance-insights h4 {
+    margin: 0 0 1rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+  }
+  
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  
+  .comparison-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .comparison-item span {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  
+  .comparison-item strong {
+    font-size: 1.25rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  .insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .insight-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.02);
+  }
+  
+  /* Score Classes */
+  .score-perfect {
+    color: #10B981;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  }
+  
+  .score-high {
+    color: #34D399;
+    text-shadow: 0 0 10px rgba(52, 211, 153, 0.3);
+  }
+  
+  .score-good {
+    color: #6EE7B7;
+    text-shadow: 0 0 10px rgba(110, 231, 183, 0.3);
+  }
+  
+  .score-medium {
+    color: #FBBF24;
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+  }
+  
+  .score-below {
+    color: #F59E0B;
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  }
+  
+  .score-poor {
+    color: #EF4444;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+  }
+  
+  .score-critical {
+    color: #DC2626;
+    text-shadow: 0 0 10px rgba(220, 38, 38, 0.3);
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+  
+    .trends-section {
+      grid-template-columns: 1fr;
+    }
+  
+    .comparison-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .comparison-grid {
+      grid-template-columns: 1fr;
+    }
+  
+    .stats-value {
+      font-size: 1.5rem;
+    }
+  }

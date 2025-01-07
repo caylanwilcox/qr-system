@@ -1,21 +1,35 @@
-import React, { useContext } from 'react';
-import { Navigate } from 'react-router-dom';
-import { AuthContext } from './authContext';  // Ensure this path is correct
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from './authContext';
 
 const PrivateRoute = ({ children, requiredRole }) => {
-  const { user } = useContext(AuthContext);
+  const { user, loading, hasRequiredRole } = useAuth();
+  const location = useLocation();
 
-  // If the user is not authenticated, redirect to login
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
+
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If the user does not have the required role, redirect to access-denied
-  if (requiredRole && user.role !== requiredRole) {
-    return <Navigate to="/access-denied" />;
+  if (requiredRole && !hasRequiredRole(user.role, requiredRole)) {
+    // Redirect based on user's role
+    switch (user.role) {
+      case 'SUPER_ADMIN':
+        return <Navigate to="/super-admin" replace />;
+      case 'ADMIN':
+        return <Navigate to="/location-admin" replace />;
+      default:
+        return <Navigate to="/dashboard" replace />;
+    }
   }
 
-  // If the user is authenticated and has the required role, allow access
   return children;
 };
 
