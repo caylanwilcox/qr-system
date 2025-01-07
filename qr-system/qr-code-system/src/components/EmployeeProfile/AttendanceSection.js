@@ -1,125 +1,161 @@
-// components/AttendanceSection.js
 import React from 'react';
 import { format } from 'date-fns';
 import { Trash2, Clock, AlertCircle } from 'lucide-react';
-import PropTypes from 'prop-types';
 
 const AttendanceSection = ({
-  attendanceRecords,
+  attendanceRecords = [],
   deleteConfirm,
   onDeleteRecord
 }) => {
   const getStatusColor = (clockIn, expectedTime = '09:00') => {
-    if (!clockIn) return 'text-red-500';
+    if (!clockIn) return 'text-red-400';
     const clockInTime = new Date(`2000-01-01 ${clockIn}`);
     const expectedDateTime = new Date(`2000-01-01 ${expectedTime}`);
-    return clockInTime <= expectedDateTime ? 'text-green-500' : 'text-yellow-500';
+    return clockInTime <= expectedDateTime ? 'text-emerald-400' : 'text-yellow-400';
+  };
+
+  const StatusBadge = ({ clockInTime }) => {
+    if (!clockInTime) {
+      return (
+        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                       bg-red-500/10 text-red-400 border border-red-500/20">
+          <AlertCircle className="w-3 h-3" />
+          Absent
+        </span>
+      );
+    }
+
+    if (clockInTime > '09:15') {
+      return (
+        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                       bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+          <Clock className="w-3 h-3" />
+          Late
+        </span>
+      );
+    }
+
+    return (
+      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                     bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <Clock className="w-3 h-3" />
+        On Time
+      </span>
+    );
   };
 
   return (
-    <div className="section glass-panel">
-      <div className="section-header">
-        <h2 className="section-title">Attendance Records</h2>
+    <div className="bg-glass backdrop-blur border border-glass-light rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="p-6 border-b border-glass-light">
+        <h2 className="text-lg font-semibold text-white/90">Attendance Records</h2>
       </div>
-      <div className="table-container">
-        <table className="attendance-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Clock In</th>
-              <th>Clock Out</th>
-              <th>Hours</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {attendanceRecords?.map(record => (
-              <tr key={record.timestamp}>
-                <td>{format(new Date(record.date), 'MMM dd, yyyy')}</td>
-                <td className={getStatusColor(record.clockInTime)}>
-                  <div className="flex items-center gap-2">
-                    <Clock size={16} />
-                    {record.clockInTime || 'Not Clocked In'}
-                  </div>
-                </td>
-                <td>
-                  <div className="flex items-center gap-2">
-                    <Clock size={16} />
-                    {record.clockOutTime || 'Not Clocked Out'}
-                  </div>
-                </td>
-                <td>
-                  {record.hoursWorked ? (
-                    `${record.hoursWorked}h`
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                </td>
-                <td>
-                  {!record.clockInTime ? (
-                    <span className="flex items-center gap-1 text-red-500">
-                      <AlertCircle size={16} />
-                      Absent
-                    </span>
-                  ) : record.clockInTime > '09:15' ? (
-                    <span className="flex items-center gap-1 text-yellow-500">
-                      <Clock size={16} />
-                      Late
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-green-500">
-                      <Clock size={16} />
-                      On Time
-                    </span>
-                  )}
-                </td>
-                <td>
-                  <button
-                    onClick={() => onDeleteRecord(record.timestamp)}
-                    className="delete-record"
-                    title="Delete record"
-                  >
-                    {deleteConfirm === record.timestamp ? (
-                      'Confirm Delete'
-                    ) : (
-                      <Trash2 size={16} />
-                    )}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {(!attendanceRecords || attendanceRecords.length === 0) && (
+
+      {/* Table Container */}
+      <div className="p-6">
+        <div className="relative overflow-x-auto">
+          <table className="w-full min-w-[800px]">
+            <thead>
               <tr>
-                <td colSpan="6" className="text-center py-4">
-                  No attendance records found
-                </td>
+                <th className="bg-glass-dark px-6 py-4 text-left text-sm font-medium text-white/70 
+                             border-b border-glass-light">
+                  Date
+                </th>
+                <th className="bg-glass-dark px-6 py-4 text-left text-sm font-medium text-white/70 
+                             border-b border-glass-light">
+                  Clock In
+                </th>
+                <th className="bg-glass-dark px-6 py-4 text-left text-sm font-medium text-white/70 
+                             border-b border-glass-light">
+                  Clock Out
+                </th>
+                <th className="bg-glass-dark px-6 py-4 text-left text-sm font-medium text-white/70 
+                             border-b border-glass-light">
+                  Hours
+                </th>
+                <th className="bg-glass-dark px-6 py-4 text-left text-sm font-medium text-white/70 
+                             border-b border-glass-light">
+                  Status
+                </th>
+                <th className="bg-glass-dark px-6 py-4 text-left text-sm font-medium text-white/70 
+                             border-b border-glass-light">
+                  Actions
+                </th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-glass-light">
+              {attendanceRecords.map(record => (
+                <tr 
+                  key={record.timestamp}
+                  className="hover:bg-white/[0.02] transition-colors"
+                >
+                  <td className="px-6 py-4 text-sm text-white/90">
+                    {format(new Date(record.date), 'MMM dd, yyyy')}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className={`flex items-center gap-2 text-sm ${getStatusColor(record.clockInTime)}`}>
+                      <Clock className="w-4 h-4" />
+                      <span className="font-mono">
+                        {record.clockInTime || 'Not Clocked In'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-sm text-white/70">
+                      <Clock className="w-4 h-4" />
+                      <span className="font-mono">
+                        {record.clockOutTime || 'Not Clocked Out'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm font-mono">
+                    {record.hoursWorked ? (
+                      <span className="text-white/90">{record.hoursWorked}h</span>
+                    ) : (
+                      <span className="text-white/30">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge clockInTime={record.clockInTime} />
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => onDeleteRecord(record.timestamp)}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium 
+                                transition-all duration-200 ${
+                        deleteConfirm === record.timestamp
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+                          : 'bg-glass-light text-white/70 hover:text-red-400 hover:bg-red-500/20'
+                      }`}
+                    >
+                      {deleteConfirm === record.timestamp ? (
+                        'Confirm Delete'
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </>
+                      )}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {(!attendanceRecords || attendanceRecords.length === 0) && (
+                <tr>
+                  <td 
+                    colSpan="6" 
+                    className="px-6 py-8 text-center text-sm text-white/50"
+                  >
+                    No attendance records found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
-};
-
-AttendanceSection.propTypes = {
-  attendanceRecords: PropTypes.arrayOf(
-    PropTypes.shape({
-      timestamp: PropTypes.number.isRequired,
-      date: PropTypes.string.isRequired,
-      clockInTime: PropTypes.string,
-      clockOutTime: PropTypes.string,
-      hoursWorked: PropTypes.string,
-    })
-  ),
-  deleteConfirm: PropTypes.number,
-  onDeleteRecord: PropTypes.func.isRequired,
-};
-
-AttendanceSection.defaultProps = {
-  attendanceRecords: [],
-  deleteConfirm: null,
 };
 
 export default AttendanceSection;

@@ -1,42 +1,40 @@
-// src/components/EmployeeProfile/StatsSection.js
 import React from 'react';
-import PropTypes from 'prop-types';
 import { Activity, Clock, Calendar, TrendingUp } from 'lucide-react';
 
 const getScoreClass = (score) => {
-  if (score >= 95) return 'score-perfect';
-  if (score >= 85) return 'score-high';
-  if (score >= 75) return 'score-good';
-  if (score >= 65) return 'score-medium';
-  if (score >= 55) return 'score-below';
-  if (score >= 45) return 'score-poor';
-  return 'score-critical';
+  if (score >= 95) return 'text-emerald-400 glow-emerald';
+  if (score >= 85) return 'text-green-400 glow-green';
+  if (score >= 75) return 'text-teal-400 glow-teal';
+  if (score >= 65) return 'text-yellow-400 glow-yellow';
+  if (score >= 55) return 'text-orange-400 glow-orange';
+  if (score >= 45) return 'text-red-400 glow-red';
+  return 'text-red-600 glow-red-deep';
 };
 
 const StatsSection = ({ stats }) => {
   const statItems = [
     {
-      icon: <Activity size={20} />,
+      icon: <Activity className="w-5 h-5 text-blue-400" />,
       title: 'Attendance Rate',
       value: `${stats.attendanceRate}%`,
       scoreClass: getScoreClass(stats.attendanceRate),
       period: 'Last 30 Days'
     },
     {
-      icon: <Clock size={20} />,
+      icon: <Clock className="w-5 h-5 text-purple-400" />,
       title: 'On-Time Rate',
       value: `${stats.punctualityRate}%`,
       scoreClass: getScoreClass(stats.punctualityRate),
       period: 'Last 30 Days'
     },
     {
-      icon: <Calendar size={20} />,
+      icon: <Calendar className="w-5 h-5 text-green-400" />,
       title: 'Total Hours',
       value: `${stats.totalHours}h`,
       period: 'Month to Date'
     },
     {
-      icon: <TrendingUp size={20} />,
+      icon: <TrendingUp className="w-5 h-5 text-yellow-400" />,
       title: 'Average Hours/Day',
       value: `${stats.avgHoursPerDay}h`,
       period: 'Last 30 Days'
@@ -44,23 +42,36 @@ const StatsSection = ({ stats }) => {
   ];
 
   return (
-    <div className="section glass-panel">
-      <div className="section-header">
-        <h2 className="section-title">Performance Statistics</h2>
+    <div className="bg-glass backdrop-blur border border-glass-light rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="p-6 border-b border-glass-light">
+        <h2 className="text-lg font-semibold text-white/90">Performance Statistics</h2>
       </div>
-      <div className="stats-grid">
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-6">
         {statItems.map((stat, index) => (
-          <div key={index} className="stat-card glass-panel">
-            <div className="stat-header">
+          <div 
+            key={index}
+            className="bg-glass-dark backdrop-blur border border-glass-light rounded-lg p-4
+                     hover:-translate-y-1 transition-transform duration-300"
+          >
+            <div className="flex items-center gap-3 mb-3">
               {stat.icon}
-              <h3>{stat.title}</h3>
+              <h3 className="text-sm font-medium text-white/70">{stat.title}</h3>
             </div>
-            <p className={`stats-value ${stat.scoreClass || ''}`}>
+            <div className={`font-mono text-2xl font-semibold mb-2 ${stat.scoreClass}`}>
               {stat.value}
-            </p>
-            <span className="stats-period">{stat.period}</span>
+            </div>
+            <div className="text-xs text-white/50">{stat.period}</div>
             {stat.scoreClass && (
-              <div className={`trend-indicator ${stat.scoreClass}`}>
+              <div className={`mt-2 text-xs px-2 py-1 rounded-full ${
+                parseFloat(stat.value) >= 75 
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                  : parseFloat(stat.value) >= 50 
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+              }`}>
                 {parseFloat(stat.value) >= 75 ? 'Good' : 
                  parseFloat(stat.value) >= 50 ? 'Average' : 'Needs Improvement'}
               </div>
@@ -69,59 +80,62 @@ const StatsSection = ({ stats }) => {
         ))}
       </div>
 
-      {/* Additional Stats and Trends */}
-      <div className="trends-section">
-        <div className="monthly-comparison glass-panel">
-          <h4>Monthly Comparison</h4>
-          <div className="comparison-grid">
-            <div className="comparison-item">
-              <span>Previous Month</span>
-              <strong>{stats.previousMonthHours || '0'}h</strong>
+      {/* Trends Section */}
+      <div className="grid md:grid-cols-2 gap-6 p-6 border-t border-glass-light">
+        {/* Monthly Comparison */}
+        <div className="bg-glass-dark backdrop-blur rounded-lg p-4">
+          <h4 className="text-sm font-medium text-white/80 mb-4">Monthly Comparison</h4>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <div className="text-xs text-white/50 mb-1">Previous Month</div>
+              <div className="font-mono text-lg font-medium text-white/90">
+                {stats.previousMonthHours || '0'}h
+              </div>
             </div>
-            <div className="comparison-item">
-              <span>Current Month</span>
-              <strong>{stats.totalHours}h</strong>
+            <div>
+              <div className="text-xs text-white/50 mb-1">Current Month</div>
+              <div className="font-mono text-lg font-medium text-white/90">
+                {stats.totalHours}h
+              </div>
             </div>
-            <div className="comparison-item">
-              <span>Change</span>
-              <strong className={
-                stats.hoursChange > 0 ? 'text-green-500' : 
-                stats.hoursChange < 0 ? 'text-red-500' : ''
-              }>
+            <div>
+              <div className="text-xs text-white/50 mb-1">Change</div>
+              <div className={`font-mono text-lg font-medium ${
+                stats.hoursChange > 0 ? 'text-emerald-400' : 
+                stats.hoursChange < 0 ? 'text-red-400' : 'text-white/90'
+              }`}>
                 {stats.hoursChange > 0 ? '+' : ''}
                 {stats.hoursChange || '0'}%
-              </strong>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="attendance-insights glass-panel">
-          <h4>Quick Insights</h4>
-          <div className="insights-list">
-            {/* Perfect Attendance Streak */}
+        {/* Attendance Insights */}
+        <div className="bg-glass-dark backdrop-blur rounded-lg p-4">
+          <h4 className="text-sm font-medium text-white/80 mb-4">Quick Insights</h4>
+          <div className="space-y-3">
             {stats.perfectStreak > 0 && (
-              <div className="insight-item">
-                <Activity size={16} />
+              <div className="flex items-center gap-2 text-sm text-white/70 bg-glass p-2 rounded-lg">
+                <Activity className="w-4 h-4 text-emerald-400" />
                 <span>
                   {stats.perfectStreak} day{stats.perfectStreak !== 1 ? 's' : ''} perfect attendance streak
                 </span>
               </div>
             )}
             
-            {/* Early Arrival Rate */}
             {stats.earlyArrivalRate && (
-              <div className="insight-item">
-                <Clock size={16} />
+              <div className="flex items-center gap-2 text-sm text-white/70 bg-glass p-2 rounded-lg">
+                <Clock className="w-4 h-4 text-blue-400" />
                 <span>
                   Arrives early {stats.earlyArrivalRate}% of the time
                 </span>
               </div>
             )}
 
-            {/* Most Active Day */}
             {stats.mostActiveDay && (
-              <div className="insight-item">
-                <Calendar size={16} />
+              <div className="flex items-center gap-2 text-sm text-white/70 bg-glass p-2 rounded-lg">
+                <Calendar className="w-4 h-4 text-purple-400" />
                 <span>
                   Most active on {stats.mostActiveDay}s
                 </span>
@@ -132,20 +146,6 @@ const StatsSection = ({ stats }) => {
       </div>
     </div>
   );
-};
-
-StatsSection.propTypes = {
-  stats: PropTypes.shape({
-    attendanceRate: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    punctualityRate: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    totalHours: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    avgHoursPerDay: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    previousMonthHours: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-    hoursChange: PropTypes.number,
-    perfectStreak: PropTypes.number,
-    earlyArrivalRate: PropTypes.number,
-    mostActiveDay: PropTypes.string,
-  }).isRequired,
 };
 
 export default StatsSection;

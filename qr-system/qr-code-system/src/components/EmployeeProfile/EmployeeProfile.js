@@ -4,6 +4,7 @@ import { ref, get, update, remove } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { formatAttendanceRecords, calculateStats, formatScheduledDates } from '../utils/employeeUtils';
 import './styles/EmployeeProfile.css';
+import { User, BarChart2, Calendar } from 'lucide-react';
 
 // Component Imports
 import ProfileHeader from './ProfileHeader';
@@ -59,6 +60,22 @@ const INITIAL_STATS = {
   mostActiveDay: '',
 };
 
+const TabButton = ({ active, onClick, icon: Icon, label }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium rounded-lg
+               transition-all duration-200 ${
+      active
+        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+        : 'text-white/70 hover:bg-white/5'
+    }`}
+  >
+    <Icon className="w-4 h-4" />
+    {label}
+  </button>
+);
+ 
+
 const EmployeeProfile = () => {
   const { employeeId } = useParams();
   
@@ -72,6 +89,25 @@ const EmployeeProfile = () => {
     message: '', 
     type: '' 
   });
+  const [activeTab, setActiveTab] = useState('personal');
+
+  const tabs = [
+    {
+      id: 'personal',
+      label: 'Personal Information',
+      icon: User,
+    },
+    {
+      id: 'stats',
+      label: 'Statistics',
+      icon: BarChart2,
+    },
+    {
+      id: 'calendar',
+      label: 'Calendar',
+      icon: Calendar,
+    },
+  ];
 
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
@@ -255,10 +291,85 @@ const EmployeeProfile = () => {
     return (
       <div className="error-container glass-panel">
         <p>{error}</p>
-        <button 
-          onClick={fetchEmployeeDetails} 
-          className="btn primary"
-        >
+        <button onClick={fetchEmployeeDetails} className="btn primary">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'personal':
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="glass-panel p-6">
+              <PersonalInfoSection
+                formData={formData}
+                editMode={editMode}
+                handleInputChange={handleInputChange}
+                onRoleToggle={handleRoleToggle}
+                locations={LOCATIONS}
+                departments={DEPARTMENTS}
+              />
+            </div>
+            <div className="glass-panel p-6">
+              <IdCardSection
+                employeeDetails={employeeDetails}
+                employeeId={employeeId}
+              />
+            </div>
+            <div className="glass-panel p-6">
+              <AttendanceSection
+                attendanceRecords={attendanceRecords}
+                deleteConfirm={deleteConfirm}
+                onDeleteRecord={handleDeleteRecord}
+              />
+            </div>
+          </div>
+        );
+      
+      case 'stats':
+        return (
+          <div className="glass-panel p-6">
+            <StatsSection stats={stats} />
+          </div>
+        );
+      
+      case 'calendar':
+        return (
+          <div className="glass-panel">
+            <ScheduleSection
+              scheduledDates={scheduledDates}
+              attendanceRecords={attendanceRecords}
+              onScheduleAdd={handleScheduleAdd}
+              newScheduleDate={newScheduleDate}
+              newScheduleTime={newScheduleTime}
+              setNewScheduleDate={setNewScheduleDate}
+              setNewScheduleTime={setNewScheduleTime}
+            />
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-overlay">
+        <div className="loading-spinner" />
+        <p>Loading employee details...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="error-container glass-panel">
+        <p>{error}</p>
+        <button onClick={fetchEmployeeDetails} className="btn primary">
           Retry
         </button>
       </div>
@@ -283,42 +394,24 @@ const EmployeeProfile = () => {
         handleInputChange={handleInputChange}
       />
 
-      <div className="profile-sections">
-        <div className="left-section">
-          <PersonalInfoSection
-            formData={formData}
-            editMode={editMode}
-            handleInputChange={handleInputChange}
-            onRoleToggle={handleRoleToggle}
-            locations={LOCATIONS}
-            departments={DEPARTMENTS}
-          />
-
-          <StatsSection stats={stats} />
-
-          <AttendanceSection
-            attendanceRecords={attendanceRecords}
-            deleteConfirm={deleteConfirm}
-            onDeleteRecord={handleDeleteRecord}
-          />
+      {/* Tab Navigation */}
+      <div className="bg-glass-dark backdrop-blur border border-glass-light rounded-lg mt-6 mb-6">
+        <div className="p-2 flex flex-wrap gap-2">
+          {tabs.map((tab) => (
+            <TabButton
+              key={tab.id}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              icon={tab.icon}
+              label={tab.label}
+            />
+          ))}
         </div>
+      </div>
 
-        <div className="right-section">
-          <IdCardSection
-            employeeDetails={employeeDetails}
-            employeeId={employeeId}
-          />
-
-          <ScheduleSection
-            scheduledDates={scheduledDates}
-            attendanceRecords={attendanceRecords}
-            onScheduleAdd={handleScheduleAdd}
-            newScheduleDate={newScheduleDate}
-            newScheduleTime={newScheduleTime}
-            setNewScheduleDate={setNewScheduleDate}
-            setNewScheduleTime={setNewScheduleTime}
-          />
-        </div>
+      {/* Tab Content */}
+      <div className="tab-content">
+        {renderTabContent()}
       </div>
     </div>
   );

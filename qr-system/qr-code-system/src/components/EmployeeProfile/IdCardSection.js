@@ -10,50 +10,51 @@ const IdCardSection = ({ employeeDetails, employeeId }) => {
   const [error, setError] = useState(null);
 
   const generatePDF = async (cardRef) => {
-    if (!cardRef.current) return;
+    if (!cardRef.current) {
+      setError('Card reference not found. Please try again.');
+      return;
+    }
     
     setIsGenerating(true);
     setError(null);
 
     try {
-      // Create PDF with card dimensions (credit card size)
+      // Set up PDF with ID card dimensions
       const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: [54, 85.6]
+        format: [54, 85.6] // Standard ID card size
       });
 
-      // Capture front of card
-      const frontCanvas = await html2canvas(cardRef.current.querySelector('.card-front'), {
-        scale: 4,
-        backgroundColor: null,
+      // Capture the card element
+      const cardElement = cardRef.current;
+      const canvas = await html2canvas(cardElement, {
+        scale: 4, // Higher scale for better quality
+        backgroundColor: '#0f172a', // Match your dark background
+        logging: false,
         useCORS: true,
-        logging: false
+        allowTaint: true,
+        onclone: (clonedDoc) => {
+          // Ensure the cloned element is visible
+          const clonedCard = clonedDoc.querySelector('.card-front');
+          if (clonedCard) {
+            clonedCard.style.transform = 'none';
+            clonedCard.style.opacity = '1';
+          }
+        }
       });
 
-      // Add front of card
-      const frontImgData = frontCanvas.toDataURL('image/png');
-      doc.addImage(frontImgData, 'PNG', 0, 0, 85.6, 54);
+      // Add the captured image to the PDF
+      const imgData = canvas.toDataURL('image/png');
+      doc.addImage(imgData, 'PNG', 0, 0, 85.6, 54, '', 'FAST');
 
-      // Add new page for back
-      doc.addPage([54, 85.6], 'landscape');
-      
-      // Capture and add back of card
-      const backCanvas = await html2canvas(cardRef.current.querySelector('.card-back'), {
-        scale: 4,
-        backgroundColor: null,
-        useCORS: true,
-        logging: false
-      });
-      
-      const backImgData = backCanvas.toDataURL('image/png');
-      doc.addImage(backImgData, 'PNG', 0, 0, 85.6, 54);
-
-      // Save the PDF with employee name
+      // Save the PDF
       const fileName = `${employeeDetails.name.replace(/\s+/g, '_')}_ID_Card.pdf`;
       doc.save(fileName);
+
+      setError(null);
     } catch (err) {
-      console.error('Error generating PDF:', err);
+      console.error('PDF Generation Error:', err);
       setError('Failed to generate ID card PDF. Please try again.');
     } finally {
       setIsGenerating(false);
@@ -84,7 +85,7 @@ const IdCardSection = ({ employeeDetails, employeeId }) => {
             )}
           </div>
 
-          {/* ID Card Container */}
+          {/* ID Card */}
           <div className="flex justify-center">
             <IdCard 
               employeeDetails={employeeDetails} 
