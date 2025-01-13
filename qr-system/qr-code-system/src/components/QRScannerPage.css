@@ -1,95 +1,148 @@
 /* QRScannerPage.css */
 
-/* Container styles */
+/* Container Styles */
 .admin-container {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 40px;
+  padding: 2rem;
   box-sizing: border-box;
   position: relative;
-  background-color: transparent;
+  background: rgba(17, 25, 40, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
+/* Header Styles */
 .Admin-header {
   font-size: 2.5rem;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.9);
   text-align: center;
-  margin-bottom: 30px;
-  font-weight: bold;
+  margin-bottom: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
+/* Settings Icon Styles */
 .gear-icon {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  color:rgb(255, 255, 255);
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
+  transition: transform 0.3s ease, opacity 0.2s ease;
+  z-index: 10;
 }
 
+.gear-icon:hover {
+  transform: rotate(90deg);
+  opacity: 0.8;
+}
+
+/* Scanner Settings Panel */
 .scanner-settings {
-  text-align: center;
-  margin-top: 30px;
-  transition: all 0.3s ease-in-out;
-  opacity: 1;
-}
-
-.scanner-settings h2,p {
- color: white;
-}
-
-.location-dropdown {
-  padding: 12px;
-  font-size: 16px;
-  margin-top: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
   width: 100%;
-  max-width: 350px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: #fff;
+  max-width: 500px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.scanner-settings h2 {
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.scanner-settings p {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Location Dropdown Styles */
+.location-dropdown {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 1.5rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.location-dropdown:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.location-dropdown:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.location-dropdown option {
+  background: rgba(17, 25, 40, 0.95);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem;
+}
+
+/* Button Styles */
 .button-group {
-  margin-top: 20px;
   display: flex;
-  gap: 20px;
+  gap: 1rem;
   justify-content: center;
+  margin-bottom: 1rem;
 }
 
 button {
-  padding: 12px 24px;
-  font-size: 16px;
-  border: none;
-  border-radius: 5px;
-  background-color: #007bff;
-  color: white;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: rgba(59, 130, 246, 0.9);
+  border-radius: 0.5rem;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.2s ease;
+  font-weight: 500;
 }
 
 button:hover {
-  background-color: #0056b3;
+  background: rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
 }
 
+button:active {
+  transform: translateY(0);
+}
+
+/* Scanner Container Styles */
 .scanner-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin-top: 20px;
+  width: 100%;
+  max-width: 500px;
+  margin: 2rem 0;
 }
 
 #qr-reader {
-  width: 450px;
-  height: 450px;
-  border-radius: 50%;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 1rem;
   overflow: hidden;
-  position: relative;
-  border: 3px solid #ddd;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 #qr-reader video {
@@ -98,27 +151,41 @@ button:hover {
   object-fit: cover;
 }
 
+/* Message Container Styles */
 .message-container {
-  margin-top: 15px;
-  font-size: 1.2rem;
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0;
   text-align: center;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 500px;
+  width: 100%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Employee Info Styles */
 .employee-info-container {
-  margin-top: 30px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-top: 2rem;
+  width: 100%;
+  max-width: 500px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .employee-img-container {
-  margin-bottom: 15px;
+  margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .employee-img {
@@ -126,33 +193,140 @@ button:hover {
   height: 120px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid #007bff;
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  background: rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.employee-img:hover {
+  transform: scale(1.05);
+}
+
+.employee-details {
+  text-align: center;
 }
 
 .employee-details h2 {
-  font-size: 1.8rem;
-  color: #ffffff ;
-  margin-bottom: 10px;
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
 .employee-details p {
-  font-size: 1.2rem;
-  color: #ffffff;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
 }
 
+/* Error Messages */
+.error-log {
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 0.25rem;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.employee-info-container,
+.message-container,
+.scanner-settings {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
-  #qr-reader {
-    width: 300px;
-    height: 300px;
+  .admin-container {
+    padding: 1rem;
   }
+
+  .Admin-header {
+    font-size: 2rem;
+  }
+
+  .scanner-settings,
+  .scanner-container,
+  .message-container,
+  .employee-info-container {
+    max-width: 100%;
+  }
+
   .employee-img {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
   }
-  .employee-details h2 {
-    font-size: 1.4rem;
+
+  .button-group {
+    flex-direction: column;
   }
-  .employee-details p {
-    font-size: 1rem;
+
+  button {
+    width: 100%;
+  }
+
+  .gear-icon {
+    top: 1rem;
+    right: 1rem;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .admin-container {
+    background: rgba(17, 25, 40, 0.9);
+  }
+
+  .scanner-settings,
+  .message-container,
+  .employee-info-container {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Accessibility Improvements */
+@media (prefers-reduced-motion: reduce) {
+  .gear-icon,
+  .employee-img,
+  button,
+  .employee-info-container,
+  .message-container,
+  .scanner-settings {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .admin-container {
+    background: white;
+    color: black;
+  }
+
+  .gear-icon,
+  .scanner-container,
+  button {
+    display: none;
+  }
+
+  .employee-info-container,
+  .message-container {
+    border: 1px solid #ddd;
+    background: white;
+    color: black;
   }
 }

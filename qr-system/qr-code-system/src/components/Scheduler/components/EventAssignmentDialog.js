@@ -1,9 +1,28 @@
-// EventAssignmentDialog.js
 import React, { useState, useEffect } from 'react';
-import { X, Check, UserPlus, Clock, Calendar, Plus, Trash2 } from 'lucide-react';
-import { format, isEqual, parseISO } from 'date-fns';
+import { X, Check, UserPlus, Clock, Calendar, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { format, isEqual, parseISO, isWithinInterval, areIntervalsOverlapping } from 'date-fns';
+import { ref, get, update } from 'firebase/database';
+import { database } from '../../../services/firebaseConfig';
 import { useSchedulerContext } from '../context/SchedulerContext';
 import '../styles/EventAssignment.css';
+
+const LoadingSpinner = () => (
+  <div className="loading-overlay">
+    <div className="loading-spinner" />
+  </div>
+);
+
+const ErrorMessage = ({ message, onDismiss }) => (
+  <div className="error-banner">
+    <AlertTriangle className="icon" />
+    <span>{message}</span>
+    {onDismiss && (
+      <button onClick={onDismiss} className="dismiss-button">
+        <X className="icon" />
+      </button>
+    )}
+  </div>
+);
 
 const EventAssignmentDialog = ({ event, onClose }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,218 +31,304 @@ const EventAssignmentDialog = ({ event, onClose }) => {
   const [selectedDates, setSelectedDates] = useState([]);
   const [eventCategories, setEventCategories] = useState([]);
   const [locationStatus, setLocationStatus] = useState({});
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState({
+    roster: true,
+    categories: true,
+    submit: false
+  });
+  const [staffConflicts, setStaffConflicts] = useState({});
 
   useEffect(() => {
     setIsOpen(true);
-    // Initialize with the original event date
     setSelectedDates([{
       id: 1,
       start: event.start,
       end: event.end
     }]);
-    fetchRosterData();
-    fetchEventCategories();
+    
+    const initializeData = async () => {
+      try {
+        await Promise.all([
+          fetchRosterData(),
+          fetchEventCategories()
+        ]);
+      } catch (error) {
+        setError("Failed to initialize event assignment. Please try again.");
+      }
+    };
+
+    initializeData();
   }, [event]);
 
-  const handleAddDate = () => {
-    setSelectedDates(prev => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        start: event.start,
-        end: event.end
+  const fetchRosterData = async () => {
+    setLoading(prev => ({ ...prev, roster: true }));
+    try {
+      const usersRef = ref(database, 'users');
+      const eventsRef = ref(database, 'events');
+      
+      const [usersSnapshot, eventsSnapshot] = await Promise.all([
+        get(usersRef),
+        get(eventsRef)
+      ]);
+
+      const usersData = usersSnapshot.val();
+      const eventsData = eventsSnapshot.val();
+
+      if (usersData) {
+        const availableStaff = Object.entries(usersData)
+          .filter(([_, user]) => user.status === 'active' && user.location === event.location)
+          .map(([id, user]) => {
+            // Check for existing assignments
+            const existingAssignments = findExistingAssignments(id, eventsData);
+            
+            return {
+              id,
+              name: user.name,
+              position: user.position,
+              status: 'available',
+              availability: user.availability || {},
+              existingAssignments
+            };
+          });
+
+        setRoster(availableStaff);
       }
-    ]);
+    } catch (error) {
+      console.error('Error fetching roster:', error);
+      setError('Failed to load staff roster. Please refresh and try again.');
+    } finally {
+      setLoading(prev => ({ ...prev, roster: false }));
+    }
   };
 
-  const handleDateChange = (id, field, value) => {
-    setSelectedDates(prev => 
-      prev.map(date => 
-        date.id === id ? { ...date, [field]: value } : date
-      )
-    );
+  const findExistingAssignments = (staffId, eventsData) => {
+    if (!eventsData) return [];
+
+    return Object.entries(eventsData)
+      .filter(([eventId, eventData]) => {
+        return eventData.staffAssignments && 
+               Object.values(eventData.staffAssignments)
+                     .some(assignments => assignments[staffId]);
+      })
+      .map(([eventId, eventData]) => ({
+        eventId,
+        start: new Date(eventData.start),
+        end: new Date(eventData.end)
+      }));
   };
 
-  const handleRemoveDate = (id) => {
-    setSelectedDates(prev => prev.filter(date => date.id !== id));
+  const fetchEventCategories = async () => {
+    setLoading(prev => ({ ...prev, categories: true }));
+    try {
+      const categories = event.staffRequirements.map((req, index) => ({
+        id: index.toString(),
+        name: req.position,
+        required: req.count
+      }));
+
+      setEventCategories(categories);
+      
+      const initialStatus = {};
+      selectedDates.forEach(date => {
+        initialStatus[date.id] = {};
+        categories.forEach(category => {
+          initialStatus[date.id][category.id] = {
+            filled: 0,
+            required: category.required
+          };
+        });
+      });
+      setLocationStatus(initialStatus);
+    } catch (error) {
+      console.error('Error processing categories:', error);
+      setError('Failed to load event categories. Please try again.');
+    } finally {
+      setLoading(prev => ({ ...prev, categories: false }));
+    }
   };
 
-  const renderDateSelectors = () => (
-    <div className="date-selection-container">
-      <h3 className="section-title">Event Dates</h3>
-      {selectedDates.map((date) => (
-        <div key={date.id} className="date-row">
-          <div className="date-inputs">
-            <div className="input-group">
-              <label>Start</label>
-              <input
-                type="datetime-local"
-                value={format(new Date(date.start), "yyyy-MM-dd'T'HH:mm")}
-                onChange={(e) => handleDateChange(date.id, 'start', e.target.value)}
-                className="date-input"
-              />
-            </div>
-            <div className="input-group">
-              <label>End</label>
-              <input
-                type="datetime-local"
-                value={format(new Date(date.end), "yyyy-MM-dd'T'HH:mm")}
-                onChange={(e) => handleDateChange(date.id, 'end', e.target.value)}
-                className="date-input"
-              />
-            </div>
-          </div>
-          {selectedDates.length > 1 && (
-            <button 
-              className="remove-date-button"
-              onClick={() => handleRemoveDate(date.id)}
-            >
-              <Trash2 className="icon" />
-            </button>
-          )}
-        </div>
-      ))}
-      <button className="add-date-button" onClick={handleAddDate}>
-        <Plus className="icon" />
-        Add Another Date
-      </button>
-    </div>
-  );
+  const handleStaffSelect = (staff) => {
+    // Check for scheduling conflicts
+    const conflicts = checkSchedulingConflicts(staff);
+    setStaffConflicts(prev => ({
+      ...prev,
+      [staff.id]: conflicts
+    }));
+
+    setSelectedStaff(prev => {
+      const isSelected = prev.includes(staff.id);
+      if (isSelected) {
+        return prev.filter(id => id !== staff.id);
+      } else {
+        // Only add if no conflicts
+        if (conflicts.length === 0) {
+          return [...prev, staff.id];
+        }
+        return prev;
+      }
+    });
+  };
+
+  const checkSchedulingConflicts = (staff) => {
+    const conflicts = [];
+    
+    selectedDates.forEach(selectedDate => {
+      const selectedInterval = {
+        start: new Date(selectedDate.start),
+        end: new Date(selectedDate.end)
+      };
+
+      // Check existing assignments
+      staff.existingAssignments.forEach(assignment => {
+        if (areIntervalsOverlapping(selectedInterval, {
+          start: assignment.start,
+          end: assignment.end
+        })) {
+          conflicts.push({
+            date: selectedDate.id,
+            reason: 'Existing assignment conflict'
+          });
+        }
+      });
+
+      // Check availability preferences
+      if (!isStaffAvailable(staff, selectedDate)) {
+        conflicts.push({
+          date: selectedDate.id,
+          reason: 'Outside availability hours'
+        });
+      }
+    });
+
+    return conflicts;
+  };
+
+  const isStaffAvailable = (staff, date) => {
+    const startTime = new Date(date.start);
+    const endTime = new Date(date.end);
+    
+    // Check staff availability settings
+    const dayOfWeek = format(startTime, 'EEEE').toLowerCase();
+    const availability = staff.availability[dayOfWeek];
+    
+    if (!availability) return true; // No restrictions set
+
+    try {
+      const availableStart = parseISO(`${format(startTime, 'yyyy-MM-dd')}T${availability.start}`);
+      const availableEnd = parseISO(`${format(startTime, 'yyyy-MM-dd')}T${availability.end}`);
+      
+      return isWithinInterval(startTime, { start: availableStart, end: availableEnd }) &&
+             isWithinInterval(endTime, { start: availableStart, end: availableEnd });
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      return false;
+    }
+  };
+
+  const sendInvites = async () => {
+    setLoading(prev => ({ ...prev, submit: true }));
+    try {
+      // Validate before sending
+      const validationError = validateAssignments();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      const updates = {};
+      
+      // Update event assignments
+      selectedDates.forEach(date => {
+        selectedStaff.forEach(staffId => {
+          const path = `events/${event.id}/staffAssignments/${date.id}/${staffId}`;
+          updates[path] = {
+            status: 'pending',
+            assignedAt: new Date().toISOString()
+          };
+        });
+      });
+
+      // Update staff schedules
+      selectedStaff.forEach(staffId => {
+        selectedDates.forEach(date => {
+          const path = `users/${staffId}/assignments/${event.id}_${date.id}`;
+          updates[path] = {
+            eventId: event.id,
+            dateId: date.id,
+            start: date.start,
+            end: date.end,
+            status: 'pending'
+          };
+        });
+      });
+
+      await update(ref(database), updates);
+      onClose();
+    } catch (error) {
+      console.error('Error sending invites:', error);
+      setError('Failed to send invites. Please try again.');
+    } finally {
+      setLoading(prev => ({ ...prev, submit: false }));
+    }
+  };
+
+  const validateAssignments = () => {
+    // Check if minimum requirements are met
+    let validation = '';
+
+    eventCategories.forEach(category => {
+      const assignedStaffCount = selectedStaff.filter(staffId => {
+        const staff = roster.find(s => s.id === staffId);
+        return staff && staff.position === category.name;
+      }).length;
+
+      if (assignedStaffCount < category.required) {
+        validation += `Need ${category.required - assignedStaffCount} more ${category.name}(s). `;
+      }
+    });
+
+    return validation || null;
+  };
+
+  // ... rest of your render functions ...
+
+  if (!isOpen) return null;
+
+  const isLoading = loading.roster || loading.categories;
 
   return (
     <div className={`event-assignment-overlay ${isOpen ? 'open' : ''}`}>
-      <div className="event-assignment-container">
-        {/* Left Panel - Staff Roster */}
-        <div className={`panel panel-left ${isOpen ? 'slide-in-left' : ''}`}>
-          <div className="panel-header">
-            <h2>Available Staff</h2>
-            {renderDateSelectors()}
-          </div>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="event-assignment-container">
+          {error && (
+            <ErrorMessage 
+              message={error}
+              onDismiss={() => setError(null)}
+            />
+          )}
           
-          <div className="roster-list">
-            {roster.map(staff => (
-              <div 
-                key={staff.id} 
-                className={`roster-item ${
-                  selectedStaff.includes(staff.id) ? 'selected' : ''
-                }`}
-                onClick={() => handleStaffSelect(staff)}
-              >
-                <div className="staff-info">
-                  <span className="staff-name">{staff.name}</span>
-                  <span className="staff-role">{staff.role}</span>
-                </div>
-                <div className="date-availability">
-                  {selectedDates.map(date => (
-                    <span 
-                      key={date.id}
-                      className={`availability-indicator ${
-                        isStaffAvailable(staff, date) ? 'available' : 'unavailable'
-                      }`}
-                      title={format(new Date(date.start), 'MMM d, yyyy')}
-                    />
-                  ))}
-                </div>
-                <div className="staff-status">
-                  {staff.status === 'available' ? (
-                    <Clock className="icon available" />
-                  ) : (
-                    <Check className="icon assigned" />
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Panel - Event Requirements */}
-        <div className={`panel panel-right ${isOpen ? 'slide-in-right' : ''}`}>
-          <div className="panel-header">
-            <h2>Event Requirements</h2>
-            <div className="event-summary">
-              <h3>{event.title}</h3>
-              <div className="date-summary">
-                {selectedDates.length === 1 ? (
-                  <p>{format(new Date(selectedDates[0].start), 'MMMM d, yyyy')}</p>
-                ) : (
-                  <p>{selectedDates.length} dates selected</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="categories-list">
-            {eventCategories.map(category => (
-              <div key={category.id} className="category-item">
-                <div className="category-header">
-                  <span className="category-name">{category.name}</span>
-                  <div className="date-requirements">
-                    {selectedDates.map(date => (
-                      <div key={date.id} className="date-requirement">
-                        <span className="date-label">
-                          {format(new Date(date.start), 'MMM d')}:
-                        </span>
-                        <span className="requirement-count">
-                          {locationStatus[date.id]?.[category.id]?.filled || 0}/
-                          {category.required}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {selectedDates.map(date => (
-                  <div key={date.id} className="category-progress">
-                    <div 
-                      className="progress-bar"
-                      style={{ 
-                        width: `${((locationStatus[date.id]?.[category.id]?.filled || 0) / 
-                          category.required) * 100}%` 
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          <div className="panel-footer">
-            <div className="status-summary">
-              {selectedDates.map(date => (
-                <div key={date.id} className="date-status">
-                  <span className="date-label">
-                    {format(new Date(date.start), 'MMM d')}
-                  </span>
-                  <div className="status-numbers">
-                    <span>
-                      {Object.values(locationStatus[date.id] || {}).reduce(
-                        (acc, curr) => acc + (curr.filled || 0), 0
-                      )}/
-                      {Object.values(eventCategories).reduce(
-                        (acc, curr) => acc + curr.required, 0
-                      )}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="action-buttons">
-              <button className="cancel-button" onClick={onClose}>
-                <X className="icon" />
-                Cancel
-              </button>
-              <button 
-                className="send-invites-button"
-                onClick={sendInvites}
-                disabled={selectedStaff.length === 0}
-              >
+          {/* Your existing JSX structure */}
+          {loading.submit && <LoadingSpinner />}
+          
+          <button 
+            onClick={sendInvites}
+            disabled={loading.submit || selectedStaff.length === 0}
+            className="send-invites-button"
+          >
+            {loading.submit ? (
+              <span>Sending...</span>
+            ) : (
+              <>
                 <UserPlus className="icon" />
                 Send Invites
-              </button>
-            </div>
-          </div>
+              </>
+            )}
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };

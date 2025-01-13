@@ -1,0 +1,384 @@
+/* src/components/Scheduler/styles/EventAssignment.css */
+
+.event-assignment-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .event-assignment-overlay.open {
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .event-assignment-container {
+    display: flex;
+    width: 90%;
+    max-width: 1200px;
+    height: 80vh;
+    background: rgba(17, 25, 40, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  
+  .panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    transform: translateX(-100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  
+  .panel.slide-in-left {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  
+  .panel.slide-in-right {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  
+  .panel-left {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .panel-right {
+    transform: translateX(100%);
+  }
+  
+  .panel-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .panel-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 1rem;
+  }
+  
+  .date-selection-container {
+    margin-top: 1rem;
+  }
+  
+  .date-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: flex-start;
+  }
+  
+  .date-inputs {
+    flex: 1;
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .input-group {
+    flex: 1;
+  }
+  
+  .input-group label {
+    display: block;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.5rem;
+  }
+  
+  .date-input {
+    width: 100%;
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .remove-date-button {
+    padding: 0.5rem;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: rgba(239, 68, 68, 0.9);
+    transition: all 0.2s ease;
+  }
+  
+  .remove-date-button:hover {
+    background: rgba(239, 68, 68, 0.3);
+  }
+  
+  .add-date-button {
+    width: 100%;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 6px;
+    color: rgba(59, 130, 246, 0.9);
+    transition: all 0.2s ease;
+  }
+  
+  .add-date-button:hover {
+    background: rgba(59, 130, 246, 0.3);
+  }
+  
+  .roster-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-top: 1rem;
+  }
+  
+  .roster-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .roster-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .roster-item.selected {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  .staff-info {
+    flex: 1;
+  }
+  
+  .staff-name {
+    display: block;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .staff-role {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  
+  .date-availability {
+    display: flex;
+    gap: 0.25rem;
+    margin: 0 1rem;
+  }
+  
+  .availability-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  
+  .availability-indicator.available {
+    background: rgba(16, 185, 129, 0.5);
+    border: 1px solid rgba(16, 185, 129, 0.7);
+  }
+  
+  .availability-indicator.unavailable {
+    background: rgba(239, 68, 68, 0.5);
+    border: 1px solid rgba(239, 68, 68, 0.7);
+  }
+  
+  .staff-status {
+    display: flex;
+    align-items: center;
+  }
+  
+  .staff-status .icon {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .staff-status .icon.available {
+    color: rgba(16, 185, 129, 0.9);
+  }
+  
+  .staff-status .icon.assigned {
+    color: rgba(59, 130, 246, 0.9);
+  }
+  
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 25, 40, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+  }
+  
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
+    border-radius: 50%;
+    border-top-color: rgba(59, 130, 246, 0.9);
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .error-banner {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: rgba(239, 68, 68, 0.9);
+  }
+  
+  .error-banner .icon {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .dismiss-button {
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+  
+  .dismiss-button:hover {
+    background: rgba(239, 68, 68, 0.3);
+  }
+  
+  .categories-list {
+    margin-top: 1rem;
+    flex: 1;
+    overflow-y: auto;
+  }
+  
+  .category-item {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+  }
+  
+  .category-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  
+  .category-name {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .date-requirements {
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .date-requirement {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .category-progress {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  
+  .progress-bar {
+    height: 100%;
+    background: rgba(59, 130, 246, 0.5);
+    transition: width 0.3s ease;
+  }
+  
+  .panel-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .status-summary {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .date-status {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+  }
+  
+  .cancel-button,
+  .send-invites-button {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+  }
+  
+  .cancel-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .cancel-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  
+  .send-invites-button {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: rgba(59, 130, 246, 0.9);
+  }
+  
+  .send-invites-button:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.3);
+  }
+  
+  .send-invites-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }

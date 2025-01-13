@@ -1,150 +1,270 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
+import { Ban } from 'lucide-react';
+import { debounce } from 'lodash';
 
-const SCAN_STATES = {
-  UNKNOWN: 0,
-  NOT_STARTED: 1,
-  SCANNING: 2,
-  PAUSED: 3,
-};
+const Scanner = ({ onScan, location, isProcessing }) => {
+  const [hasCameraPermission, setHasCameraPermission] = useState(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [error, setError] = useState('');
+  const [scannerReady, setScannerReady] = useState(false);
+  
+  const scannerRef = useRef(null);
+  const barcodeTimeoutRef = useRef(null);
+  const mountedRef = useRef(true);
 
-const Scanner = ({ setMessage, mode, location, onClockIn }) => {
-  const [errors, setErrors] = useState([]);
-  const qrScannerRef = useRef(null);
-  const modeRef = useRef(mode);
-  const loggedErrorsRef = useRef(new Set());
-
-  useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
-
-  useEffect(() => {
-    const html5QrCode = new Html5Qrcode("qr-reader");
-    qrScannerRef.current = html5QrCode;
-
-    const startScanner = async () => {
-      try {
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          {
-            fps: 15,
-            qrbox: 300,
-          },
-          handleScan,
-          handleError
-        );
-        console.log("Scanner started successfully.");
-      } catch (err) {
-        logErrorOnce(`Error starting scanner: ${err.message || err}`);
-      }
+  // Get container dimensions for responsive QR box
+  const calculateQrBoxSize = () => {
+    const container = document.getElementById('qr-reader');
+    if (!container) return { width: 250, height: 250 };
+    
+    const minDimension = Math.min(container.offsetWidth, container.offsetHeight);
+    const qrboxSize = Math.floor(minDimension * 0.7); // 70% of container
+    return {
+      width: Math.max(qrboxSize, 100), // Ensure minimum of 100px
+      height: Math.max(qrboxSize, 100)
     };
+  };
 
-    startScanner();
+  // Memoize scanner configuration
+  const scannerConfig = {
+    fps: 10,
+    qrbox: calculateQrBoxSize(),
+    aspectRatio: 1.0,
+    rememberLastUsedCamera: true,
+    formatsToSupport: [
+      Html5Qrcode.CODE_128,
+      Html5Qrcode.CODE_39,
+      Html5Qrcode.EAN_13,
+      Html5Qrcode.EAN_8,
+      Html5Qrcode.UPC_A,
+      Html5Qrcode.UPC_E,
+      Html5Qrcode.UPC_EAN_EXTENSION,
+      Html5Qrcode.CODABAR,
+      Html5Qrcode.CODE_93,
+      Html5Qrcode.QR_CODE,
+      Html5Qrcode.DATA_MATRIX,
+      Html5Qrcode.PDF_417
+    ],
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
+  };
 
-    return () => {
-      if (qrScannerRef.current) {
-        const scannerState = qrScannerRef.current.getState();
-        console.log("Scanner state during cleanup:", scannerState);
-
-        if (
-          scannerState === Html5Qrcode.SCAN_STATE_SCANNING ||
-          scannerState === Html5Qrcode.SCAN_STATE_PAUSED
-        ) {
-          qrScannerRef.current
-            .stop()
-            .then(() => {
-              console.log("QR scanner stopped.");
-              qrScannerRef.current.clear();
-              qrScannerRef.current = null;
-            })
-            .catch((err) => {
-              logErrorOnce(`Error stopping scanner: ${err.message || err}`);
-            });
-        } else {
-          console.log("Scanner not running or already cleared.");
-          qrScannerRef.current.clear();
-          qrScannerRef.current = null;
-        }
-      }
-    };
+  // Handle scanner errors
+  const handleScannerError = useCallback((error) => {
+    const ignoredErrors = [
+      'No QR code found',
+      'NotFoundException',
+      'No MultiFormat Readers'
+    ];
+    
+    if (!ignoredErrors.some(msg => error.includes(msg))) {
+      console.error('Scanner error:', error);
+      setError(error);
+    }
   }, []);
 
-  const handleScan = async (decodedText) => {
-    if (!decodedText) {
-      setMessage("No data scanned");
-      logErrorOnce("No data scanned");
-      return;
+  // Handle successful scans
+  const handleSuccessfulScan = useCallback((decodedText) => {
+    if (!isProcessing && decodedText && mountedRef.current) {
+      onScan(decodedText.trim());
     }
+  }, [isProcessing, onScan]);
 
-    console.log("Scanned data:", decodedText);
-
-    let scannedData;
+  // Initialize camera and check permissions
+  const initializeCamera = useCallback(async () => {
     try {
-      scannedData = JSON.parse(decodedText);
-    } catch (e) {
-      setMessage("Error parsing scanned data");
-      logErrorOnce("Error parsing scanned data");
-      return;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      if (mountedRef.current) {
+        setHasCameraPermission(true);
+      }
+      return true;
+    } catch (err) {
+      console.error('Camera permission error:', err);
+      if (mountedRef.current) {
+        setHasCameraPermission(false);
+        setError('Camera access denied - USB scanner still available');
+      }
+      return false;
     }
+  }, []);
 
-    const { employeeId, name, location } = scannedData;
-
-    if (!employeeId || !location) {
-      const errorMsg = "Invalid scanned data: employeeId or location is missing.";
-      setMessage(errorMsg);
-      logErrorOnce(errorMsg);
-      return;
-    }
-
-    const clockInData = {
-      employeeId,
-      location,
-      name,
-      mode: modeRef.current,
-      timestamp: new Date().toISOString(),
-    };
+  // Initialize scanner
+  const initializeScanner = useCallback(async () => {
+    if (!location || !mountedRef.current) return;
 
     try {
-      const response = await fetch("http://localhost:3003/clock-in", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(clockInData),
+      const hasCamera = await initializeCamera();
+      if (!hasCamera || !mountedRef.current) return;
+
+      const scanner = new Html5Qrcode("qr-reader", { verbose: false });
+      scannerRef.current = scanner;
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            ...scannerConfig,
+            // Add error recovery options
+            recoveryPeriod: 1000,
+            disableFlip: false,
+            experimentalFeatures: {
+              ...scannerConfig.experimentalFeatures,
+              useBarCodeDetectorIfSupported: true,
+              allowNonGrantedPermissions: true
+            }
+          },
+          handleSuccessfulScan,
+          handleScannerError
+        );
+      } catch (startError) {
+        // If standard mode fails, try fallback mode
+        if (startError.message.includes('CanvasRenderingContext2D')) {
+          console.log('Attempting fallback scanning mode...');
+          await scanner.start(
+            { facingMode: "environment" },
+            {
+              ...scannerConfig,
+              experimentalFeatures: {
+                useBarCodeDetectorIfSupported: false
+              }
+            },
+            handleSuccessfulScan,
+            handleScannerError
+          );
+        } else {
+          throw startError;
+        }
+      }
+
+      if (mountedRef.current) {
+        setScannerReady(true);
+      }
+    } catch (err) {
+      console.error('Scanner initialization error:', err);
+      if (mountedRef.current) {
+        setError(err.message);
+      }
+    }
+  }, [location, handleSuccessfulScan, handleScannerError, initializeCamera]);
+
+  // Handle barcode input with improved buffering
+  const handleBarcodeInput = useCallback((event) => {
+    if (isProcessing || !location) return;
+
+    // Clear any existing timeout
+    if (barcodeTimeoutRef.current) {
+      clearTimeout(barcodeTimeoutRef.current);
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (barcodeInput) {
+        onScan(barcodeInput.trim());
+        setBarcodeInput('');
+      }
+      return;
+    }
+
+    // Only process alphanumeric and special characters
+    if (event.key.length === 1 && /[\w\-]/.test(event.key)) {
+      setBarcodeInput(prev => {
+        const newInput = prev + event.key;
+        
+        // Wait for 500ms of no input before processing
+        // This allows the complete barcode to be captured
+        barcodeTimeoutRef.current = setTimeout(() => {
+          if (newInput && mountedRef.current && newInput.length > 3) {
+            onScan(newInput.trim());
+            setBarcodeInput('');
+          }
+        }, 500);
+
+        return newInput;
       });
-
-      if (!response.ok) {
-        throw new Error(`${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      setMessage(result.message);
-
-      if (result.success && modeRef.current === "clock-in") {
-        onClockIn({
-          name: result.employeeName,
-          photo: result.employeePhoto || "",
-        });
-      }
-    } catch (error) {
-      const errorMsg = `Error during clock-in/out process: ${error.message}`;
-      setMessage(errorMsg);
-      logErrorOnce(errorMsg);
     }
-  };
+  }, [isProcessing, location, barcodeInput, onScan]);
 
-  const handleError = (err) => {
-    if (!err.message) return;
-    logErrorOnce(`Scanner error: ${err.message}`);
-  };
+  // Setup effect
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    if (location) {
+      initializeScanner();
+      document.addEventListener('keydown', handleBarcodeInput);
+      
+      // Handle window resizing
+      const handleResize = debounce(() => {
+        if (scannerRef.current) {
+          const newConfig = {
+            ...scannerConfig,
+            qrbox: calculateQrBoxSize()
+          };
+          scannerRef.current.applyVideoConstraints(newConfig);
+        }
+      }, 250);
 
-  const logErrorOnce = (message) => {
-    if (!loggedErrorsRef.current.has(message)) {
-      loggedErrorsRef.current.add(message);
-      console.error(message);
-      setErrors((prevErrors) => [...prevErrors, message]);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
     }
-  };
 
-  return <div id="qr-reader"></div>;
+    // Cleanup
+    return () => {
+      mountedRef.current = false;
+      
+      const cleanup = async () => {
+        if (scannerRef.current) {
+          try {
+            const isScanning = await scannerRef.current.isScanning();
+            if (isScanning) {
+              await scannerRef.current.stop();
+            }
+            scannerRef.current.clear();
+          } catch (err) {
+            console.error('Scanner cleanup error:', err);
+          }
+        }
+      };
+
+      cleanup();
+      document.removeEventListener('keydown', handleBarcodeInput);
+      
+      if (barcodeTimeoutRef.current) {
+        clearTimeout(barcodeTimeoutRef.current);
+      }
+    };
+  }, [location, handleBarcodeInput, initializeScanner]);
+
+  return (
+    <div className="max-w-lg w-full mx-auto mb-8">
+      {!location ? (
+        <div className="aspect-square rounded-2xl overflow-hidden bg-black bg-opacity-20 border border-white border-opacity-10 flex items-center justify-center text-white text-opacity-70">
+          Please select a location to activate scanner
+        </div>
+      ) : hasCameraPermission === false ? (
+        <div className="aspect-square rounded-2xl overflow-hidden bg-black bg-opacity-20 border border-white border-opacity-10 flex flex-col items-center justify-center text-white text-opacity-70">
+          <Ban size={48} className="mb-4 text-red-400" />
+          <p>Camera access denied</p>
+          <p className="text-sm mt-2">USB scanner still available</p>
+        </div>
+      ) : (
+        <div 
+          id="qr-reader" 
+          className={`aspect-square rounded-2xl overflow-hidden bg-black bg-opacity-20 border border-white border-opacity-10 ${
+            !scannerReady ? 'animate-pulse' : ''
+          }`} 
+        />
+      )}
+      
+      {error && (
+        <div className="mt-4 text-red-400 text-sm text-center">
+          {error}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Scanner;

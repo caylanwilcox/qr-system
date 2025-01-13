@@ -1,6 +1,6 @@
-// CalendarToolbar.js
+// src/components/Scheduler/components/CalendarToolbar.js
 import React, { useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Plus, Edit } from 'lucide-react';
 import { useSchedulerContext } from '../context/SchedulerContext';
 import '../styles/CalendarToolbar.css';
 
@@ -11,8 +11,21 @@ const VIEW_NAMES = {
   agenda: 'Agenda'
 };
 
-const CalendarToolbar = ({ onNavigate, onView, date, view, views }) => {
-  const { setDate, setView, setShowEventDialog, setSelectedEvent } = useSchedulerContext();
+const CalendarToolbar = ({ 
+  onNavigate, 
+  onView, 
+  date, 
+  view, 
+  views,
+  isEditMode,
+  setIsEditMode 
+}) => {
+  const { 
+    setDate, 
+    setView, 
+    setShowEventDialog, 
+    setSelectedEvent 
+  } = useSchedulerContext();
 
   const formattedDate = useMemo(() => {
     return new Intl.DateTimeFormat('en-US', {
@@ -25,7 +38,7 @@ const CalendarToolbar = ({ onNavigate, onView, date, view, views }) => {
   const handleNavigation = (action) => {
     onNavigate(action);
     const newDate = new Date(date);
-    
+
     switch (action) {
       case 'PREV':
         newDate.setMonth(date.getMonth() - 1);
@@ -37,7 +50,7 @@ const CalendarToolbar = ({ onNavigate, onView, date, view, views }) => {
         newDate.setTime(new Date().getTime());
         break;
     }
-    
+
     setDate(newDate);
   };
 
@@ -49,6 +62,14 @@ const CalendarToolbar = ({ onNavigate, onView, date, view, views }) => {
   const handleCreateEvent = () => {
     setSelectedEvent(null);
     setShowEventDialog(true);
+  };
+
+  const toggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+    if (isEditMode) {
+      setSelectedEvent(null); // Clear any selected event when exiting edit mode
+      setShowEventDialog(false); // Close any open dialogs
+    }
   };
 
   return (
@@ -86,9 +107,9 @@ const CalendarToolbar = ({ onNavigate, onView, date, view, views }) => {
       </div>
 
       <div className="toolbar-section">
-        <div 
-          className="view-buttons" 
-          role="group" 
+        <div
+          className="view-buttons"
+          role="group"
           aria-label="Calendar view options"
         >
           {views.map((name) => (
@@ -106,14 +127,26 @@ const CalendarToolbar = ({ onNavigate, onView, date, view, views }) => {
           ))}
         </div>
 
-        <button
-          onClick={handleCreateEvent}
-          className="toolbar-button create-event-button"
-          aria-label="Create new event"
-        >
-          <Plus className="toolbar-icon" aria-hidden="true" />
-          <span>Create Event</span>
-        </button>
+        <div className="action-buttons">
+          <button
+            onClick={toggleEditMode}
+            className={`toolbar-button ${isEditMode ? 'active' : ''}`}
+            aria-label={isEditMode ? "Exit edit mode" : "Enter edit mode"}
+          >
+            <Edit className="toolbar-icon" aria-hidden="true" />
+            <span>{isEditMode ? 'Exit Edit' : 'Edit'}</span>
+          </button>
+
+          <button
+            onClick={handleCreateEvent}
+            className="toolbar-button create-event-button"
+            aria-label="Create new event"
+            disabled={isEditMode}
+          >
+            <Plus className="toolbar-icon" aria-hidden="true" />
+            <span>Create Event</span>
+          </button>
+        </div>
       </div>
     </div>
   );

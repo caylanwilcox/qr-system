@@ -22,7 +22,7 @@ import AccountSettings from './components/AccountSettings';
 import QRScannerPage from './components/QRScannerPage';
 import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
 import ClearAndAddEmployees from './components/clearAndAddEmployees';
-
+import ManageAdmins from './components/ManageAdmins';
 // Core components that need lazy loading
 const Login = React.lazy(() => import('./components/Login'));
 const Profile = React.lazy(() => import('./components/Profile'));
@@ -52,6 +52,7 @@ function App() {
                 }
               >
                 <Route path="manage-employees" element={<ManageEmployees />} />
+                <Route path="manage-admins" element={<ManageAdmins />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="add-user" element={<AddUser />} />

@@ -1,240 +1,225 @@
+// src/components/SuperAdminDashboard.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ref, onValue } from "firebase/database";
+import { ref, get, off } from "firebase/database";
 import { database } from '../../services/firebaseConfig';
-import { Loader2, AlertCircle, CheckCircle2, Clock, User, TrendingUp, TrendingDown } from 'lucide-react';
-import './SuperAdminDashboard.css';
+import { Loader2, AlertCircle, CheckCircle2, Clock, User } from 'lucide-react';
+
+const LOCATIONS = {
+  "All": "All",
+  "Aurora": "Aurora",
+  "Elgin": "Agua Viva Elgin R7",
+  "Joliet": "Agua Viva Joliet",
+  "Lyons": "Agua Viva Lyons",
+  "West Chicago": "Agua Viva West Chicago",
+  "Wheeling": "Agua Viva Wheeling"
+};
+
+const UPDATE_INTERVAL = 30000; // 30 seconds
 
 const SuperAdminDashboard = () => {
-  const [metrics, setMetrics] = useState({
-    total: { notClockedIn: 0, clockedIn: 0, onTime: 0, late: 0 },
-    perLocation: {},
-    employees: [],
+  const [dashboardState, setDashboardState] = useState({
+    metrics: {
+      total: { clockedIn: 0, totalMembers: 0 },
+      perLocation: {},
+      employees: []
+    },
+    loading: true,
+    error: null,
+    activeTab: "All",
+    timeFilter: {
+      type: '24h',
+      dateRange: { 
+        start: new Date().toISOString().split('T')[0], 
+        end: new Date().toISOString().split('T')[0] 
+      }
+    }
   });
-  
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("All");
-  const [timeFilter, setTimeFilter] = useState({
-    type: '24h',
-    dateRange: { start: '', end: '' }
-  });
 
-  const locationMap = {
-    "All": "All",
-    "Aurora": "Aurora",
-    "Elgin": "Agua Viva Elgin R7",
-    "Joliet": "Agua Viva Joliet",
-    "Lyons": "Agua Viva Lyons",
-    "West Chicago": "Agua Viva West Chicago",
-    "Wheeling": "Agua Viva Wheeling",
-    "Retreat": "Retreat",
+  const { metrics, loading, error, activeTab, timeFilter } = dashboardState;
 
-  };
+  const getDateRange = useCallback(() => {
+    if (timeFilter.type === '24h') {
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - 1);
+      return {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0]
+      };
+    }
+    return timeFilter.dateRange;
+  }, [timeFilter]);
 
-  const calculateFraction = useCallback((numerator, denominator) => {
-    if (!denominator) return 0;
-    const result = (numerator / denominator) * 100;
-    return isNaN(result) ? 0 : result;
-  }, []);
+  const calculateMetrics = useCallback(async (attendanceData, usersData) => {
+    const dateRange = getDateRange();
+    const metrics = {
+      total: { clockedIn: 0, totalMembers: 0 },
+      perLocation: {},
+      employees: []
+    };
 
-  const handleTabClick = (tabName) => {
-    setActiveTab(tabName);
-    setError(null);
-  };
+    // Initialize location metrics
+    Object.values(LOCATIONS).forEach(location => {
+      if (location !== "All") {
+        const activeUsers = Object.values(usersData || {}).filter(user => 
+          user.status === 'active' && 
+          user.location === location
+        ).length;
+
+        metrics.perLocation[location] = {
+          clockedIn: 0,
+          totalMembers: activeUsers
+        };
+      }
+    });
+
+    metrics.total.totalMembers = Object.values(usersData || {}).filter(
+      user => user.status === 'active'
+    ).length;
+
+    const clockedInUsers = [];
+    
+    const processAttendance = (location, date, dayData) => {
+      if (date >= dateRange.start && date <= dateRange.end) {
+        Object.entries(dayData).forEach(([userId, attendance]) => {
+          const user = usersData[userId];
+          if (user && user.status === 'active') {
+            clockedInUsers.push({
+              id: userId,
+              name: attendance.name,
+              position: attendance.position || user.position,
+              location: location,
+              clockInTime: attendance.clockInTime,
+              clockOutTime: attendance.clockOutTime,
+              date: date
+            });
+
+            if (metrics.perLocation[location]) {
+              metrics.perLocation[location].clockedIn++;
+              metrics.total.clockedIn++;
+            }
+          }
+        });
+      }
+    };
+
+    // Process attendance data
+    Object.entries(attendanceData || {}).forEach(([location, locationData]) => {
+      if (location === "Agua Viva") {
+        // Handle nested structure
+        Object.entries(locationData).forEach(([subLocation, subLocationData]) => {
+          Object.entries(subLocationData).forEach(([date, dayData]) => {
+            processAttendance(subLocation, date, dayData);
+          });
+        });
+      } else {
+        // Handle direct location data
+        Object.entries(locationData).forEach(([date, dayData]) => {
+          processAttendance(location, date, dayData);
+        });
+      }
+    });
+
+    metrics.employees = clockedInUsers.sort((a, b) => 
+      new Date(b.clockInTime) - new Date(a.clockInTime)
+    );
+
+    return metrics;
+  }, [getDateRange]);
+
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const [attendanceSnapshot, usersSnapshot] = await Promise.all([
+        get(ref(database, 'attendance')),
+        get(ref(database, 'users'))
+      ]);
+
+      const metrics = await calculateMetrics(
+        attendanceSnapshot.val() || {},
+        usersSnapshot.val() || {}
+      );
+
+      return metrics;
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      throw error;
+    }
+  }, [calculateMetrics]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let timeoutId;
+
+    const updateDashboard = async () => {
+      if (!isMounted) return;
+      
+      try {
+        const metrics = await fetchDashboardData();
+        if (isMounted) {
+          setDashboardState(prev => ({
+            ...prev,
+            metrics,
+            loading: false,
+            error: null
+          }));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setDashboardState(prev => ({
+            ...prev,
+            error: error.message,
+            loading: false
+          }));
+        }
+      }
+
+      if (isMounted) {
+        timeoutId = setTimeout(updateDashboard, UPDATE_INTERVAL);
+      }
+    };
+
+    setDashboardState(prev => ({ ...prev, loading: true }));
+    updateDashboard();
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      off(ref(database, "attendance"));
+      off(ref(database, "users"));
+    };
+  }, [fetchDashboardData, timeFilter]); // Added timeFilter dependency
+
+  const filteredEmployees = useMemo(() => {
+    return metrics.employees
+      .filter(employee => {
+        if (activeTab === "All") return true;
+        return employee.location === LOCATIONS[activeTab];
+      });
+  }, [metrics.employees, activeTab]);
+
+  const locationMetrics = useMemo(() => {
+    return activeTab === "All" ? metrics.total : metrics.perLocation[LOCATIONS[activeTab]];
+  }, [metrics.total, metrics.perLocation, activeTab]);
 
   const handleTimeFilterChange = (type) => {
-    setTimeFilter(prev => ({
+    setDashboardState(prev => ({
       ...prev,
-      type,
-      dateRange: type === '24h' ? { start: '', end: '' } : prev.dateRange
+      timeFilter: {
+        type,
+        dateRange: type === '24h' ? getDateRange() : prev.timeFilter.dateRange
+      }
     }));
   };
 
   const handleDateRangeChange = (field, value) => {
-    setTimeFilter(prev => ({
+    setDashboardState(prev => ({
       ...prev,
-      dateRange: { ...prev.dateRange, [field]: value }
+      timeFilter: {
+        ...prev.timeFilter,
+        dateRange: { ...prev.timeFilter.dateRange, [field]: value }
+      }
     }));
   };
-
-  const validateDateRange = useCallback(() => {
-    const { start, end } = timeFilter.dateRange;
-    if (timeFilter.type === 'range' && (!start || !end)) {
-      throw new Error('Please select both start and end dates');
-    }
-    if (start && end && new Date(start) > new Date(end)) {
-      throw new Error('Start date must be before end date');
-    }
-  }, [timeFilter]);
-
-  const processAttendanceMetrics = useCallback((data, metrics) => {
-    Object.entries(data).forEach(([location, locationData]) => {
-      if (!locationData) return;
-
-      metrics.perLocation[location] = {
-        notClockedIn: 0,
-        clockedIn: 0,
-        onTime: 0,
-        late: 0
-      };
-
-      Object.values(locationData).forEach((record) => {
-        // Update location metrics
-        if (record.present) {
-          metrics.perLocation[location].clockedIn++;
-          metrics.total.clockedIn++;
-          
-          if (record.onTime) {
-            metrics.perLocation[location].onTime++;
-            metrics.total.onTime++;
-          } else {
-            metrics.perLocation[location].late++;
-            metrics.total.late++;
-          }
-        } else {
-          metrics.perLocation[location].notClockedIn++;
-          metrics.total.notClockedIn++;
-        }
-      });
-    });
-    return metrics;
-  }, []);
-
-  const isWithinTimeFilter = useCallback((timestamp) => {
-    if (!timestamp) return false;
-    
-    if (timeFilter.type === '24h') {
-      const now = new Date();
-      return now - new Date(timestamp) <= 24 * 60 * 60 * 1000;
-    }
-    
-    if (timeFilter.type === 'range') {
-      const date = new Date(timestamp);
-      return date >= new Date(timeFilter.dateRange.start) &&
-             date <= new Date(timeFilter.dateRange.end);
-    }
-    
-    return false;
-  }, [timeFilter]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const attendanceRef = ref(database, "attendance");
-    const usersRef = ref(database, "users");
-    
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        validateDateRange();
-        
-        // Fetch users data
-        const unsubscribeUsers = onValue(usersRef, (snapshot) => {
-          if (!isMounted) return;
-          
-          const usersData = snapshot.val();
-          const employeeList = [];
-
-          if (usersData) {
-            Object.entries(usersData).forEach(([userId, userData]) => {
-              if (!userData || !userData.name || userData.status?.toLowerCase() !== 'active') return;
-
-              const stats = userData.stats || {};
-              const currentLocation = userData.locationHistory?.[0]?.locationId || 'Unknown';
-              
-              employeeList.push({
-                id: userId,
-                name: userData.name,
-                position: userData.position || 'Member',
-                location: currentLocation,
-                stats: {
-                  daysPresent: stats.daysPresent || 0,
-                  daysAbsent: stats.daysAbsent || 0,
-                  daysLate: stats.daysLate || 0,
-                  rank: stats.rank || 0,
-                  rankChange: stats.lastRankChange ? {
-                    direction: stats.lastRankChange.direction,
-                    date: new Date(stats.lastRankChange.date)
-                  } : null,
-                  attendanceRate: stats.daysPresent && (stats.daysPresent + stats.daysAbsent) > 0
-                    ? ((stats.daysPresent / (stats.daysPresent + stats.daysAbsent)) * 100).toFixed(1)
-                    : 0,
-                  onTimeRate: stats.daysPresent > 0
-                    ? (((stats.daysPresent - stats.daysLate) / stats.daysPresent) * 100).toFixed(1)
-                    : 0
-                }
-              });
-            });
-          }
-
-          setMetrics(prev => ({
-            ...prev,
-            employees: employeeList
-          }));
-        });
-
-        // Fetch attendance data
-        const unsubscribeAttendance = onValue(attendanceRef, (snapshot) => {
-          if (!isMounted) return;
-          
-          try {
-            const data = snapshot.val();
-            if (!data) throw new Error("No attendance data available");
-
-            const metrics = {
-              total: { notClockedIn: 0, clockedIn: 0, onTime: 0, late: 0 },
-              perLocation: {},
-            };
-
-            const activeDatabaseKey = locationMap[activeTab];
-            const filteredData = activeDatabaseKey === "All" 
-              ? data 
-              : { [activeDatabaseKey]: data[activeDatabaseKey] };
-
-            processAttendanceMetrics(filteredData, metrics);
-
-            setMetrics(prev => ({
-              ...prev,
-              total: metrics.total,
-              perLocation: metrics.perLocation,
-            }));
-            setError(null);
-          } catch (error) {
-            console.error("Error processing attendance data:", error);
-            setError(error.message);
-          } finally {
-            setLoading(false);
-          }
-        });
-
-        return () => {
-          unsubscribeUsers();
-          unsubscribeAttendance();
-        };
-      } catch (error) {
-        if (isMounted) {
-          setError(error.message);
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeTab, timeFilter, processAttendanceMetrics, isWithinTimeFilter, validateDateRange, locationMap]);
-
-  const filteredEmployees = useMemo(() => {
-    return metrics.employees.filter(employee => {
-      if (activeTab === "All") return true;
-      return employee.location === locationMap[activeTab];
-    });
-  }, [metrics.employees, activeTab, locationMap]);
-
-  const locationMetrics = activeTab === "All" ? null : metrics.perLocation[locationMap[activeTab]];
 
   if (loading) {
     return (
@@ -258,10 +243,10 @@ const SuperAdminDashboard = () => {
         <div className="quadrant quadrant-2">
           <nav className="quadrant-nav">
             <ul>
-              {Object.keys(locationMap).map((tabName) => (
+              {Object.keys(LOCATIONS).map((tabName) => (
                 <li
                   key={tabName}
-                  onClick={() => handleTabClick(tabName)}
+                  onClick={() => setDashboardState(prev => ({...prev, activeTab: tabName}))}
                   className={`nav-item ${activeTab === tabName ? 'active' : ''}`}
                 >
                   {tabName}
@@ -272,14 +257,14 @@ const SuperAdminDashboard = () => {
 
           <div className="filter-options">
             <button 
-              onClick={() => handleTimeFilterChange('24h')} 
+              onClick={() => handleTimeFilterChange('24h')}
               className={`filter-btn ${timeFilter.type === '24h' ? 'active' : ''}`}
             >
               <Clock className="h-4 w-4 mr-2" />
               Last 24 Hours
             </button>
             <button 
-              onClick={() => handleTimeFilterChange('range')} 
+              onClick={() => handleTimeFilterChange('range')}
               className={`filter-btn ${timeFilter.type === 'range' ? 'active' : ''}`}
             >
               <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -307,63 +292,21 @@ const SuperAdminDashboard = () => {
           </div>
 
           <div className="quadrant-inside">
-            <div className="metric-box total-absent">
-              <h3>{activeTab === "All" ? "Total Absent" : `${activeTab} - Total Absent`}</h3>
-              <div className="metric-content">
-                <p className="metric-number large warning">
-                  {activeTab === "All" 
-                    ? metrics.total.notClockedIn 
-                    : locationMetrics?.notClockedIn || 0}
-                </p>
-              </div>
-            </div>
-
-            <div className="metrics-grid">
+            <div className="metrics-grid grid-cols-2">
               <div className="metric-box">
-                <h3>Total Present</h3>
+                <h3>Clocked In</h3>
                 <div className="metric-content">
                   <p className="metric-number success">
-                    {activeTab === "All" 
-                      ? metrics.total.clockedIn 
-                      : locationMetrics?.clockedIn || 0}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="metric-box">
-                <h3>% On Time</h3>
-                <div className="metric-content">
-                  <p className="metric-number success">
-                    {calculateFraction(
-                      activeTab === "All" ? metrics.total.onTime : locationMetrics?.onTime || 0,
-                      activeTab === "All" ? metrics.total.clockedIn : locationMetrics?.clockedIn || 0
-                    ).toFixed(2)}%
+                    {locationMetrics?.clockedIn || 0}
                   </p>
                 </div>
               </div>
 
               <div className="metric-box">
-                <h3>% Late</h3>
+                <h3>Total Active Users</h3>
                 <div className="metric-content">
-                  <p className="metric-number warning">
-                    {calculateFraction(
-                      activeTab === "All" ? metrics.total.late : locationMetrics?.late || 0,
-                      activeTab === "All" ? metrics.total.clockedIn : locationMetrics?.clockedIn || 0
-                    ).toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-
-              <div className="metric-box">
-                <h3>% Present</h3>
-                <div className="metric-content">
-                  <p className="metric-number success">
-                    {calculateFraction(
-                      activeTab === "All" ? metrics.total.clockedIn : locationMetrics?.clockedIn || 0,
-                      activeTab === "All"
-                        ? metrics.total.clockedIn + metrics.total.notClockedIn
-                        : (locationMetrics?.clockedIn || 0) + (locationMetrics?.notClockedIn || 0)
-                    ).toFixed(2)}%
+                  <p className="metric-number large text-blue-400">
+                    {locationMetrics?.totalMembers || 0}
                   </p>
                 </div>
               </div>
@@ -372,63 +315,51 @@ const SuperAdminDashboard = () => {
         </div>
 
         <div className="quadrant quadrant-3">
-          <h3 className="rank-header">Active Employees</h3>
+          <h3 className="rank-header">Attendance History</h3>
           <div className="employees-list overflow-auto max-h-[calc(100vh-240px)]">
-            {filteredEmployees.map((employee) => (
-              <div key={employee.id} 
-                className="bg-opacity-20 bg-gray-800 backdrop-blur-sm rounded-lg shadow-sm p-4 mb-3 border border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="bg-blue-500 bg-opacity-20 p-2 rounded-full">
-                      <User className="h-5 w-5 text-blue-400" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-white">{employee.name}</h4>
-                      <p className="text-sm text-gray-300">
-                        {employee.location.replace('Agua Viva ', '')} • {employee.position}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-6">
-                    <div className="text-right">
-                      <div className="text-sm font-medium text-gray-300">Attendance</div>
-                      <div className={`text-sm font-bold ${
-                        Number(employee.stats.attendanceRate) >= 75 ? 'text-yellow-400' :
-                        'text-red-400'
-                      }`}>
-                        {employee.stats.attendanceRate}%
+            {filteredEmployees.length > 0 ? (
+              filteredEmployees.map((employee) => (
+                <div key={`${employee.id}-${employee.clockInTime}`} 
+                  className="bg-opacity-20 bg-gray-800 backdrop-blur-sm rounded-lg shadow-sm p-4 mb-3 border border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="bg-blue-500 bg-opacity-20 p-2 rounded-full">
+                        <User className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-white">{employee.name}</h4>
+                        <p className="text-sm text-gray-300">
+                          {employee.location.replace('Agua Viva ', '')} • {employee.position}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-medium text-gray-300">On Time</div>
-                      <div className={`text-sm font-bold ${
-                        Number(employee.stats.onTimeRate) >= 90 ? 'text-green-400' :
-                        Number(employee.stats.onTimeRate) >= 75 ? 'text-yellow-400' :
-                        'text-red-400'
-                      }`}>
-                        {employee.stats.onTimeRate}%
+                      <div className="text-sm font-medium text-gray-300">
+                        {new Date(employee.date).toLocaleDateString()}
                       </div>
-                    </div>
-                    <div className="text-right min-w-[80px]">
-                      <div className="text-sm font-medium text-gray-300">Rank</div>
-                      <div className="flex items-center justify-end space-x-1">
-                        <span className="text-sm font-bold text-white">
-                          {employee.stats.rank}
-                        </span>
-                        {employee.stats.rankChange && 
-                         new Date().getTime() - employee.stats.rankChange.date.getTime() <= 30 * 24 * 60 * 60 * 1000 && (
-                          employee.stats.rankChange.direction === 'up' ? (
-                            <TrendingUp className="h-4 w-4 text-green-400" />
-                          ) : (
-                            <TrendingDown className="h-4 w-4 text-red-400" />
-                          )
-                        )}
+                      <div className="text-sm text-white">
+                        {new Date(employee.clockInTime).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </div>
+                      {employee.clockOutTime && (
+                        <div className="text-sm text-gray-300">
+                          Out: {new Date(employee.clockOutTime).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 py-8">
+                No attendance records for this period
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -436,4 +367,4 @@ const SuperAdminDashboard = () => {
   );
 };
 
-export default SuperAdminDashboard
+export default SuperAdminDashboard;

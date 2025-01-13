@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
-import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+// src/components/EmployeeProfile/ScheduleSection.js
+import React, { useState, useMemo } from 'react';
+import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import enUS from 'date-fns/locale/en-US';
-import { Calendar as CalendarIcon, Clock, Plus } from 'lucide-react';
+import { Clock, Plus, X } from 'lucide-react';
+import { ref, update } from 'firebase/database';
+import { database } from '../../services/firebaseConfig';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import './styles/ScheduleSection.css';
 
-const locales = {
-  'en-US': enUS
-};
-
+// Calendar localizer setup
 const localizer = dateFnsLocalizer({
   format,
   parse,
   startOfWeek,
   getDay,
-  locales,
+  locales: { 'en-US': enUS }
 });
 
+// Custom Event Component
 const CustomEvent = ({ event }) => (
   <div className={`calendar-event ${event.type}`}>
     <div className="event-content">
@@ -26,111 +28,246 @@ const CustomEvent = ({ event }) => (
   </div>
 );
 
-const CustomToolbar = ({ label, onNavigate, onView, view }) => (
-  <div className="flex flex-wrap justify-between items-center mb-4">
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => onNavigate('TODAY')}
-        className="px-3 py-1.5 text-sm bg-glass-light text-white/70 rounded-lg 
-                 hover:bg-white/10 transition-colors"
-      >
-        Today
-      </button>
-      <button
-        onClick={() => onNavigate('PREV')}
-        className="px-3 py-1.5 text-sm bg-glass-light text-white/70 rounded-lg 
-                 hover:bg-white/10 transition-colors"
-      >
-        Back
-      </button>
-      <button
-        onClick={() => onNavigate('NEXT')}
-        className="px-3 py-1.5 text-sm bg-glass-light text-white/70 rounded-lg 
-                 hover:bg-white/10 transition-colors"
-      >
-        Next
-      </button>
+// Event Dialog Component
+const EventDialog = ({ event, onClose }) => {
+  if (!event) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 p-6 rounded-lg max-w-md w-full" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-white">{event.title}</h3>
+          <button onClick={onClose} className="text-white/70 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <p className="text-white/70 text-sm">Date</p>
+            <p className="text-white">{format(new Date(event.start), 'PPP')}</p>
+          </div>
+          
+          <div>
+            <p className="text-white/70 text-sm">Time</p>
+            <p className="text-white">{format(new Date(event.start), 'p')}</p>
+          </div>
+          
+          {event.notes && (
+            <div>
+              <p className="text-white/70 text-sm">Notes</p>
+              <p className="text-white">{event.notes}</p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-white/70 text-sm">Type</p>
+            <p className={`inline-flex px-2 py-1 rounded text-sm ${
+              event.eventType === 'scheduled' ? 'bg-blue-500/20 text-blue-400' :
+              event.eventType === 'clockIn' ? 'bg-emerald-500/20 text-emerald-400' :
+              'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              {event.eventType === 'scheduled' ? 'Scheduled' :
+               event.eventType === 'clockIn' ? 'Clock In' : 'Event'}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
+  );
+};
 
-    <h2 className="text-lg font-medium text-white/90 px-4">{label}</h2>
+// Add Event Modal Component
+const AddEventModal = ({ isOpen, onClose, onSave, selectedDate }) => {
+  const [eventDetails, setEventDetails] = useState({
+    title: '',
+    time: '09:00',
+    notes: ''
+  });
 
-    <div className="flex items-center gap-2">
-      {['month', 'week', 'day'].map((viewType) => (
-        <button
-          key={viewType}
-          onClick={() => onView(viewType)}
-          className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-            view === viewType
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'bg-glass-light text-white/70 hover:bg-white/10'
-          }`}
-        >
-          {viewType.charAt(0).toUpperCase() + viewType.slice(1)}
-        </button>
-      ))}
-    </div>
-  </div>
-);
-
-const ScheduleSection = ({
-  scheduledDates,
-  attendanceRecords,
-  onScheduleAdd,
-  newScheduleDate,
-  newScheduleTime,
-  setNewScheduleDate,
-  setNewScheduleTime
-}) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-
-  // Format events properly
-  const events = [
-    ...scheduledDates.map(date => ({
-      id: `scheduled-${date.date}`,
-      title: 'Scheduled',
-      start: new Date(`${date.date}T${date.time}`),
-      end: new Date(`${date.date}T${date.time}`),
-      type: 'scheduled'
-    })),
-    ...attendanceRecords.map(record => ({
-      id: `attended-${record.timestamp}`,
-      title: record.clockInTime ? 'Attended' : 'Absent',
-      start: new Date(record.date),
-      end: new Date(record.date),
-      type: record.clockInTime ? 'attended' : 'absent'
-    }))
-  ];
-
-  const handleNavigate = (newDate) => {
-    setCurrentDate(newDate);
+  const handleSave = () => {
+    onSave({
+      ...eventDetails,
+      date: selectedDate,
+      timestamp: new Date(`${selectedDate}T${eventDetails.time}`).toISOString()
+    });
+    onClose();
   };
 
-  const handleSelect = ({ start }) => {
-    setNewScheduleDate(format(start, 'yyyy-MM-dd'));
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50">
+      <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-white">Schedule Event</h3>
+          <button onClick={onClose} className="text-white/70 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-1">
+              Title
+            </label>
+            <input
+              type="text"
+              value={eventDetails.title}
+              onChange={(e) => setEventDetails(prev => ({...prev, title: e.target.value}))}
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-white"
+              placeholder="Event title"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-1">
+              Time
+            </label>
+            <input
+              type="time"
+              value={eventDetails.time}
+              onChange={(e) => setEventDetails(prev => ({...prev, time: e.target.value}))}
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={eventDetails.notes}
+              onChange={(e) => setEventDetails(prev => ({...prev, notes: e.target.value}))}
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-white resize-none"
+              rows={3}
+              placeholder="Additional notes"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              disabled={!eventDetails.title || !eventDetails.time}
+            >
+              Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main Schedule Section Component
+const ScheduleSection = ({ employeeId, employeeDetails }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  // Process events from employee details
+  const events = useMemo(() => {
+    if (!employeeDetails) return [];
+    
+    const allEvents = [];
+
+    // Add location history records
+    if (employeeDetails.locationHistory) {
+      employeeDetails.locationHistory.forEach(record => {
+        if (record.date) {
+          allEvents.push({
+            id: `location-${record.date}`,
+            title: `Location: ${record.locationId}`,
+            start: new Date(record.date),
+            end: new Date(record.date),
+            eventType: 'location',
+            location: record.locationId
+          });
+        }
+      });
+    }
+
+    // Add clock in/out events
+    if (employeeDetails.stats?.lastClockIn) {
+      allEvents.push({
+        id: `clockin-${employeeDetails.stats.lastClockIn}`,
+        title: 'Clock In',
+        start: new Date(employeeDetails.stats.lastClockIn),
+        end: new Date(employeeDetails.stats.lastClockIn),
+        eventType: 'clockIn',
+        location: employeeDetails.location
+      });
+    }
+
+    if (employeeDetails.stats?.lastClockOut) {
+      allEvents.push({
+        id: `clockout-${employeeDetails.stats.lastClockOut}`,
+        title: 'Clock Out',
+        start: new Date(employeeDetails.stats.lastClockOut),
+        end: new Date(employeeDetails.stats.lastClockOut),
+        eventType: 'clockOut',
+        location: employeeDetails.location
+      });
+    }
+
+    // Add scheduled events
+    if (employeeDetails.scheduledEvents) {
+      Object.entries(employeeDetails.scheduledEvents).forEach(([id, event]) => {
+        allEvents.push({
+          id,
+          title: event.title || 'Scheduled Event',
+          start: new Date(event.timestamp),
+          end: new Date(event.timestamp),
+          eventType: 'scheduled',
+          notes: event.notes,
+          location: event.location || employeeDetails.location
+        });
+      });
+    }
+
+    console.log('Generated events:', allEvents);
+    return allEvents.sort((a, b) => new Date(b.start) - new Date(a.start));
+  }, [employeeDetails]);
+
+  const handleScheduleEvent = async (eventDetails) => {
+    if (!employeeId) return;
+
+    try {
+      const eventRef = ref(database, `users/${employeeId}/scheduledEvents`);
+      const newEvent = {
+        title: eventDetails.title,
+        timestamp: eventDetails.timestamp,
+        notes: eventDetails.notes,
+        location: employeeDetails.location
+      };
+
+      await update(eventRef, {
+        [`event-${Date.now()}`]: newEvent
+      });
+    } catch (error) {
+      console.error('Error scheduling event:', error);
+    }
+  };
+
+  const handleSelectSlot = ({ start }) => {
+    setSelectedDate(format(start, 'yyyy-MM-dd'));
+    setShowAddModal(true);
   };
 
   return (
-    <div className="bg-glass backdrop-blur border border-glass-light rounded-lg overflow-hidden">
+    <div className="bg-slate-800 rounded-lg overflow-hidden">
       <div className="p-6">
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-blue-500/20 border border-blue-500/30" />
-            <span className="text-sm text-white/70">Scheduled</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/30" />
-            <span className="text-sm text-white/70">Attended</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-red-500/20 border border-red-500/30" />
-            <span className="text-sm text-white/70">Absent</span>
-          </div>
-        </div>
-
         {/* Calendar */}
-        <div className="bg-glass-dark backdrop-blur rounded-lg border border-glass-light">
-          <Calendar
+        <div className="bg-slate-900 rounded-lg">
+          <BigCalendar
             localizer={localizer}
             events={events}
             startAccessor="start"
@@ -139,62 +276,29 @@ const ScheduleSection = ({
             views={['month', 'week', 'day']}
             defaultView="month"
             date={currentDate}
-            onNavigate={handleNavigate}
-            components={{
-              event: CustomEvent,
-              toolbar: CustomToolbar
-            }}
+            onNavigate={(date) => setCurrentDate(date)}
             selectable
-            onSelectSlot={handleSelect}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={(event) => setSelectedEvent(event)}
             className="custom-calendar"
-            dayLayoutAlgorithm="no-overlap"
+            components={{ event: CustomEvent }}
           />
         </div>
 
-        {/* Schedule Form */}
-        <div className="mt-6 p-6 bg-glass-dark backdrop-blur rounded-lg border border-glass-light">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-white/70 mb-2">
-                Date
-              </label>
-              <input
-                type="date"
-                value={newScheduleDate}
-                onChange={(e) => setNewScheduleDate(e.target.value)}
-                min={format(new Date(), 'yyyy-MM-dd')}
-                className="w-full px-4 py-2.5 bg-glass border border-glass-light rounded-lg
-                          text-white/90 focus:outline-none focus:border-blue-500/50 
-                          focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-white/70 mb-2">
-                Time
-              </label>
-              <input
-                type="time"
-                value={newScheduleTime}
-                onChange={(e) => setNewScheduleTime(e.target.value)}
-                className="w-full px-4 py-2.5 bg-glass border border-glass-light rounded-lg
-                          text-white/90 focus:outline-none focus:border-blue-500/50 
-                          focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-            <div className="flex items-end">
-              <button 
-                onClick={onScheduleAdd}
-                disabled={!newScheduleDate || !newScheduleTime}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-500/20 text-blue-400
-                         border border-blue-500/30 rounded-lg hover:bg-blue-500/30 
-                         transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-                Add Schedule
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Modals */}
+        {selectedEvent && (
+          <EventDialog 
+            event={selectedEvent} 
+            onClose={() => setSelectedEvent(null)} 
+          />
+        )}
+
+        <AddEventModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSave={handleScheduleEvent}
+          selectedDate={selectedDate}
+        />
       </div>
     </div>
   );

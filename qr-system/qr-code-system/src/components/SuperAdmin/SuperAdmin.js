@@ -28,7 +28,6 @@ const SuperAdmin = () => {
 
   const navItems = [
     { path: '/super-admin', icon: <Home size={24} />, text: 'Dashboard Overview' },
-    { path: '/super-admin/locations', icon: <Building size={24} />, text: 'Manage Locations' },
     { path: '/super-admin/manage-admins', icon: <UserPlus size={24} />, text: 'Manage Admins' },
     { path: '/super-admin/manage-employees', icon: <Users size={24} />, text: 'Manage Employees' },
     { path: '/super-admin/scheduler', icon: <Calendar size={24} />, text: 'Schedule Manager' },

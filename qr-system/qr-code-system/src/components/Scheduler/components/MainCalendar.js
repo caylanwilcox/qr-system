@@ -1,14 +1,20 @@
+// src/components/Scheduler/components/MainCalendar.js
 import React, { useMemo, useState, useEffect } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
+import enUS from 'date-fns/locale/en-US';
 import { useSchedulerContext } from '../context/SchedulerContext';
 import { Sun } from 'lucide-react';
-import CalendarToolbar from './CalendarToolbar';
-import { eventStyleGetter } from '../utils/eventStyles';
+import EventDialog from './EventDialog';
+import EventAssignmentDialog from './EventAssignmentDialog';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 import '../styles/MainCalendar.css';
 
+// Custom toolbar component moved to separate file
+import CustomToolbar from './CalendarToolbar';
+
 const locales = {
-  'en-US': require('date-fns/locale/en-US')
+  'en-US': enUS
 };
 
 const localizer = dateFnsLocalizer({
@@ -21,10 +27,13 @@ const localizer = dateFnsLocalizer({
 
 const MainCalendar = () => {
   const [weekWeather, setWeekWeather] = useState([]);
+  const [isEditMode, setIsEditMode] = useState(false);
+  
   const {
     events,
     selectedEvent,
     setSelectedEvent,
+    showEventDialog,
     setShowEventDialog,
     view,
     setView,
@@ -43,7 +52,7 @@ const MainCalendar = () => {
         );
         const data = await response.json();
         
-        const dailyForecasts = data.list.filter(item => 
+        const dailyForecasts = data.list.filter(item =>
           item.dt_txt.includes('12:00:00')
         ).slice(0, 7);
 
@@ -79,28 +88,52 @@ const MainCalendar = () => {
     fetchWeatherData();
   }, []);
 
-  const { components } = useMemo(() => ({
-    components: {
-      toolbar: CalendarToolbar,
-    }
-  }), []);
-
   const handleSelectSlot = ({ start, end }) => {
-    setSelectedEvent({
+    // Clear any existing event selection
+    setSelectedEvent(null);
+    // Reset edit mode
+    setIsEditMode(false);
+    
+    // Create new event template
+    const newEvent = {
       start,
       end,
       title: '',
       description: '',
       location: '',
-      attendees: [],
-    });
+      staffRequirements: [],
+      isUrgent: false
+    };
+    
+    setSelectedEvent(newEvent);
     setShowEventDialog(true);
   };
 
   const handleSelectEvent = (event) => {
+    if (isEditMode) return; // Prevent opening dialog if in edit mode
+    
     setSelectedEvent(event);
     setShowEventDialog(true);
   };
+
+  const handleCloseDialog = () => {
+    setShowEventDialog(false);
+    setSelectedEvent(null);
+    setIsEditMode(false); // Reset edit mode when closing dialog
+  };
+
+  // Calendar components configuration
+  const { components } = useMemo(() => ({
+    components: {
+      toolbar: (props) => (
+        <CustomToolbar
+          {...props}
+          isEditMode={isEditMode}
+          setIsEditMode={setIsEditMode}
+        />
+      ),
+    }
+  }), [isEditMode]);
 
   return (
     <div className="main-calendar-wrapper">
@@ -113,13 +146,14 @@ const MainCalendar = () => {
           </div>
         ))}
       </div>
+
       <Calendar
         localizer={localizer}
         events={events}
         startAccessor="start"
         endAccessor="end"
-        selectable
-        resizable
+        selectable={!isEditMode} // Disable selection when in edit mode
+        resizable={!isEditMode} // Disable resize when in edit mode
         defaultView="month"
         view={view}
         date={date}
@@ -127,11 +161,29 @@ const MainCalendar = () => {
         onNavigate={setDate}
         onSelectSlot={handleSelectSlot}
         onSelectEvent={handleSelectEvent}
-        eventPropGetter={eventStyleGetter}
+        eventPropGetter={(event) => ({
+          className: `event-${event.type || 'default'} ${event.isUrgent ? 'urgent' : ''}`
+        })}
         components={components}
         dayLayoutAlgorithm="no-overlap"
         className="main-calendar"
+        toolbar={true}
       />
+
+      {/* Dialogs */}
+      {showEventDialog && (
+        <EventDialog 
+          onClose={handleCloseDialog}
+          isEditMode={isEditMode}
+        />
+      )}
+      
+      {selectedEvent?.type === 'schedule_template' && (
+        <EventAssignmentDialog
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
     </div>
   );
 };
