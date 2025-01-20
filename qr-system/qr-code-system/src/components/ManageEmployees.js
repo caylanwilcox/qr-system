@@ -117,20 +117,20 @@ const ManageEmployees = () => {
   ).length;
 };
 
-  const LocationCard = ({ location }) => {
-    const locationEmployees = employees.filter(emp => emp.location === location);
-    const activeCount = locationEmployees.filter(emp => emp.status === 'active').length;
-    const adminCount = getRoleCount(employees, location, 'admin');
+const LocationCard = ({ location }) => {
+  const locationEmployees = employees.filter(emp => emp.location === location);
+  const activeCount = locationEmployees.filter(emp => emp.status === 'active').length;
+  const adminCount = locationEmployees.filter(emp => emp.role === 'admin').length;
+  
+  const attendanceStats = locationEmployees.reduce((acc, emp) => {
+    acc.totalAttendance += parseFloat(emp.stats?.attendanceRate || 0);
+    return acc;
+  }, { totalAttendance: 0 });
+  
+  const averageAttendance = locationEmployees.length > 0
+    ? (attendanceStats.totalAttendance / locationEmployees.length).toFixed(1)
+    : 0;
     
-    const attendanceStats = locationEmployees.reduce((acc, emp) => {
-      acc.totalAttendance += parseFloat(emp.stats.attendanceRate) || 0;
-      return acc;
-    }, { totalAttendance: 0 });
-    
-    const averageAttendance = locationEmployees.length > 0
-      ? (attendanceStats.totalAttendance / locationEmployees.length).toFixed(1)
-      : 0;
-
     return (
       <div className="location-card" onClick={() => setSelectedLocation(location)}>
         <h3 className="location-name">{location}</h3>

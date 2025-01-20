@@ -332,22 +332,17 @@ const EmployeeProfile = () => {
       case 'stats':
         return (
           <div className="glass-panel p-6">
-            <StatsSection stats={stats} />
-          </div>
+<StatsSection employeeDetails={employeeDetails} />
+</div>
         );
       
       case 'calendar':
         return (
           <div className="glass-panel">
-            <ScheduleSection
-              scheduledDates={scheduledDates}
-              attendanceRecords={attendanceRecords}
-              onScheduleAdd={handleScheduleAdd}
-              newScheduleDate={newScheduleDate}
-              newScheduleTime={newScheduleTime}
-              setNewScheduleDate={setNewScheduleDate}
-              setNewScheduleTime={setNewScheduleTime}
-            />
+           <ScheduleSection 
+  employeeId={employeeId}
+  employeeDetails={employeeDetails} 
+/>
           </div>
         );
       
