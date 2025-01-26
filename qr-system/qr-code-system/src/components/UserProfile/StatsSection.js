@@ -1,5 +1,6 @@
+// src/components/UserProfile/StatsSection.js
 import React from 'react';
-import { Activity, Clock, Calendar, TrendingUp, Users, ChartBar } from 'lucide-react';
+import { Activity, Clock, Calendar, ChartBar, Users } from 'lucide-react';
 
 const getScoreClass = (score) => {
   const numScore = parseFloat(score);
@@ -11,6 +12,7 @@ const getScoreClass = (score) => {
   if (numScore >= 45) return 'text-red-400';
   return 'text-red-600';
 };
+
 const TimelineBox = ({ isAttended, date, tooltipContent }) => (
   <div 
     className={`w-6 h-6 border relative group ${
@@ -54,22 +56,15 @@ const RegistrySection = ({ title, events = [], total = 0 }) => (
   </div>
 );
 
-const StatsSection = ({ employeeDetails }) => {
-  const stats = employeeDetails?.stats || {};
-  const events = employeeDetails?.events || {};
-  const locationHistory = employeeDetails?.locationHistory || [];
+const StatsSection = ({ userDetails }) => {
+  const stats = userDetails?.stats || {};
+  const events = userDetails?.events || {};
+  const locationHistory = userDetails?.locationHistory || [];
 
-  // Calculate attendance rate
   const totalDays = (stats.daysPresent || 0) + (stats.daysAbsent || 0);
   const attendanceRate = totalDays ? ((stats.daysPresent || 0) / totalDays * 100).toFixed(1) : 0;
-  
-  // Calculate days late rate
   const daysLateRate = stats.daysPresent ? ((stats.daysLate || 0) / stats.daysPresent * 100).toFixed(1) : 0;
-  
-  // Convert total hours to a readable format
   const totalHours = stats.totalHours ? Math.round(stats.totalHours) : 0;
-  
-  // Format last clock in/out times
   const lastClockIn = stats.lastClockIn ? new Date(stats.lastClockIn).toLocaleString() : 'N/A';
   const lastClockOut = stats.lastClockOut ? new Date(stats.lastClockOut).toLocaleString() : 'N/A';
 
@@ -102,20 +97,14 @@ const StatsSection = ({ employeeDetails }) => {
     }
   ];
 
-  // Extract events data
-  const poWorkshops = events.workshops || [];
-  const poMeetings = events.meetings || [];
-  const haciendas = events.haciendas || [];
-  const gestions = events.gestions || [];
-
   const attendanceStats = [
     {
-      title: "PO Workshops (Monthly)",
+      title: "Workshops",
       data: events.workshops || [],
       total: 12
     },
     {
-      title: "PO Group Meetings",
+      title: "Group Meetings",
       data: events.meetings || [],
       total: 4
     },
@@ -123,26 +112,15 @@ const StatsSection = ({ employeeDetails }) => {
       title: "Haciendas",
       data: events.haciendas || [],
       total: 52
-    },
-    {
-      title: "Junta de Hacienda",
-      data: events.juntaHacienda || [],
-      total: 12
     }
   ];
 
-  // Calculate gestions percentage
-  const gestionRate = gestions.length ? 
-    (gestions.filter(g => g.attended).length / gestions.length * 100).toFixed(1) : 0;
-
   return (
     <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg overflow-hidden">
-      {/* Header */}
       <div className="p-6 border-b border-slate-700">
-        <h2 className="text-lg font-semibold text-white/90">Registry</h2>
+        <h2 className="text-lg font-semibold text-white/90">My Statistics</h2>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-6">
         {statItems.map((stat, index) => (
           <div 
@@ -174,9 +152,7 @@ const StatsSection = ({ employeeDetails }) => {
         ))}
       </div>
 
-      {/* Event Registry Section */}
       <div className="p-6 space-y-6 border-t border-slate-700">
-        {/* Event Timelines */}
         {attendanceStats.map((section, index) => (
           <RegistrySection
             key={index}
@@ -185,28 +161,9 @@ const StatsSection = ({ employeeDetails }) => {
             total={section.total}
           />
         ))}
-
-        {/* Gestions Summary */}
-        <div className="bg-slate-800/80 backdrop-blur rounded-lg p-4">
-          <div className="flex justify-between items-center">
-            <h4 className="text-sm font-medium text-white/80">Gestion Attended</h4>
-            <span className={`text-lg font-mono font-semibold ${
-              gestionRate >= 75 ? 'text-green-400' : 
-              gestionRate >= 50 ? 'text-yellow-400' : 
-              'text-red-400'
-            }`}>
-              {gestionRate}%
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-white/50">
-            Total Gestions: {gestions.length}
-          </div>
-        </div>
       </div>
 
-      {/* Additional Insights */}
       <div className="grid md:grid-cols-2 gap-6 p-6 border-t border-slate-700">
-        {/* Attendance Details */}
         <div className="bg-slate-800/80 backdrop-blur rounded-lg p-4">
           <h4 className="text-sm font-medium text-white/80 mb-4">Attendance Overview</h4>
           <div className="grid grid-cols-3 gap-4">
@@ -231,7 +188,6 @@ const StatsSection = ({ employeeDetails }) => {
           </div>
         </div>
 
-        {/* Recent Activity */}
         <div className="bg-slate-800/80 backdrop-blur rounded-lg p-4">
           <h4 className="text-sm font-medium text-white/80 mb-4">Recent Activity</h4>
           <div className="space-y-3">

@@ -1,12 +1,11 @@
-// src/components/EmployeeProfile/EmployeeProfile.js
+// src/components/UserProfile/UserProfile.js
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
-import { ref, get, update, remove } from 'firebase/database';
-import { database } from '../../services/firebaseConfig';
+import { ref, get, update } from 'firebase/database';
+import { database, auth } from '../../services/firebaseConfig';
 import { formatAttendanceRecords, calculateStats, formatScheduledDates } from '../utils/employeeUtils';
-import './styles/EmployeeProfile.css';
+import './styles/UserProfile.css';
 import { User, BarChart2, Calendar } from 'lucide-react';
 
 import ProfileHeader from './ProfileHeader';
@@ -21,9 +20,21 @@ const LOCATIONS = [
   'Agua Viva Elgin R7', 'Agua Viva Joliet', 'Agua Viva Wheeling', 'Retreat',
 ];
 
-const DEPARTMENTS = [
-  'Main Church', 'Youth Ministry', 'Kids Ministry',
-  'Music Ministry', 'Administration',
+const SERVICE_TYPES = [
+  'LIDER',
+  'RSG',
+  'COM',
+  'TESORERO DE GRUPO',
+  'PPI',
+  'MANAGER DE HACIENDA',
+  'COORDINADOR DE HACIENDA',
+  'ATRACCION INTERNA',
+  'ATRACCION EXTERNA',
+  'SECRETARY',
+  'LITERATURA',
+  'SERVIDOR DE CORO',
+  'SERVIDOR DE JAV EN MESA',
+  'SERVIDOR DE SEGUIMIENTOS'
 ];
 
 const INITIAL_FORM_DATA = {
@@ -31,8 +42,7 @@ const INITIAL_FORM_DATA = {
   email: '',
   phone: '',
   position: '',
-  department: '',
-  location: '',
+  SERVICE_TYPES: '',
   joinDate: '',
   role: 'employee',
   status: 'inactive',
@@ -70,21 +80,17 @@ const TabButton = ({ active, onClick, icon: Icon, label }) => (
   </button>
 );
 
-const EmployeeProfile = () => {
-  const { employeeId } = useParams();
+const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [activeTab, setActiveTab] = useState('personal');
-  const [employeeDetails, setEmployeeDetails] = useState(null);
+  const [userDetails, setUserDetails] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [scheduledDates, setScheduledDates] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [stats, setStats] = useState(INITIAL_STATS);
-  const [newScheduleDate, setNewScheduleDate] = useState('');
-  const [newScheduleTime, setNewScheduleTime] = useState('');
 
   const showNotification = useCallback((message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -103,53 +109,21 @@ const EmployeeProfile = () => {
     }));
   };
 
-  const handlePadrinoChange = async (e) => {
-    const { checked } = e.target;
-    try {
-      const updates = {
-        padrino: checked,
-        padrinoColor: checked ? formData.padrinoColor : null
-      };
-      
-      await update(ref(database, `users/${employeeId}`), updates);
-      setFormData(prev => ({
-        ...prev,
-        ...updates
-      }));
-      showNotification('Padrino status updated successfully');
-    } catch (err) {
-      console.error('Error updating padrino status:', err);
-      showNotification('Failed to update padrino status', 'error');
-    }
-  };
-
-  const handlePadrinoColorChange = async (e) => {
-    const { value } = e.target;
-    try {
-      await update(ref(database, `users/${employeeId}`), {
-        padrinoColor: value
-      });
-      setFormData(prev => ({
-        ...prev,
-        padrinoColor: value
-      }));
-      showNotification('Padrino color updated successfully');
-    } catch (err) {
-      console.error('Error updating padrino color:', err);
-      showNotification('Failed to update padrino color', 'error');
-    }
-  };
-
   const handleSave = async () => {
     try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
       const updates = {
         ...formData,
-        padrino: formData.padrino,
-        padrinoColor: formData.padrinoColor,
+        email: formData.email,
+        phone: formData.phone,
+        emergencyContact: formData.emergencyContact,
+        emergencyPhone: formData.emergencyPhone,
       };
 
-      await update(ref(database, `users/${employeeId}`), updates);
-      setEmployeeDetails(prev => ({
+      await update(ref(database, `users/${userId}`), updates);
+      setUserDetails(prev => ({
         ...prev,
         ...updates
       }));
@@ -161,64 +135,20 @@ const EmployeeProfile = () => {
     }
   };
 
-  const handleRoleToggle = async () => {
-    const newRole = formData.role === 'admin' ? 'employee' : 'admin';
+  const fetchUserDetails = useCallback(async () => {
     try {
-      await update(ref(database, `users/${employeeId}`), { role: newRole });
-      setFormData(prev => ({
-        ...prev,
-        role: newRole
-      }));
-      showNotification(`Role updated to ${newRole}`);
-    } catch (err) {
-      showNotification('Failed to update role', 'error');
-    }
-  };
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
 
-  const handleStatusToggle = async () => {
-    const newStatus = formData.status === 'active' ? 'inactive' : 'active';
-    try {
-      await update(ref(database, `users/${employeeId}`), { status: newStatus });
-      setFormData(prev => ({
-        ...prev,
-        status: newStatus
-      }));
-      showNotification(`Status updated to ${newStatus}`);
-    } catch (err) {
-      showNotification('Failed to update status', 'error');
-    }
-  };
-  const handleDeleteRecord = async (timestamp) => {
-    if (deleteConfirm !== timestamp) {
-      setDeleteConfirm(timestamp);
-      return;
-    }
-  
-    try {
-      await remove(ref(database, `users/${employeeId}/clockInTimes/${timestamp}`));
-      await remove(ref(database, `users/${employeeId}/clockOutTimes/${timestamp}`));
-      
-      setAttendanceRecords(prev => 
-        prev.filter(record => record.timestamp !== timestamp)
-      );
-      setDeleteConfirm(null);
-      showNotification('Record deleted successfully');
-    } catch (err) {
-      console.error('Error deleting record:', err);
-      showNotification('Failed to delete record', 'error');
-    }
-  };
-  const fetchEmployeeDetails = useCallback(async () => {
-    try {
-      const employeeRef = ref(database, `users/${employeeId}`);
-      const snapshot = await get(employeeRef);
+      const userRef = ref(database, `users/${userId}`);
+      const snapshot = await get(userRef);
 
       if (!snapshot.exists()) {
-        throw new Error('Employee not found');
+        throw new Error('User data not found');
       }
 
       const data = snapshot.val();
-      setEmployeeDetails(data);
+      setUserDetails(data);
 
       const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
       setAttendanceRecords(records);
@@ -231,7 +161,7 @@ const EmployeeProfile = () => {
         email: data.email || '',
         phone: data.phone || '',
         position: data.position || '',
-        department: data.department || '',
+        SERVICE_TYPES: data.SERVICE_TYPES || '',
         location: data.location || '',
         joinDate: data.joinDate || '',
         role: data.role || 'employee',
@@ -246,16 +176,16 @@ const EmployeeProfile = () => {
       const formattedDates = formatScheduledDates(data.assignedDates || []);
       setScheduledDates(formattedDates);
     } catch (err) {
-      console.error('Error fetching employee details:', err);
-      setError(err.message || 'Failed to fetch employee data');
+      console.error('Error fetching user details:', err);
+      setError(err.message || 'Failed to fetch user data');
     } finally {
       setLoading(false);
     }
-  }, [employeeId]);
+  }, []);
 
   useEffect(() => {
-    fetchEmployeeDetails();
-  }, [fetchEmployeeDetails]);
+    fetchUserDetails();
+  }, [fetchUserDetails]);
 
   const tabs = [
     { id: 'personal', label: 'Personal Information', icon: User },
@@ -273,21 +203,18 @@ const EmployeeProfile = () => {
                 formData={formData}
                 editMode={editMode}
                 handleInputChange={handleInputChange}
-                onRoleToggle={handleRoleToggle}
                 locations={LOCATIONS}
-                departments={DEPARTMENTS}
-                onPadrinoChange={handlePadrinoChange}
-                onPadrinoColorChange={handlePadrinoColorChange}
+                SERVICE_TYPES={SERVICE_TYPES}
               />
             </div>
             <div className="glass-panel p-6">
-              <IdCardSection employeeDetails={employeeDetails} employeeId={employeeId} />
+              <IdCardSection userDetails={userDetails} userId={auth.currentUser?.uid} />
             </div>
             <div className="glass-panel p-6">
               <AttendanceSection
                 attendanceRecords={attendanceRecords}
-                deleteConfirm={deleteConfirm}
-                onDeleteRecord={handleDeleteRecord}
+                deleteConfirm={null}
+                onDeleteRecord={() => {}}
               />
             </div>
           </div>
@@ -295,13 +222,13 @@ const EmployeeProfile = () => {
       case 'stats':
         return (
           <div className="glass-panel p-6">
-            <StatsSection employeeDetails={employeeDetails} />
+            <StatsSection userDetails={userDetails} />
           </div>
         );
       case 'calendar':
         return (
           <div className="glass-panel">
-            <ScheduleSection employeeId={employeeId} employeeDetails={employeeDetails} />
+            <ScheduleSection userId={auth.currentUser?.uid} userDetails={userDetails} />
           </div>
         );
       default:
@@ -313,7 +240,7 @@ const EmployeeProfile = () => {
     return (
       <div className="loading-overlay">
         <div className="loading-spinner" />
-        <p>Loading employee details...</p>
+        <p>Loading user details...</p>
       </div>
     );
   }
@@ -322,13 +249,13 @@ const EmployeeProfile = () => {
     return (
       <div className="error-container glass-panel">
         <p>{error}</p>
-        <button onClick={fetchEmployeeDetails} className="btn primary">Retry</button>
+        <button onClick={fetchUserDetails} className="btn primary">Retry</button>
       </div>
     );
   }
 
   return (
-    <div className="employee-profile-container">
+    <div className="user-profile-container">
       {notification.show && (
         <div className={`notification ${notification.type}`}>
           {notification.message}
@@ -338,10 +265,10 @@ const EmployeeProfile = () => {
       <ProfileHeader
         formData={formData}
         editMode={editMode}
-        employeeId={employeeId}
+        employeeId={auth.currentUser?.uid}
         onEdit={() => setEditMode(!editMode)}
         onSave={handleSave}
-        onStatusToggle={handleStatusToggle}
+        onStatusToggle={() => {}}
         handleInputChange={handleInputChange}
       />
 
@@ -366,4 +293,4 @@ const EmployeeProfile = () => {
   );
 };
 
-export default EmployeeProfile;
+export default UserProfile;

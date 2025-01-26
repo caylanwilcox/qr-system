@@ -1,171 +1,108 @@
-import React, { useEffect, useState } from 'react';
-import { ref, get } from 'firebase/database';
-import { database } from '../services/firebaseConfig'; // Import Firebase config
-import { Bar } from 'react-chartjs-2';
+import React from 'react';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
   Tooltip,
   Legend,
-} from 'chart.js';
-import './AttendanceChart.css';
+  ResponsiveContainer,
+} from 'recharts';
 
-// Register Chart.js components for Bar chart
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-const AttendanceChart = () => {
-  const [attendanceData, setAttendanceData] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchAttendanceData = async () => {
-      try {
-        const currentMonthRef = ref(database, 'attendance/2024-10');
-        const previousMonthRef = ref(database, 'attendance/2024-09');
-
-        const currentMonthSnapshot = await get(currentMonthRef);
-        const previousMonthSnapshot = await get(previousMonthRef);
-
-        const currentMonthData = currentMonthSnapshot.val() || {};
-        const previousMonthData = previousMonthSnapshot.val() || {};
-
-        const attendanceRates = calculateAttendanceImprovement(
-          currentMonthData,
-          previousMonthData
-        );
-
-        setAttendanceData(attendanceRates);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching data from Firebase:', error);
-      }
-    };
-
-    fetchAttendanceData();
-  }, []);
-
-  const calculateAttendanceImprovement = (currentMonth, previousMonth) => {
-    let currentTotalAttendance = 0;
-    let previousTotalAttendance = 0;
-
-    Object.values(currentMonth).forEach((employee) => {
-      currentTotalAttendance += (employee.daysPresent / employee.totalDays) * 100;
-    });
-
-    Object.values(previousMonth).forEach((employee) => {
-      previousTotalAttendance += (employee.daysPresent / employee.totalDays) * 100;
-    });
-
-    const numEmployees = Math.max(
-      Object.keys(currentMonth).length,
-      Object.keys(previousMonth).length
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="glass-card p-4 rounded-lg border border-slate-200/20">
+        <p className="text-slate-200 font-medium">{label}</p>
+        <p className="text-sky-400">Days Present: {payload[0].value}</p>
+      </div>
     );
-
-    const averageCurrentMonth = numEmployees && currentTotalAttendance
-      ? currentTotalAttendance / numEmployees
-      : 0;
-    const averagePreviousMonth = numEmployees && previousTotalAttendance
-      ? previousTotalAttendance / numEmployees
-      : 0;
-
-    return {
-      averageCurrentMonth,
-      averagePreviousMonth,
-      difference: averageCurrentMonth - averagePreviousMonth,
-    };
-  };
-
-  const chartData = {
-    labels: ['Previous Month', 'Current Month'],
-    datasets: [
-      {
-        label: 'Average Attendance (%)',
-        data: [
-          attendanceData.averagePreviousMonth || 0,
-          attendanceData.averageCurrentMonth || 0,
-        ],
-        backgroundColor: '#105485',
-        borderRadius: 8,
-      },
-    ],
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top',
-        labels: {
-          color: '#105485',
-          font: {
-            weight: 'bold',
-          },
-        },
-      },
-      title: {
-        display: true,
-        text: 'Monthly Attendance Comparison',
-        color: '#105485',
-        font: {
-          size: 18,
-          weight: 'bold',
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        ticks: {
-          color: '#105485',
-          stepSize: 25,
-        },
-        title: {
-          display: true,
-          text: 'Attendance (%)',
-          color: '#105485',
-          font: {
-            weight: 'bold',
-          },
-        },
-      },
-      x: {
-        ticks: {
-          color: '#105485',
-        },
-        title: {
-          display: true,
-          text: 'Month',
-          color: '#105485',
-          font: {
-            weight: 'bold',
-          },
-        },
-      },
-    },
-  };
-
-  if (isLoading) {
-    return <p>Loading attendance data...</p>;
   }
+  return null;
+};
+
+const AttendanceChart = ({ attendanceData }) => {
+  const monthlyStats = Object.entries(attendanceData)
+    .map(([monthYear, employees]) => {
+      const totalDaysPresent = Object.values(employees).reduce(
+        (sum, emp) => sum + emp.daysPresent,
+        0
+      );
+
+      const [month, year] = monthYear.split('-');
+      const date = new Date(year, month - 1);
+      const monthName = date.toLocaleString('default', { month: 'short' });
+
+      return {
+        month: `${monthName} ${year}`,
+        daysPresent: totalDaysPresent,
+      };
+    })
+    .sort((a, b) => {
+      const [monthA, yearA] = a.month.split(' ');
+      const [monthB, yearB] = b.month.split(' ');
+      const dateA = new Date(`${monthA} 1, ${yearA}`);
+      const dateB = new Date(`${monthB} 1, ${yearB}`);
+      return dateA - dateB;
+    });
 
   return (
-    <div className="attendance-chart-container">
-      <nav className="attendance-nav">Attendance Dashboard</nav>
-      <div className="quadrant-1 large-box">
-        <Bar data={chartData} options={options} />
-      </div>
+    <div className="glass-card chart-container w-full h-[32rem]">
+      <div className="glass-background"></div>
+      <h3 className="text-2xl font-semibold mb-6 text-slate-200">
+        Days Present Trends
+      </h3>
+      <ResponsiveContainer width="100%" height="90%">
+        <LineChart data={monthlyStats}>
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="rgba(148, 163, 184, 0.2)"
+          />
+          <XAxis
+            dataKey="month"
+            angle={-45}
+            textAnchor="end"
+            height={60}
+            stroke="rgba(226, 232, 240, 0.6)"
+            tick={{ fill: 'rgba(226, 232, 240, 0.6)' }}
+          />
+          <YAxis
+            label={{
+              value: 'Days Present',
+              angle: -90,
+              position: 'insideLeft',
+              style: { fill: 'rgba(226, 232, 240, 0.6)' },
+            }}
+            stroke="rgba(226, 232, 240, 0.6)"
+            tick={{ fill: 'rgba(226, 232, 240, 0.6)' }}
+          />
+          <Tooltip
+            content={<CustomTooltip />}
+            cursor={{ stroke: 'rgba(148, 163, 184, 0.2)' }}
+          />
+          <Legend
+            wrapperStyle={{
+              paddingTop: '20px',
+              color: 'rgba(226, 232, 240, 0.8)',
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="daysPresent"
+            stroke="#0EA5E9"
+            strokeWidth={3}
+            name="Days Present"
+            dot={{ fill: '#0EA5E9', strokeWidth: 2, r: 6 }}
+            activeDot={{
+              r: 8,
+              stroke: '#38BDF8',
+              strokeWidth: 2,
+              fill: '#0EA5E9',
+            }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 };

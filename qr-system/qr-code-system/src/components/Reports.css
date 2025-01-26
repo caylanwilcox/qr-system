@@ -1,68 +1,127 @@
-.attendance-reports-container {
-    padding: 20px;
-    background-color: #f9fafc; /* Light gray-blue background */
-    border-radius: 8px;
-  }
-  
-  .attendance-reports-container h2 {
-    text-align: center;
-    margin-bottom: 20px;
-    color: #2c3e50; /* Dark slate color */
-  }
-  
-  .month-selector {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-  
-  .month-selector label {
-    margin-right: 10px;
-    font-weight: bold;
-    color: #34495e; /* Medium dark slate */
-  }
-  
-  .month-selector select {
-    padding: 5px;
-    font-size: 16px;
-    border: 1px solid #bdc3c7; /* Light gray border */
-    border-radius: 4px;
-  }
-  
-  .attendance-table {
-    width: 100%;
-    border-collapse: collapse;
-    background-color: #ffffff; /* White background for table */
-  }
-  
-  .attendance-table th,
-  .attendance-table td {
-    border: 1px solid #ecf0f1; /* Very light gray border */
-    padding: 12px;
-    text-align: center;
-    color: #2c3e50; /* Dark slate color for text */
-  }
-  
-  .attendance-table th {
-    background-color: #2980b9; /* Blue header background */
-    color: #ffffff; /* White text for headers */
-    font-weight: bold;
-  }
-  
-  .attendance-table tr:nth-child(even) {
-    background-color: #f2f7fb; /* Very light blue for even rows */
-  }
-  
-  .attendance-table tr:hover {
-    background-color: #e1ecf4; /* Light blue on hover */
-  }
-  
-  .attendance-table td {
-    font-size: 14px;
-  }
-  
-  .attendance-table th {
-    font-size: 15px;
-  }
-  
+.glass-card {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  transition: all 0.3s ease;
+}
+
+.glass-container {
+  background: linear-gradient(
+    to right bottom,
+    rgba(15, 23, 42, 0.8),
+    rgba(30, 41, 59, 0.7)
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.glass-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.1),
+    rgba(56, 189, 248, 0.05)
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  z-index: -1;
+}
+
+.chart-container {
+  padding: 24px;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-title {
+  color: rgba(226, 232, 240, 1);
+  font-weight: 600;
+  text-align: center;
+}
+
+.attendance-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 2rem;
+}
+
+.attendance-table th {
+  background: rgba(14, 165, 233, 0.2);
+  color: rgba(226, 232, 240, 1);
+  padding: 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.attendance-table td {
+  color: rgba(226, 232, 240, 0.9);
+  padding: 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.attendance-table tr:hover {
+  background: rgba(51, 65, 85, 0.4);
+  transition: all 0.2s ease;
+}
+
+.month-selector {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  margin: 2rem 0;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 0.5rem;
+}
+
+.month-selector label {
+  color: rgba(226, 232, 240, 0.9);
+  font-weight: 500;
+}
+
+.month-selector select {
+  background: rgba(30, 41, 59, 0.6);
+  color: rgba(226, 232, 240, 1);
+  padding: 0.5rem 2rem 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.month-selector select:focus {
+  border-color: rgba(14, 165, 233, 0.5);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.month-selector select:hover {
+  background: rgba(51, 65, 85, 0.6);
+}
+
+/* Tooltip custom styles */
+.recharts-tooltip-wrapper {
+  outline: none;
+}

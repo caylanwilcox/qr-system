@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/authContext';
+import { ref, get, set } from 'firebase/database';
+import { database } from '../services/firebaseConfig';
 import './Login.css';
 
 const Login = () => {
@@ -20,15 +22,38 @@ const Login = () => {
       const user = await signIn(email, password);
       console.log('Login successful, user role:', user.role);
 
-      switch (user.role) {
+      // Check if user exists in database
+      const userRef = ref(database, `users/${user.uid}`);
+      const snapshot = await get(userRef);
+      
+      if (!snapshot.exists()) {
+        // Create basic user data if it doesn't exist
+        await set(userRef, {
+          email: email,
+          role: user.role,
+          status: 'active',
+          name: user.email.split('@')[0],
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString()
+        });
+      }
+
+      // Normalize the role to uppercase for consistent comparison
+      const userRole = user.role?.toUpperCase();
+
+      switch (userRole) {
         case 'SUPER_ADMIN':
-          navigate('/super-admin');
+          navigate('/super-admin/manage-employees');
           break;
         case 'ADMIN':
-          navigate('/location-admin');
+          navigate('/location-admin/employees');
+          break;
+        case 'EMPLOYEE':
+          navigate('/dashboard');
           break;
         default:
-          navigate('/dashboard');
+          console.error('Unknown role:', userRole);
+          setError('Invalid user role assigned');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -79,7 +104,7 @@ const Login = () => {
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
-        </form> 
+        </form>
       </div>
       <div className="company-name">
         Agua Viva Technology

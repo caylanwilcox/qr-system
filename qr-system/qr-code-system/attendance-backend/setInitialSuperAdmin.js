@@ -1,8 +1,7 @@
-// Load environment variables from .env file
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin SDK using the service account
 const serviceAccount = {
   type: process.env.TYPE,
   project_id: process.env.PROJECT_ID,
@@ -13,42 +12,50 @@ const serviceAccount = {
   auth_uri: process.env.AUTH_URI,
   token_uri: process.env.TOKEN_URI,
   auth_provider_x509_cert_url: process.env.AUTH_PROVIDER_X509_CERT_URL,
-  client_x509_cert_url: process.env.CLIENT_X509_CERT_URL,
+  client_x509_cert_url: process.env.CLIENT_X509_CERT_URL
 };
 
-// Initialize the admin SDK
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.DATABASE_URL
-  });
-}
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: process.env.DATABASE_URL
+});
 
-// Function to set super admin role
-async function setInitialSuperAdmin(email) {
+async function updateUserSettings(email, newPassword) {
   try {
-    // Get user by email
     const user = await admin.auth().getUserByEmail(email);
     
-    // Set custom claims
+    // Update password
+    await admin.auth().updateUser(user.uid, {
+      password: newPassword
+    });
+
+    // Set custom claims for super-admin
     await admin.auth().setCustomUserClaims(user.uid, {
+      superAdmin: true,
+      admin: true,
       role: 'SUPER_ADMIN'
     });
 
-    // Update user record in Realtime Database
+    // Update role and location in database
     await admin.database().ref(`users/${user.uid}`).update({
       role: 'SUPER_ADMIN',
-      updatedAt: admin.database.ServerValue.TIMESTAMP
+      location: 'aurora',
+      status: 'active',
+      updatedAt: admin.database.ServerValue.TIMESTAMP,
+      customClaims: {
+        superAdmin: true,
+        admin: true,
+        role: 'SUPER_ADMIN'
+      }
     });
 
-    console.log(`Successfully set super admin role for user: ${email}`);
+    console.log(`Updated settings for user: ${email}`);
     process.exit(0);
   } catch (error) {
-    console.error('Error setting super admin role:', error);
+    console.error('Error:', error);
     process.exit(1);
   }
 }
 
-// Replace with your email
-const userEmail = 'caylanwilcox@gmail.com'; // Replace with your actual email
-setInitialSuperAdmin(userEmail);
+// Update specific user
+updateUserSettings('caylan45@yahoo.com', 'PW123!');

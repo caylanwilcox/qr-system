@@ -28,7 +28,6 @@ const SuperAdmin = () => {
 
   const navItems = [
     { path: '/super-admin', icon: <Home size={24} />, text: 'Dashboard Overview' },
-    { path: '/super-admin/locations', icon: <Building size={24} />, text: 'Manage Locations' },
     { path: '/super-admin/manage-admins', icon: <UserPlus size={24} />, text: 'Manage Admins' },
     { path: '/super-admin/manage-employees', icon: <Users size={24} />, text: 'Manage Employees' },
     { path: '/super-admin/scheduler', icon: <Calendar size={24} />, text: 'Schedule Manager' },
@@ -36,8 +35,10 @@ const SuperAdmin = () => {
     { path: '/super-admin/settings', icon: <Settings size={24} />, text: 'Settings' },
     { path: '/super-admin/qr-scanner', icon: <QrCode size={24} />, text: 'QR Code Scanner' },
   ];
-
   useEffect(() => {
+    const locationRefs = []; // Track refs
+    const unsubscribes = []; // Track cleanup functions
+  
     const mockWeatherData = () => {
       const today = new Date();
       const week = Array.from({ length: 7 }, (_, i) => {
@@ -51,30 +52,33 @@ const SuperAdmin = () => {
       });
       setWeekWeather(week);
     };
-
+  
     const fetchLocationAnalytics = async () => {
       setLoading(true);
       try {
         const allLocationsData = await Promise.all(
           locations.map(async (location) => {
             const locationRef = ref(database, `attendance/${location}`);
+            locationRefs.push(locationRef); // Store ref
+  
             return new Promise((resolve) => {
-              onValue(locationRef, (snapshot) => {
+              const unsubscribe = onValue(locationRef, (snapshot) => {
                 const data = snapshot.val();
                 resolve({ location, data: data ? Object.values(data) : [] });
               }, (error) => {
                 console.error(`Error fetching data for ${location}:`, error);
                 resolve({ location, data: [] });
               });
+              unsubscribes.push(unsubscribe); // Store unsubscribe function
             });
           })
         );
-
+  
         const analytics = allLocationsData.reduce((acc, { location, data }) => {
           acc[location] = calculateLocationAnalytics(data);
           return acc;
         }, {});
-
+  
         setLocationAnalytics(analytics);
         setTopEmployees(calculateTopEmployees(allLocationsData));
         setError(null);
@@ -85,15 +89,13 @@ const SuperAdmin = () => {
         setLoading(false);
       }
     };
-
+  
     fetchLocationAnalytics();
     mockWeatherData();
-
+  
+    // Cleanup
     return () => {
-      locations.forEach(location => {
-        const locationRef = ref(database, `attendance/${location}`);
-        onValue(locationRef, () => {});
-      });
+      unsubscribes.forEach(unsubscribe => unsubscribe());
     };
   }, []);
 

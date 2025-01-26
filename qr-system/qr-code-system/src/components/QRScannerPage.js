@@ -5,7 +5,7 @@ import { database } from '../services/firebaseConfig';
 import Scanner from './Scanner';
 
 const QRScannerPage = () => {
-  // State management
+  // Existing state
   const [message, setMessage] = useState('');
   const [location, setLocation] = useState('');
   const [mode, setMode] = useState('clock-in');
@@ -14,7 +14,10 @@ const QRScannerPage = () => {
   const [errors, setErrors] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Mode ref for async operations
+  // New state for meeting/hacienda
+  const [eventType, setEventType] = useState('hacienda');
+  const [selectedMeeting, setSelectedMeeting] = useState('');
+  
   const modeRef = useRef(mode);
 
   const locations = [
@@ -26,7 +29,17 @@ const QRScannerPage = () => {
     "Agua Viva Wheeling",
   ];
 
-  // Update mode ref when mode changes
+  const meetingTypes = [
+    "PADRINOS Y OREJAS",
+    "GENERAL",
+    "INICIANDO EL CAMINO",
+    "CIRCULO DE RECUPERACION",
+    "TRIBUNA",
+    "SEGUIMIENTO",
+    "CIRCULO DE ESTUDIO",
+    "NOCHE DE GUERRO"
+  ];
+
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
@@ -54,16 +67,17 @@ const QRScannerPage = () => {
       return;
     }
 
+    if (eventType === 'meeting' && !selectedMeeting) {
+      setMessage("⚠️ Please select a meeting type");
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      // Clean and validate the scanned code
       const employeeId = scannedCode.trim();
-      
-      // Get current date for attendance record
       const now = new Date().toISOString();
-      const attendanceDate = now.split('T')[0]; // YYYY-MM-DD format
+      const attendanceDate = now.split('T')[0];
       
-      // Get user data
       const userRef = ref(database, `users/${employeeId}`);
       const userSnapshot = await get(userRef);
 
@@ -73,18 +87,17 @@ const QRScannerPage = () => {
 
       const userData = userSnapshot.val();
       
-      // Check if user is active
       if (userData.status !== 'active') {
         throw new Error('This employee ID is not active');
       }
 
-      // Reference to attendance record
-      const attendanceRef = ref(database, `attendance/${location}/${attendanceDate}/${employeeId}`);
+      // Create attendance reference based on event type
+      const attendanceRef = eventType === 'meeting' 
+        ? ref(database, `attendance/${location}/meetings/${selectedMeeting}/${attendanceDate}/${employeeId}`)
+        : ref(database, `attendance/${location}/${attendanceDate}/${employeeId}`);
       
-      // Update user's location
       await updateUserLocation(employeeId, userData);
 
-      // Handle clock in/out based on mode
       if (modeRef.current === 'clock-in') {
         await handleClockIn(userData, employeeId, attendanceRef, now);
       } else {
@@ -105,16 +118,17 @@ const QRScannerPage = () => {
       throw new Error(`${userData.name} is already clocked in for today`);
     }
 
-    // Create attendance record
+    // Create attendance record with event type info
     await set(attendanceRef, {
       clockInTime: now,
       name: userData.name,
       position: userData.position || 'Member',
       userId: employeeId,
-      location
+      location,
+      eventType,
+      ...(eventType === 'meeting' && { meetingType: selectedMeeting })
     });
 
-    // Update user's stats
     const statsRef = ref(database, `users/${employeeId}/stats`);
     const statsSnapshot = await get(statsRef);
     const currentStats = statsSnapshot.exists() ? statsSnapshot.val() : {};
@@ -156,7 +170,6 @@ const QRScannerPage = () => {
       hoursWorked: hoursWorked.toFixed(2)
     });
 
-    // Update user's stats
     const statsRef = ref(database, `users/${employeeId}/stats`);
     const statsSnapshot = await get(statsRef);
     const currentStats = statsSnapshot.exists() ? statsSnapshot.val() : {};
@@ -176,7 +189,6 @@ const QRScannerPage = () => {
 
     setMessage(`Goodbye ${userData.name}! Clock-out successful`);
 
-    // Clear employee info after delay
     setTimeout(() => {
       setEmployeeInfo(null);
     }, 5000);
@@ -186,6 +198,13 @@ const QRScannerPage = () => {
     setMode(newMode);
     setMessage(`Switched to ${newMode === "clock-in" ? "Clock In" : "Clock Out"} mode`);
     setEmployeeInfo(null);
+  };
+
+  const handleEventTypeChange = (type) => {
+    setEventType(type);
+    if (type === 'hacienda') {
+      setSelectedMeeting('');
+    }
   };
 
   return (
@@ -219,6 +238,46 @@ const QRScannerPage = () => {
               </option>
             ))}
           </select>
+
+          <div className="flex gap-4 justify-center mb-6">
+            <label className="flex items-center gap-2 text-white cursor-pointer">
+              <input
+                type="radio"
+                name="eventType"
+                value="hacienda"
+                checked={eventType === 'hacienda'}
+                onChange={(e) => handleEventTypeChange(e.target.value)}
+                className="w-4 h-4"
+              />
+              Hacienda
+            </label>
+            <label className="flex items-center gap-2 text-white cursor-pointer">
+              <input
+                type="radio"
+                name="eventType"
+                value="meeting"
+                checked={eventType === 'meeting'}
+                onChange={(e) => handleEventTypeChange(e.target.value)}
+                className="w-4 h-4"
+              />
+              Meeting
+            </label>
+          </div>
+
+          {eventType === 'meeting' && (
+            <select
+              value={selectedMeeting}
+              onChange={(e) => setSelectedMeeting(e.target.value)}
+              className="w-full p-3 text-base bg-black bg-opacity-5 border border-white border-opacity-10 rounded-lg text-white mb-6 cursor-pointer"
+            >
+              <option value="">Select Meeting Type</option>
+              {meetingTypes.map((meeting) => (
+                <option key={meeting} value={meeting} className="bg-slate-900 text-white">
+                  {meeting}
+                </option>
+              ))}
+            </select>
+          )}
 
           <div className="flex gap-4 justify-center mb-4">
             <button
