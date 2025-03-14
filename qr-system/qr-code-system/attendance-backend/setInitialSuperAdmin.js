@@ -58,4 +58,4 @@ async function updateUserSettings(email, newPassword) {
 }
 
 // Update specific user
-updateUserSettings('caylan45@yahoo.com', 'PW123!');
+updateUserSettings('caylanwilcox@gmail.com', 'Isaiah27');

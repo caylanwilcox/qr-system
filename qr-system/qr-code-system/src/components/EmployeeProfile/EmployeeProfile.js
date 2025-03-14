@@ -1,4 +1,3 @@
-// src/components/EmployeeProfile/EmployeeProfile.js
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -96,13 +95,13 @@ const EmployeeProfile = () => {
   const handleInputChange = (e) => {
     const { name, type, checked, value } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    
     setFormData(prev => ({
       ...prev,
       [name]: newValue,
     }));
   };
 
+  // Note: When updating profile-related fields, use the '/profile' subnode
   const handlePadrinoChange = async (e) => {
     const { checked } = e.target;
     try {
@@ -110,12 +109,8 @@ const EmployeeProfile = () => {
         padrino: checked,
         padrinoColor: checked ? formData.padrinoColor : null
       };
-      
-      await update(ref(database, `users/${employeeId}`), updates);
-      setFormData(prev => ({
-        ...prev,
-        ...updates
-      }));
+      await update(ref(database, `users/${employeeId}/profile`), updates);
+      setFormData(prev => ({ ...prev, ...updates }));
       showNotification('Padrino status updated successfully');
     } catch (err) {
       console.error('Error updating padrino status:', err);
@@ -126,13 +121,8 @@ const EmployeeProfile = () => {
   const handlePadrinoColorChange = async (e) => {
     const { value } = e.target;
     try {
-      await update(ref(database, `users/${employeeId}`), {
-        padrinoColor: value
-      });
-      setFormData(prev => ({
-        ...prev,
-        padrinoColor: value
-      }));
+      await update(ref(database, `users/${employeeId}/profile`), { padrinoColor: value });
+      setFormData(prev => ({ ...prev, padrinoColor: value }));
       showNotification('Padrino color updated successfully');
     } catch (err) {
       console.error('Error updating padrino color:', err);
@@ -143,15 +133,26 @@ const EmployeeProfile = () => {
   const handleSave = async () => {
     try {
       const updates = {
-        ...formData,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        position: formData.position,
+        department: formData.department,
+        primaryLocation: formData.location, // new field in profile
+        joinDate: formData.joinDate,
+        role: formData.role,
+        status: formData.status,
+        emergencyContact: formData.emergencyContact,
+        emergencyPhone: formData.emergencyPhone,
+        notes: formData.notes,
         padrino: formData.padrino,
         padrinoColor: formData.padrinoColor,
       };
 
-      await update(ref(database, `users/${employeeId}`), updates);
+      await update(ref(database, `users/${employeeId}/profile`), updates);
       setEmployeeDetails(prev => ({
         ...prev,
-        ...updates
+        profile: { ...prev.profile, ...updates }
       }));
       setEditMode(false);
       showNotification('Changes saved successfully');
@@ -164,11 +165,8 @@ const EmployeeProfile = () => {
   const handleRoleToggle = async () => {
     const newRole = formData.role === 'admin' ? 'employee' : 'admin';
     try {
-      await update(ref(database, `users/${employeeId}`), { role: newRole });
-      setFormData(prev => ({
-        ...prev,
-        role: newRole
-      }));
+      await update(ref(database, `users/${employeeId}/profile`), { role: newRole });
+      setFormData(prev => ({ ...prev, role: newRole }));
       showNotification(`Role updated to ${newRole}`);
     } catch (err) {
       showNotification('Failed to update role', 'error');
@@ -178,29 +176,23 @@ const EmployeeProfile = () => {
   const handleStatusToggle = async () => {
     const newStatus = formData.status === 'active' ? 'inactive' : 'active';
     try {
-      await update(ref(database, `users/${employeeId}`), { status: newStatus });
-      setFormData(prev => ({
-        ...prev,
-        status: newStatus
-      }));
+      await update(ref(database, `users/${employeeId}/profile`), { status: newStatus });
+      setFormData(prev => ({ ...prev, status: newStatus }));
       showNotification(`Status updated to ${newStatus}`);
     } catch (err) {
       showNotification('Failed to update status', 'error');
     }
   };
+
   const handleDeleteRecord = async (timestamp) => {
     if (deleteConfirm !== timestamp) {
       setDeleteConfirm(timestamp);
       return;
     }
-  
     try {
       await remove(ref(database, `users/${employeeId}/clockInTimes/${timestamp}`));
       await remove(ref(database, `users/${employeeId}/clockOutTimes/${timestamp}`));
-      
-      setAttendanceRecords(prev => 
-        prev.filter(record => record.timestamp !== timestamp)
-      );
+      setAttendanceRecords(prev => prev.filter(record => record.timestamp !== timestamp));
       setDeleteConfirm(null);
       showNotification('Record deleted successfully');
     } catch (err) {
@@ -208,41 +200,44 @@ const EmployeeProfile = () => {
       showNotification('Failed to delete record', 'error');
     }
   };
+
+  // Fetch employee details from the new structure
   const fetchEmployeeDetails = useCallback(async () => {
     try {
       const employeeRef = ref(database, `users/${employeeId}`);
       const snapshot = await get(employeeRef);
-
       if (!snapshot.exists()) {
         throw new Error('Employee not found');
       }
-
       const data = snapshot.val();
       setEmployeeDetails(data);
 
+      // Process attendance records if still stored under these keys;
+      // adjust these calls if attendance data has been moved.
       const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
       setAttendanceRecords(records);
-
       const calculatedStats = calculateStats(records);
       setStats(calculatedStats);
 
+      // Set form data from the profile node
       setFormData({
-        name: data.name || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        position: data.position || '',
-        department: data.department || '',
-        location: data.location || '',
-        joinDate: data.joinDate || '',
-        role: data.role || 'employee',
-        status: data.status || 'inactive',
-        emergencyContact: data.emergencyContact || '',
-        emergencyPhone: data.emergencyPhone || '',
-        notes: data.notes || '',
-        padrino: data.padrino ?? false,
-        padrinoColor: data.padrinoColor || null,
+        name: data.profile?.name || '',
+        email: data.profile?.email || '',
+        phone: data.profile?.phone || '',
+        position: data.profile?.position || '',
+        department: data.profile?.department || '',
+        location: data.profile?.primaryLocation || '',
+        joinDate: data.profile?.joinDate || '',
+        role: data.profile?.role || 'employee',
+        status: data.profile?.status || 'inactive',
+        emergencyContact: data.profile?.emergencyContact || '',
+        emergencyPhone: data.profile?.emergencyPhone || '',
+        notes: data.profile?.notes || '',
+        padrino: data.profile?.padrino ?? false,
+        padrinoColor: data.profile?.padrinoColor || null,
       });
 
+      // If scheduled dates have been migrated, adjust accordingly:
       const formattedDates = formatScheduledDates(data.assignedDates || []);
       setScheduledDates(formattedDates);
     } catch (err) {

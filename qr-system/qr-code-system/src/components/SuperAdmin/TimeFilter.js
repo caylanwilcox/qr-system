@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { Clock, CheckCircle2 } from 'lucide-react';
-// Optionally: import './TimeFilter.css';
+import './TimeFilter.css';
 
 const TimeFilter = ({
   timeFilter,

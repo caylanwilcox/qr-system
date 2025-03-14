@@ -1,0 +1,140 @@
+/***********************************************
+  Metrics Grid Container
+***********************************************/
+.metrics-grid {
+    /* 
+      Make it a responsive grid with gap 
+      and auto-fit behavior for a flexible layout.
+    */
+    @apply grid gap-4 p-4;
+  
+    /* 
+      On small screens (≥640px => "sm:" in Tailwind), 
+      use 2 columns; on larger screens (≥1024px => "lg:"), 
+      use 3 or 4 columns as needed.
+    */
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    
+    /* 
+      You can tweak breakpoints with standard CSS queries,
+      or rely on Tailwind classes for more control.
+    */
+    max-height: 100%;
+    min-height: 100%;
+  }
+  
+  /***********************************************
+    Metric Card Styles
+  ***********************************************/
+  .metric-box {
+    @apply relative rounded-lg p-4 transition-all cursor-pointer;
+    
+    /* Dark translucent background and subtle border */
+    background: rgba(17, 25, 40, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    
+    /* Hover effect */
+    &:hover {
+      @apply -translate-y-1 shadow-xl;
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+  }
+  
+  .metric-title {
+    @apply text-sm font-semibold mb-2;
+    color: rgba(255, 255, 255, 0.75);
+  }
+  
+  .metric-number {
+    @apply text-2xl font-bold;
+    color: #ffffff;
+  }
+  
+  /***********************************************
+    Padrinos Box & Ranking Grid
+  ***********************************************/
+  .padrinos-box {
+    /* If you want to make it span two columns at certain breakpoints, 
+       you can add custom classes or do something like:
+       @apply col-span-2; 
+       on LG or MD breakpoints if needed.
+    */
+  }
+  
+  .padrinos-grid {
+    @apply grid grid-cols-2 gap-2;
+  }
+  
+  .padrino-item {
+    @apply flex justify-between items-center p-2 rounded-md cursor-pointer transition-colors;
+    color: rgba(255, 255, 255, 0.8);
+  
+    /* Basic hover effect */
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  
+    /* Active state with a subtle highlight */
+    &.active {
+      @apply bg-opacity-30;
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+  
+  /***********************************************
+    Color Classes (Blue, Green, Red, Orange)
+  ***********************************************/
+  .blue {
+    /* 
+      Tailwind example: 
+      @apply text-blue-500 hover:bg-blue-500/20; 
+      or keep your existing style:
+    */
+    color: #1890ff;
+  }
+  
+  .green {
+    color: #44bd32;
+  }
+  
+  .red {
+    color: #ff4d4f;
+  }
+  
+  .orange {
+    color: #ffa500;
+  }
+  
+  /***********************************************
+    Responsive Tweaks
+  ***********************************************/
+  /* For tablets/smaller devices */
+  @media (max-width: 768px) {
+    .metric-box {
+      @apply p-3;
+    }
+    
+    .metric-title {
+      @apply text-sm;
+    }
+    
+    .metric-number {
+      @apply text-xl;
+    }
+  }
+  
+  /* For very small screens (max-width: 480px) */
+  @media (max-width: 480px) {
+    .metric-box {
+      @apply p-2;
+    }
+  
+    .metric-title {
+      @apply text-xs;
+    }
+  
+    .metric-number {
+      @apply text-lg;
+    }
+  }
+  

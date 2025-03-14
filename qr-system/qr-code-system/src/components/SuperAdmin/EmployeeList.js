@@ -17,15 +17,21 @@ const EmployeeList = ({ colorFilter }) => {
     
     const unsubscribe = onValue(usersRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) return;
+      if (!data) {
+        setEmployees([]);
+        setLoading(false);
+        return;
+      }
 
+      // Map through the users using the new structure:
+      // Personal details are under "profile" and stats under "stats"
       const employeeList = Object.entries(data)
         .map(([id, user]) => ({
           id,
-          name: user.name || 'N/A',
-          position: user.position || 'N/A',
-          location: user.location || 'N/A',
-          padrinoColor: user.padrinoColor || 'N/A',
+          name: user.profile?.name || 'N/A',
+          position: user.profile?.position || 'N/A',
+          location: user.profile?.primaryLocation || 'N/A',
+          padrinoColor: user.profile?.padrinoColor || 'N/A',
           stats: {
             attendanceRate: calculateAttendanceRate(user.stats),
             onTimeRate: calculateOnTimeRate(user.stats),
@@ -83,6 +89,7 @@ const EmployeeList = ({ colorFilter }) => {
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
       
+      // For sorting by attendance or on-time rates, extract the appropriate stat value.
       if (sortConfig.key === 'stats.attendanceRate' || sortConfig.key === 'stats.onTimeRate') {
         aValue = Number(a.stats[sortConfig.key.split('.')[1]]);
         bValue = Number(b.stats[sortConfig.key.split('.')[1]]);
@@ -198,12 +205,13 @@ const EmployeeList = ({ colorFilter }) => {
                   </span>
                   {employee.stats.rankChange &&
                     Date.now() - new Date(employee.stats.rankChange.date).getTime() <= 30 * 24 * 60 * 60 * 1000 && (
-                    employee.stats.rankChange.direction === 'up' ? (
-                      <TrendingUp className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4 text-red-400" />
+                      employee.stats.rankChange.direction === 'up' ? (
+                        <TrendingUp className="h-4 w-4 text-green-400" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4 text-red-400" />
+                      )
                     )
-                  )}
+                  }
                 </div>
               </div>
             </div>

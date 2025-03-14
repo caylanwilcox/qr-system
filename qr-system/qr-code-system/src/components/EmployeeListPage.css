@@ -1,0 +1,99 @@
+/* Main container for the EmployeeListPage */
+.employee-list-page {
+    padding: 2rem;
+    min-height: 80vh;
+    color: #fff;
+    /* If you want the entire page to have the “glass container” background, 
+       you could reuse a .glass-container class from your existing files.
+       e.g., @apply it here or add it to your HTML. */
+  }
+  
+  /* Glass card styling – reusing your app's theme */
+  .glass-card {
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px 0 rgba(14, 165, 233, 0.15);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 16px;
+    margin: 1rem 0;
+    padding: 1rem;
+    transition: all 0.3s ease;
+  }
+  
+  .glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(14, 165, 233, 0.3);
+  }
+  
+  /* Titles & subtitles */
+  .employee-list-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: rgba(226, 232, 240, 1);
+  }
+  
+  .employee-list-subtitle {
+    margin-bottom: 1.5rem;
+    color: rgba(226, 232, 240, 0.9);
+  }
+  
+  /* Table container */
+  .employee-list-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(30, 41, 59, 0.4);
+    border-radius: 12px;
+    overflow: hidden; /* ensures child elements don’t overflow the border radius */
+    margin-top: 1rem;
+  }
+  
+  /* Table header cells */
+  .employee-list-table th {
+    background: rgba(14, 165, 233, 0.2);
+    color: rgba(226, 232, 240, 1);
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+  
+  /* Table body cells */
+  .employee-list-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    color: rgba(226, 232, 240, 0.9);
+  }
+  
+  /* Row hover effect */
+  .employee-list-table tr:hover {
+    background: rgba(51, 65, 85, 0.4);
+    transition: all 0.2s ease;
+  }
+  
+  /* Optional: style for an “empty” row if no employees are found */
+  .employee-list-table td[colspan] {
+    text-align: center;
+    padding: 1rem;
+    font-style: italic;
+  }
+  .back-button {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    background: rgba(30, 41, 59, 0.6);
+    color: rgba(226, 232, 240, 1);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  
+  .back-button:hover {
+    background: rgba(51, 65, 85, 0.6);
+  }
+  

@@ -22,8 +22,8 @@ const SuperAdmin = () => {
   const location = useLocation();
 
   const locations = [
-    'Aurora', 'Agua Viva Lyons', 'Agua Viva',
-    'Agua Viva Elgin R7', 'Agua Viva Joliet', 'Agua Viva Wheeling',
+    'Aurora', 'Lyons', 'Agua Viva',
+    'Elgin', 'Joliet', 'Wheeling',
   ];
 
   const navItems = [

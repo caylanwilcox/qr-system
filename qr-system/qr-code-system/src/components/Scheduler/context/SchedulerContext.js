@@ -26,12 +26,12 @@ export const SchedulerProvider = ({ children }) => {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [locations] = useState([
-    'Agua Viva West Chicago',
-    'Agua Viva Lyons',
+    'West Chicago',
+    'Lyons',
     'Agua Viva',
-    'Agua Viva Elgin R7',
-    'Agua Viva Joliet',
-    'Agua Viva Wheeling',
+    'Elgin R7',
+    'Joliet',
+    'Wheeling',
   ]);
 
   // Firebase Event Handlers

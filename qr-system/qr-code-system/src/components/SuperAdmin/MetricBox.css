@@ -1,0 +1,103 @@
+/* MetricBox.css */
+
+.metric-box {
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f4c75, #3282b8);
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+  min-height: 160px;
+}
+
+.metric-box:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+}
+
+.metric-title {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 10px;
+}
+
+.metric-content {
+  font-size: 2.5rem;
+  color: #ffffff;
+}
+
+.metric-number {
+  font-size: 2.8rem;
+  font-weight: bold;
+}
+
+.green {
+  color: #44bd32;
+}
+
+.orange {
+  color: #ffa500;
+}
+
+.red {
+  color: #ff4d4f;
+}
+
+.blue {
+  color: #1890ff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .metric-box {
+    min-height: 150px;
+  }
+  
+  .metric-title {
+    font-size: 1.2rem;
+  }
+  
+  .metric-number {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .metric-box {
+    min-height: 140px;
+    padding: 15px;
+  }
+  
+  .metric-title {
+    font-size: 1.1rem;
+  }
+  
+  .metric-number {
+    font-size: 2.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .metric-box {
+    min-height: 130px;
+    padding: 12px;
+  }
+  
+  .metric-title {
+    font-size: 1rem;
+  }
+  
+  .metric-content {
+    font-size: 2rem;
+  }
+  
+  .metric-number {
+    font-size: 2rem;
+  }
+}

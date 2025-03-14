@@ -1,6 +1,8 @@
 /* SuperAdminDashboard.css */
 
 .dashboard-container {
+  height: auto;
+  overflow-y:auto;
   @apply p-4 w-full;
 }
 
@@ -10,6 +12,7 @@
 
 .quadrant {
   @apply bg-white rounded-lg shadow-md p-4;
+  max-height: 100%;
 }
 
 .quadrant-1 {
@@ -252,7 +255,6 @@
 .dashboard-container {
   width: 100%;
   height: calc(100vh - 64px);
-  overflow: hidden;
   background-color: transparent;
   position: relative;
   padding: 1rem;
@@ -285,7 +287,7 @@
 /* Dashboard Grid */
 .dashboard-grid {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto;
   gap: 1.5rem;
   height: 100%;
 }
@@ -295,7 +297,8 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 1rem;
   backdrop-filter: blur(20px);
-  overflow: hidden;
+  
+  height: fit-content;
 }
 
 /* Navigation */
@@ -369,7 +372,6 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
   padding: 1.25rem;
-  overflow-y: auto;
 }
 
 .metric-box {
@@ -397,6 +399,7 @@
 
 .metric-content {
   margin-top: auto;
+  
 }
 
 .metric-number {

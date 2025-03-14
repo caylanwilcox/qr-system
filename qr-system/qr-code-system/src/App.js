@@ -6,6 +6,7 @@ import { SchedulerProvider } from './components/Scheduler/context/SchedulerConte
 import './components/App.css';
 import './index.css';
 import './components/glass-theme.css';
+import EmployeeListPage from './components/EmployeeListPage';
 
 /* Direct imports */
 import Scheduler from './components/Scheduler/SchedulerContainer';
@@ -19,7 +20,6 @@ import AddUser from './components/AddUser';
 import AccountSettings from './components/AccountSettings';
 import QRScannerPage from './components/QRScannerPage';
 import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
-import ClearAndAddEmployees from './components/clearAndAddEmployees';
 import StatDetails from './components/SuperAdmin/StatDetails';
 import UserProfile from './components/UserProfile/UserProfile';
 
@@ -37,6 +37,7 @@ function App() {
               {/* Public Routes */}
               <Route path="/" element={<Navigate to="/login" />} />
               <Route path="/login" element={<Login />} />
+              <Route path="employee-list" element={<EmployeeListPage />} />
 
               {/* Employee Routes */}
               <Route path="/dashboard" element={<PrivateRoute requiredRole="EMPLOYEE"><UserProfile /></PrivateRoute>} />
@@ -49,8 +50,8 @@ function App() {
                 <Route path="settings" element={<Settings />} />
                 <Route path="add-user" element={<AddUser />} />
                 <Route path="scheduler" element={<Scheduler />} />
-                <Route path="update-employees" element={<ClearAndAddEmployees />} />
                 <Route path="account-settings" element={<AccountSettings />} />
+
                 <Route path="qr-scanner" element={<QRScannerPage />} />
                 <Route path="users/:employeeId" element={<EmployeeProfile />} />
                 <Route path="stats/:status" element={<StatDetails />} />
@@ -61,6 +62,7 @@ function App() {
                 <Route path="employees" element={<ManageEmployees />} />
                 <Route path="scheduler" element={<Scheduler />} />
                 <Route path="reports" element={<Reports />} />
+
                 <Route path="settings" element={<Settings />} />
                 <Route path="account-settings" element={<AccountSettings />} />
                 <Route path="qr-scanner" element={<QRScannerPage />} />

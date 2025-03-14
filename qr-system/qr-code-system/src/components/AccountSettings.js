@@ -1,5 +1,4 @@
 import React from 'react';
-import UpdateEmployeesButton from './clearAndAddEmployees'; // Import the UpdateEmployeesButton component
 
 const AccountSettings = () => {
   return (

@@ -15,11 +15,11 @@ const ManageEmployees = () => {
 
   const locations = [
     'Aurora',
-    'Agua Viva West Chicago',
-    'Agua Viva Lyons',
-    'Agua Viva Elgin R7',
-    'Agua Viva Joliet',
-    'Agua Viva Wheeling',
+    'West Chicago',
+    'Lyons',
+    'Elgin',
+    'Joliet',
+    'Wheeling',
     'Retreat',
   ];
 
@@ -27,7 +27,6 @@ const ManageEmployees = () => {
     const fetchEmployees = async () => {
       try {
         const usersRef = ref(database, 'users');
-        
         onValue(usersRef, (snapshot) => {
           const usersData = snapshot.val();
           if (!usersData) {
@@ -36,20 +35,26 @@ const ManageEmployees = () => {
             return;
           }
 
+          // Map through the users using the new structure:
+          // - Profile data is under userData.profile
+          // - Performance metrics are under userData.stats
           const employeeList = Object.entries(usersData)
-            .filter(([_, userData]) => userData && userData.name)
+            .filter(([_, userData]) => userData && userData.profile && userData.profile.name)
             .map(([userId, userData]) => {
-              const currentLocation = userData.locationHistory?.[0]?.locationId || 'Unknown';
-              const status = userData.status?.toLowerCase() || 'inactive';
-              const role = userData.role?.toLowerCase() || 'employee';
-              const service = userData.service || 'Not Assigned';
-
+              const profile = userData.profile;
               const stats = userData.stats || {};
+
+              // Use primaryLocation from profile
+              const currentLocation = profile.primaryLocation || 'Unknown';
+              const status = (profile.status || 'inactive').toLowerCase();
+              const role = (profile.role || 'employee').toLowerCase();
+              const service = profile.service || 'Not Assigned';
+
               const daysPresent = stats.daysPresent || 0;
               const daysAbsent = stats.daysAbsent || 0;
               const daysLate = stats.daysLate || 0;
               const totalDays = daysPresent + daysAbsent;
-              
+
               const attendanceRate = totalDays > 0 
                 ? ((daysPresent / totalDays) * 100).toFixed(1) 
                 : 0;
@@ -60,9 +65,9 @@ const ManageEmployees = () => {
 
               return {
                 id: userId,
-                name: userData.name,
-                email: userData.email,
-                phone: userData.phone,
+                name: profile.name,
+                email: profile.email,
+                phone: profile.phone,
                 service,
                 location: currentLocation,
                 status,
@@ -111,10 +116,11 @@ const ManageEmployees = () => {
     return filtered;
   };
 
+  // Update role inside the profile node
   const handleToggleRole = async (employee) => {
     try {
       const newRole = employee.role === 'admin' ? 'employee' : 'admin';
-      await update(ref(database, `users/${employee.id}`), {
+      await update(ref(database, `users/${employee.id}/profile`), {
         role: newRole,
       });
       console.log(`Role updated to "${newRole}" for user: ${employee.id}`);
@@ -132,7 +138,7 @@ const ManageEmployees = () => {
 
   const LocationCard = ({ location }) => {
     const locationEmployees = employees.filter(
-      (emp) => emp.location === location
+      (emp) => emp.location.toLowerCase() === location.toLowerCase()
     );
     const activeCount = locationEmployees.filter(
       (emp) => emp.status === 'active'
@@ -216,8 +222,8 @@ const ManageEmployees = () => {
                 employee.stats.attendanceRate >= 65 ? 'score-medium' :
                 employee.stats.attendanceRate >= 55 ? 'score-below' :
                 employee.stats.attendanceRate >= 45 ? 'score-poor' :
-                'score-critical'}`}
-              >
+                'score-critical'
+              }`}>
                 {employee.stats.attendanceRate}%
               </td>
               <td className={`reliability-score ${
@@ -227,8 +233,8 @@ const ManageEmployees = () => {
                 employee.stats.onTimeRate >= 65 ? 'score-medium' :
                 employee.stats.onTimeRate >= 55 ? 'score-below' :
                 employee.stats.onTimeRate >= 45 ? 'score-poor' :
-                'score-critical'}`}
-              >
+                'score-critical'
+              }`}>
                 {employee.stats.onTimeRate}%
               </td>
               <td>
@@ -270,7 +276,7 @@ const ManageEmployees = () => {
 
   if (selectedLocation) {
     const locationEmployees = employees.filter(
-      (emp) => emp.location === selectedLocation
+      (emp) => emp.location.toLowerCase() === selectedLocation.toLowerCase()
     );
     const activeCount = locationEmployees.filter(
       (emp) => emp.status === 'active'
