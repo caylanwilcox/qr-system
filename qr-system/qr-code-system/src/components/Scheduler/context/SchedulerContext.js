@@ -1,11 +1,17 @@
 // src/components/Scheduler/context/SchedulerContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ref, onValue, push, update, remove } from "firebase/database";
-import { database } from '../../../services/firebaseConfig';
-import { startOfDay, endOfDay } from 'date-fns';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useAuthState } from './hooks/useAuthState';
+import { useEventState } from './hooks/useEventState';
+import { useUIState } from './hooks/useUIState';
+import { useLocationState } from './hooks/useLocationState';
+import { useEventHandlers } from './hooks/useEventHandlers';
+import { useHelperFunctions } from './hooks/useHelperFunctions';
+import { useDebugFunctions } from './hooks/useDebugFunctions';
 
-const SchedulerContext = createContext();
+// Create the context
+const SchedulerContext = createContext(null);
 
+// Custom hook to use the scheduler context
 export const useSchedulerContext = () => {
   const context = useContext(SchedulerContext);
   if (!context) {
@@ -14,148 +20,95 @@ export const useSchedulerContext = () => {
   return context;
 };
 
+// Provider component
 export const SchedulerProvider = ({ children }) => {
-  // UI State
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [view, setView] = useState('week');
-  const [date, setDate] = useState(new Date());
-  const [showEventDialog, setShowEventDialog] = useState(false);
+  // Get auth state
+  const authState = useAuthState();
   
-  // Data State
-  const [events, setEvents] = useState([]);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [locations] = useState([
-    'West Chicago',
-    'Lyons',
-    'Agua Viva',
-    'Elgin R7',
-    'Joliet',
-    'Wheeling',
-  ]);
-
-  // Firebase Event Handlers
-  const handleCreateEvent = async (eventData) => {
-    try {
-      const eventsRef = ref(database, 'events');
-      const newEvent = {
-        ...eventData,
-        start: eventData.start.toISOString(),
-        end: eventData.end.toISOString(),
-        createdAt: new Date().toISOString(),
-      };
-      await push(eventsRef, newEvent);
-      setShowEventDialog(false);
-    } catch (error) {
-      setError('Failed to create event. Please try again.');
-      console.error('Error creating event:', error);
-    }
-  };
-
-  const handleUpdateEvent = async (eventId, eventData) => {
-    try {
-      const eventRef = ref(database, `events/${eventId}`);
-      const updatedEvent = {
-        ...eventData,
-        start: eventData.start.toISOString(),
-        end: eventData.end.toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await update(eventRef, updatedEvent);
-      setShowEventDialog(false);
-      setSelectedEvent(null);
-    } catch (error) {
-      setError('Failed to update event. Please try again.');
-      console.error('Error updating event:', error);
-    }
-  };
-
-  const handleDeleteEvent = async (eventId) => {
-    try {
-      const eventRef = ref(database, `events/${eventId}`);
-      await remove(eventRef);
-      setShowEventDialog(false);
-      setSelectedEvent(null);
-    } catch (error) {
-      setError('Failed to delete event. Please try again.');
-      console.error('Error deleting event:', error);
-    }
-  };
-
-  // Data Fetching
+  // Get UI state
+  const uiState = useUIState();
+  
+  // Get locations
+  const locationState = useLocationState();
+  
+  // Get event state - pass auth to handle different user roles
+  const eventState = useEventState(authState);
+  
+  // Set up event handlers
+  const eventHandlers = useEventHandlers(authState, eventState, uiState);
+  
+  // Set up helper functions
+  const helperFunctions = useHelperFunctions(authState, eventState);
+  
+  // Set up debug functions
+  const debugFunctions = useDebugFunctions(eventHandlers, authState);
+  
+  // Monitor events state changes for debugging
   useEffect(() => {
-    const eventsRef = ref(database, 'events');
-    setLoading(true);
+    if (eventState.events && eventState.events.length > 0) {
+      console.log("SchedulerContext: Events state updated, now has", eventState.events.length, "events");
+      
+      // Sample the first event for debugging
+      const sampleEvent = eventState.events[0];
+      console.log("Sample event from context:", {
+        id: sampleEvent.id,
+        title: sampleEvent.title,
+        startType: sampleEvent.start instanceof Date ? "Date" : typeof sampleEvent.start,
+        endType: sampleEvent.end instanceof Date ? "Date" : typeof sampleEvent.end,
+        startValid: sampleEvent.start instanceof Date && !isNaN(sampleEvent.start.getTime()),
+        endValid: sampleEvent.end instanceof Date && !isNaN(sampleEvent.end.getTime())
+      });
+    } else {
+      console.log("SchedulerContext: Events state updated, now empty");
+    }
+  }, [eventState.events]);
+  
+  // Monitor selected event changes
+  useEffect(() => {
+    if (eventState.selectedEvent) {
+      console.log("SchedulerContext: Selected event updated:", {
+        id: eventState.selectedEvent.id,
+        title: eventState.selectedEvent.title
+      });
+    } else {
+      console.log("SchedulerContext: Selected event cleared");
+    }
+  }, [eventState.selectedEvent]);
+  
+  // Monitor loading state changes
+  useEffect(() => {
+    console.log("SchedulerContext: Loading state changed to", uiState.loading);
+  }, [uiState.loading]);
+  
+  // Monitor UI dialog states
+  useEffect(() => {
+    console.log("SchedulerContext: Event dialog state changed to", uiState.showEventDialog);
+  }, [uiState.showEventDialog]);
+  
+  useEffect(() => {
+    console.log("SchedulerContext: Assignment dialog state changed to", uiState.showAssignmentDialog);
+  }, [uiState.showAssignmentDialog]);
 
-    const unsubscribe = onValue(eventsRef, (snapshot) => {
-      try {
-        const data = snapshot.val();
-        if (data) {
-          const formattedEvents = Object.entries(data).map(([id, event]) => ({
-            ...event,
-            id,
-            start: new Date(event.start),
-            end: new Date(event.end),
-          }));
-          setEvents(formattedEvents);
-        } else {
-          setEvents([]);
-        }
-        setError(null);
-      } catch (error) {
-        console.error('Error processing events:', error);
-        setError('Failed to load events. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }, (error) => {
-      console.error('Database error:', error);
-      setError('Failed to connect to the database. Please try again.');
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Helper Functions
-  const getEventsForDay = (selectedDate) => {
-    const start = startOfDay(selectedDate);
-    const end = endOfDay(selectedDate);
-    return events.filter(event => {
-      const eventDate = new Date(event.start);
-      return eventDate >= start && eventDate <= end;
-    });
-  };
-
-  const getEventsForLocation = (location) => {
-    return events.filter(event => event.location === location);
-  };
-
+  // Create the context value object by combining all the state and functions
   const contextValue = {
+    // Auth state
+    ...authState,
+    
     // UI State
-    loading,
-    error,
-    view,
-    setView,
-    date,
-    setDate,
-    showEventDialog,
-    setShowEventDialog,
+    ...uiState,
     
     // Data State
-    events,
-    selectedEvent,
-    setSelectedEvent,
-    locations,
+    ...eventState,
+    ...locationState,
     
     // Event Handlers
-    handleCreateEvent,
-    handleUpdateEvent,
-    handleDeleteEvent,
+    ...eventHandlers,
     
     // Helper Functions
-    getEventsForDay,
-    getEventsForLocation,
+    ...helperFunctions,
+    
+    // Debug Functions
+    ...debugFunctions
   };
 
   return (
@@ -164,3 +117,5 @@ export const SchedulerProvider = ({ children }) => {
     </SchedulerContext.Provider>
   );
 };
+
+export default SchedulerProvider;

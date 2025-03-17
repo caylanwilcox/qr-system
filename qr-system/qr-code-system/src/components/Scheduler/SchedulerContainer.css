@@ -1,98 +1,127 @@
+/* SchedulerContainer.css - Optimized for proper spacing and layout */
+
 .scheduler-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    padding: 1.5rem;
-    background-color:transparent;
-  }
-  
-  .scheduler-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-  }
-  
-  .scheduler-title {
-    font-size: 1.875rem;
-    font-weight: 600;
-    color: #111827;
-  }
-  
-  .scheduler-main {
-    flex: 1;
-    min-height: 0;
-    background: transparent !important;
-    border-radius: 0.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  }
-  
-  .create-event-btn {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.5rem 1rem;
-    background-color: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  
-  .create-event-btn:hover {
-    background-color: #2563eb;
-  }
-  
-  .scheduler-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-  }
-  
-  .loading-spinner {
-    border: 3px solid #f3f3f3;
-    border-radius: 50%;
-    border-top: 3px solid #3b82f6;
-    width: 24px;
-    height: 24px;
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
-  }
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
-  .scheduler-error {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem;
-    margin: 1rem;
-    background-color: #fee2e2;
-    border: 1px solid #fecaca;
-    border-radius: 0.375rem;
-    color: #dc2626;
-  }
-  
-  .dark .scheduler-container {
-    background-color:transparent;
-  }
-  
-  .dark .scheduler-title {
-    color: #f9fafb;
-  }
-  
-  .dark .scheduler-main {
-    background: #374151;
-  }
-  
-  .dark .scheduler-error {
-    background-color: #7f1d1d;
-    border-color: #991b1b;
-    color: #fecaca;
-  }
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: transparent;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Admin badge styling */
+.admin-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: rgba(13, 25, 48, 0.7);
+  border-bottom: 1px solid rgba(62, 184, 209, 0.2);
+  z-index: 10;
+}
+
+.admin-badge {
+  background: rgba(62, 184, 209, 0.2);
+  color: rgba(62, 184, 209, 1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.admin-info {
+  display: flex;
+  gap: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+}
+
+/* Make sure calendar takes full available space */
+.scheduler-container > .main-calendar-wrapper {
+  flex: 1;
+  min-height: 0;
+  margin: 10px;
+}
+
+/* Loading state */
+.scheduler-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: rgba(13, 25, 48, 0.4);
+}
+
+.loading-spinner {
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  border-top: 3px solid rgba(62, 184, 209, 1);
+  width: 36px;
+  height: 36px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.scheduler-loading p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+}
+
+/* Error state */
+.scheduler-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: rgba(13, 25, 48, 0.4);
+  padding: 2rem;
+}
+
+.error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  border-radius: 50%;
+  color: rgba(239, 68, 68, 1);
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.scheduler-error p {
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.scheduler-error button {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: rgba(239, 68, 68, 1);
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.scheduler-error button:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* When parent has admin status, adjust calendar height */
+.scheduler-container.has-admin-status > .main-calendar-wrapper {
+  height: calc(100vh - 60px);
+}

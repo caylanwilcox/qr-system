@@ -8,7 +8,7 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick }) => {
 
   // Handler to navigate to your employee-list route
   const handleMetricClick = () => {
-    navigate('/super-admin/employee-list');
+    navigate('/employee-list');
   };
 
   return (
@@ -86,17 +86,7 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick }) => {
         <p className="metric-number">{metrics.overview.totalApoyos}</p>
       </div>
 
-      {/* Metric Card: Monthly Attendance (clickable) */}
-      <div 
-        className="metric-box"
-        style={{ cursor: 'pointer' }}
-        onClick={handleMetricClick}
-      >
-        <h3 className="metric-title">PROMEDIO DE ASISTENCIA MENSUAL</h3>
-        <p className="metric-number">
-          {metrics.overview.monthlyAttendance.toFixed(1)}%
-        </p>
-      </div>
+  
     </div>
   );
 };

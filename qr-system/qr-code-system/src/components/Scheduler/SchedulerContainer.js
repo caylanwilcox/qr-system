@@ -1,25 +1,28 @@
+// src/components/Scheduler/SchedulerContainer.js
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { useSchedulerContext } from './context/SchedulerContext';
 import MainCalendar from './components/MainCalendar';
 import EventDialog from './components/EventDialog';
-import { SchedulerProvider, useSchedulerContext } from './context/SchedulerContext';
-import './styles/Scheduler.css';
-// Main container component that uses the context
-const SchedulerContent = () => {
+import ParticipantSelectionDialog from './components/ParticipantSelectionDialog';
+import './SchedulerContainer.css';
+
+// Remove the SchedulerProvider wrapper - it will be provided at a higher level
+const SchedulerContainer = () => {
   const {
-    loading,
-    error,
-    showEventDialog,
     selectedEvent,
-    setSelectedEvent,
-    setShowEventDialog
+    showEventDialog,
+    showAssignmentDialog,
+    setShowAssignmentDialog,
+    adminPermissions,
+    loading,
+    error
   } = useSchedulerContext();
 
   if (loading) {
     return (
       <div className="scheduler-loading">
         <div className="loading-spinner"></div>
-        <p>Loading scheduler...</p>
+        <p>Loading calendar...</p>
       </div>
     );
   }
@@ -27,33 +30,45 @@ const SchedulerContent = () => {
   if (error) {
     return (
       <div className="scheduler-error">
-        <AlertTriangle className="h-5 w-5" />
+        <div className="error-icon">!</div>
         <p>{error}</p>
+        <button onClick={() => window.location.reload()}>Try Again</button>
       </div>
     );
   }
-
+  console.log("SchedulerContainer render - Dialog states:", {
+    showEventDialog,
+    showAssignmentDialog,
+    hasSelectedEvent: Boolean(selectedEvent),
+    selectedEventId: selectedEvent?.id
+  });
   return (
     <div className="scheduler-container">
+      {adminPermissions && (
+        <div className="admin-status">
+          <div className="admin-badge">
+            {adminPermissions.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+          </div>
+          <div className="admin-info">
+            <span>Managing {Object.keys(adminPermissions.managedLocations || {}).length} locations</span>
+            <span>and {Object.keys(adminPermissions.managedDepartments || {}).length} departments</span>
+          </div>
+        </div>
+      )}
       
+      <MainCalendar />
       
-       
-
-      <div className="scheduler-main" >
-        <MainCalendar />
-      </div>
-
       {showEventDialog && <EventDialog />}
+      
+      // In your SchedulerContainer.jsx
+      // In your SchedulerContainer.js
+      {showAssignmentDialog && selectedEvent && (
+  <ParticipantSelectionDialog 
+    eventId={selectedEvent.id} // CORRECT: This is passing a string ID
+    onClose={() => setShowAssignmentDialog(false)} 
+  />
+)}
     </div>
-  );
-};
-
-// Wrapper component that provides the context
-const SchedulerContainer = () => {
-  return (
-    <SchedulerProvider>
-      <SchedulerContent />
-    </SchedulerProvider>
   );
 };
 

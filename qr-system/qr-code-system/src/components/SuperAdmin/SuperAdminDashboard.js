@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
@@ -100,97 +99,91 @@ const SuperAdminDashboard = () => {
         padrinosOrange: 0,
         totalOrejas: 0,
         totalApoyos: 0,
-        monthlyAttendance: 0, // or however you measure attendance
+        monthlyAttendance: 0,
       },
     };
-
+  
     // Helper: check if a user is in the correct location
     const locationMatch = (userLocation, targetLocation) => {
       if (targetLocation === 'All') return true;
       return userLocation === targetLocation;
     };
-
-    // We'll track how many active users had presence data -> average attendance
-    let activeUsersCount = 0;
-
-    // Loop over each user record
+  
+    // Track group-level attendance totals
+    let totalPresentAll = 0;
+    let totalDaysAll = 0;
+  
     Object.entries(data).forEach(([userId, userRecord]) => {
       if (!userRecord) return;
-
-      // Access nested fields
+  
       const { profile, stats } = userRecord;
       if (!profile) return; // skip if no profile at all
-
-      const userStatus = profile.status?.toLowerCase();
+  
+      // Extract relevant fields
       const userLocation = profile.primaryLocation || 'Unknown';
-      const color = profile.padrinoColor?.toLowerCase?.() || ''; // if you have "padrinoColor" in profile
+      const color = profile.padrinoColor?.toLowerCase?.() || '';
       const lastClockIn = stats?.lastClockIn;
       const daysPresent = stats?.daysPresent || 0;
       const daysAbsent = stats?.daysAbsent || 0;
       const daysLate = stats?.daysLate || 0;
       const service = profile.service?.toUpperCase?.();
-
-      // 1) Filter by location
+  
+      // (1) Filter by location
       if (!locationMatch(userLocation, activeLocation)) return;
-
-      // 2) Count padrinos by color
-      if (color === 'blue') metricsObj.overview.padrinosBlue++;
-      if (color === 'green') metricsObj.overview.padrinosGreen++;
-      if (color === 'red') metricsObj.overview.padrinosRed++;
+  
+      // (2) Count padrinos by color
+      if (color === 'blue')   metricsObj.overview.padrinosBlue++;
+      if (color === 'green')  metricsObj.overview.padrinosGreen++;
+      if (color === 'red')    metricsObj.overview.padrinosRed++;
       if (color === 'orange') metricsObj.overview.padrinosOrange++;
-
-      // 3) For attendance, only consider active users
-      if (userStatus === 'active') {
-        // If you want location-based stats, init if missing
-        if (!metricsObj.perLocation[userLocation]) {
-          metricsObj.perLocation[userLocation] = {
-            notClockedIn: 0,
-            clockedIn: 0,
-            onTime: 0,
-            late: 0,
-          };
-        }
-
-        // If there's a valid lastClockIn => user is clockedIn
-        if (lastClockIn) {
-          metricsObj.total.clockedIn++;
-          metricsObj.perLocation[userLocation].clockedIn++;
-
-          // If they've ever been late
-          if (daysLate > 0) {
-            metricsObj.total.late++;
-            metricsObj.perLocation[userLocation].late++;
-          } else {
-            metricsObj.total.onTime++;
-            metricsObj.perLocation[userLocation].onTime++;
-          }
-        } else {
-          // Not clocked in
-          metricsObj.total.notClockedIn++;
-          metricsObj.perLocation[userLocation].notClockedIn++;
-        }
-
-        // RSG => Orejas, COM => Apoyos
-        if (service === 'RSG') metricsObj.overview.totalOrejas++;
-        if (service === 'COM') metricsObj.overview.totalApoyos++;
-
-        // 4) Attendance calculations
-        const totalDays = daysPresent + daysAbsent;
-        if (totalDays > 0) {
-          metricsObj.overview.monthlyAttendance += (daysPresent / totalDays) * 100;
-          activeUsersCount++;
-        }
+  
+      // (3) Initialize location-based counters if missing
+      if (!metricsObj.perLocation[userLocation]) {
+        metricsObj.perLocation[userLocation] = {
+          notClockedIn: 0,
+          clockedIn: 0,
+          onTime: 0,
+          late: 0,
+        };
       }
+  
+      // If there's a valid `lastClockIn`, count user as clockedIn
+      if (lastClockIn) {
+        metricsObj.total.clockedIn++;
+        metricsObj.perLocation[userLocation].clockedIn++;
+  
+        if (daysLate > 0) {
+          metricsObj.total.late++;
+          metricsObj.perLocation[userLocation].late++;
+        } else {
+          metricsObj.total.onTime++;
+          metricsObj.perLocation[userLocation].onTime++;
+        }
+      } else {
+        metricsObj.total.notClockedIn++;
+        metricsObj.perLocation[userLocation].notClockedIn++;
+      }
+  
+      // (4) Service-based counts (e.g., RSG => Orejas, COM => Apoyos)
+      if (service === 'RSG') metricsObj.overview.totalOrejas++;
+      if (service === 'COM') metricsObj.overview.totalApoyos++;
+  
+      // (5) Group-level attendance from daysPresent/daysAbsent
+      const totalDays = daysPresent + daysAbsent;
+      totalPresentAll += daysPresent;
+      totalDaysAll += totalDays;
     });
-
-    // Average out monthlyAttendance if we found active users
-    if (activeUsersCount > 0) {
-      metricsObj.overview.monthlyAttendance /= activeUsersCount;
+  
+    // Final group attendance ratio
+    if (totalDaysAll > 0) {
+      metricsObj.overview.monthlyAttendance = (totalPresentAll / totalDaysAll) * 100;
+    } else {
+      metricsObj.overview.monthlyAttendance = 0;
     }
-
+  
     return metricsObj;
   }, []);
-
+  
   // ---------------------------
   // 5) Fetch from Firebase
   // ---------------------------

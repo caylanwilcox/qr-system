@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/authContext';
-import { ref, get, set } from 'firebase/database';
+import { ref, get, set, update } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
+import { Loader2, AlertCircle } from 'lucide-react'; // Optional - you can remove if not using
 import './Login.css';
 
 const Login = () => {
@@ -25,24 +26,34 @@ const Login = () => {
       // Check if user exists in database
       const userRef = ref(database, `users/${user.uid}`);
       const snapshot = await get(userRef);
-      
+
       if (!snapshot.exists()) {
         // Create basic user data if it doesn't exist
         await set(userRef, {
-          email: email,
-          role: user.role,
-          status: 'active',
-          name: user.email.split('@')[0],
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString()
+          profile: {
+            email: email,
+            role: user.role || 'EMPLOYEE', // Default to EMPLOYEE if no role
+            status: 'active',
+            name: user.email.split('@')[0],
+            createdAt: new Date().toISOString(),
+          },
+          stats: {
+            lastLogin: new Date().toISOString()
+          }
+        });
+      } else {
+        // Update last login time
+        await update(userRef, {
+          'stats/lastLogin': new Date().toISOString()
         });
       }
 
       // Normalize the role to uppercase for consistent comparison
-      const userRole = user.role?.toUpperCase();
+      const userRole = (user.role || '').toUpperCase();
 
       switch (userRole) {
         case 'SUPER_ADMIN':
+        case 'SUPER-ADMIN': // Handle hyphenated version too
           navigate('/super-admin/manage-employees');
           break;
         case 'ADMIN':
@@ -53,11 +64,36 @@ const Login = () => {
           break;
         default:
           console.error('Unknown role:', userRole);
-          setError('Invalid user role assigned');
+          // Try to get role from database as fallback
+          if (snapshot.exists() && snapshot.val().profile?.role) {
+            const dbRole = snapshot.val().profile.role.toUpperCase();
+            console.log('Using role from database:', dbRole);
+            
+            if (dbRole === 'SUPER_ADMIN' || dbRole === 'SUPER-ADMIN') {
+              navigate('/super-admin/manage-employees');
+            } else if (dbRole === 'ADMIN') {
+              navigate('/location-admin/employees');
+            } else {
+              navigate('/dashboard'); // Default to employee dashboard
+            }
+          } else {
+            navigate('/dashboard'); // Default to employee dashboard
+            console.warn('No role found, defaulting to employee dashboard');
+          }
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Failed to sign in. Please check your email or password.');
+      
+      // Provide more specific error messages
+      if (error.code === 'auth/user-not-found') {
+        setError('No account exists with this email address.');
+      } else if (error.code === 'auth/wrong-password') {
+        setError('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/too-many-requests') {
+        setError('Too many login attempts. Please try again later.');
+      } else {
+        setError('Failed to sign in. Please check your email or password.');
+      }
     } finally {
       setLoading(false);
     }
@@ -95,14 +131,28 @@ const Login = () => {
             />
           </div>
           
-          {error && <div className="login-error">{error}</div>}
+          {error && (
+            <div className="login-error">
+              {/* If you're using lucide-react: */}
+              {/* <AlertCircle size={16} className="error-icon" /> */}
+              {error}
+            </div>
+          )}
           
           <button
             type="submit"
-            className="login-button"
+            className={`login-button ${loading ? 'loading' : ''}`}
             disabled={loading}
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? (
+              <>
+                {/* If you're using lucide-react: */}
+                {/* <Loader2 size={16} className="loading-spinner" /> */}
+                Logging in...
+              </>
+            ) : (
+              'Login'
+            )}
           </button>
         </form>
       </div>

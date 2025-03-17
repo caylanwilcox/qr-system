@@ -3,12 +3,14 @@ import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { ref, onValue } from "firebase/database";
 import { format } from 'date-fns';
 import { database } from '../../services/firebaseConfig';
+import { useAuth } from '../../services/authContext';
 import './SuperAdmin.css'; // Consider renaming to SuperAdmin.css
 import Dashboard from './SuperAdminDashboard';
 import logo from '../logo.png';
 import {
   Home, Users, FileText, Settings, Calendar, QrCode,
-  LogOut, ChevronLeft, ChevronRight, Building, UserPlus
+  LogOut, ChevronLeft, ChevronRight, Building, UserPlus,
+  Shield, User
 } from 'lucide-react';
 
 const SuperAdmin = () => {
@@ -18,8 +20,12 @@ const SuperAdmin = () => {
   const [error, setError] = useState(null);
   const [weekWeather, setWeekWeather] = useState([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [showUserInfo, setShowUserInfo] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Get user information from auth context
+  const { user } = useAuth();
 
   const locations = [
     'Aurora', 'Lyons', 'Agua Viva',
@@ -140,6 +146,50 @@ const SuperAdmin = () => {
       : <Outlet />;
   };
 
+  // Format role for display
+  const formatRole = (role) => {
+    if (!role) return 'Unknown';
+    return role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  // Function to render role badge with appropriate styling
+  const getRoleBadge = (role) => {
+    if (!role) return null;
+    
+    const roleLower = role.toLowerCase();
+    let badgeClass = 'role-badge';
+    
+    if (roleLower.includes('super')) {
+      badgeClass += ' super-admin-badge';
+    } else if (roleLower.includes('admin')) {
+      badgeClass += ' admin-badge';
+    } else {
+      badgeClass += ' employee-badge';
+    }
+    
+    return <span className={badgeClass}>{formatRole(role)}</span>;
+  };
+
+  // Function to format the locations list
+  const formatLocations = (permissions) => {
+    if (!permissions || !permissions.managedLocations) return 'None';
+    
+    const locations = permissions.managedLocations;
+    if (locations.includes('*')) return 'All Locations';
+    
+    return locations.join(', ');
+  };
+
+  // Function to format the departments list
+  const formatDepartments = (permissions) => {
+    if (!permissions || !permissions.managedDepartments) return 'None';
+    
+    const departments = permissions.managedDepartments;
+    if (departments.includes('*')) return 'All Departments';
+    
+    return departments.join(', ');
+  };
+
   return (
     <div className="admin-layout">
       <aside className={`admin-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
@@ -173,7 +223,62 @@ const SuperAdmin = () => {
         <header className="main-header">
           <div className="header-content">
             <h1>{getPageTitle()}</h1>
-            <span className="current-date">{format(new Date(), 'MMMM d, yyyy')}</span>
+            <div className="header-right">
+              <span className="current-date">{format(new Date(), 'MMMM d, yyyy')}</span>
+              
+              {/* User information dropdown */}
+              <div className="user-info-container">
+                <button 
+                  className="user-info-button" 
+                  onClick={() => setShowUserInfo(!showUserInfo)}
+                  aria-label="Toggle user information"
+                >
+                  {user ? (
+                    <div className="user-button-content">
+                      <User size={20} />
+                      <span className="user-name">{user.profile?.name || user.email}</span>
+                      {getRoleBadge(user.role)}
+                    </div>
+                  ) : (
+                    <Shield size={20} />
+                  )}
+                </button>
+                
+                {/* Dropdown with detailed user permissions */}
+                {showUserInfo && user && (
+                  <div className="user-dropdown">
+                    <div className="user-dropdown-header">
+                      <h3>{user.profile?.name || 'User'}</h3>
+                      <p className="user-email">{user.email}</p>
+                      {getRoleBadge(user.role)}
+                    </div>
+                    
+                    <div className="user-permissions">
+                      <h4>Permissions</h4>
+                      
+                      <div className="permission-item">
+                        <span className="permission-label">Locations:</span>
+                        <span className="permission-value">
+                          {formatLocations(user.managementPermissions)}
+                        </span>
+                      </div>
+                      
+                      <div className="permission-item">
+                        <span className="permission-label">Departments:</span>
+                        <span className="permission-value">
+                          {formatDepartments(user.managementPermissions)}
+                        </span>
+                      </div>
+                      
+                      <Link to="/account-settings" className="settings-link">
+                        <Settings size={16} />
+                        <span>Account Settings</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </header>
         <div className="main-content">

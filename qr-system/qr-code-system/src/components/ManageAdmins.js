@@ -1,60 +1,99 @@
 import React, { useState, useEffect } from 'react';
 import { ref, get, set, update } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
-import { Link } from 'react-router-dom';
-import { PlusCircle, Trash2, Edit2, Loader2, AlertCircle, User } from 'lucide-react';
-
-// Helper to convert an attendanceRate (0-100) into a letter grade
-function getAttendanceGrade(rate) {
-  if (rate == null) return 'N/A';
-  if (rate >= 95) return 'A';
-  if (rate >= 85) return 'B';
-  if (rate >= 75) return 'C';
-  if (rate >= 65) return 'D';
-  return 'F';
-}
+import { 
+  Loader2, 
+  AlertCircle, 
+  Users, 
+  MapPin, 
+  User,
+  Filter,
+  X,
+  CheckCircle
+} from 'lucide-react';
 
 const ManageAdmins = () => {
-  const [admins, setAdmins] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [newAdmin, setNewAdmin] = useState({
-    name: '',
-    email: '',
-    location: '',
-    phone: '',
-    role: 'admin'
-  });
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Core data
+  const [admins, setAdmins] = useState([]);
+  const [regularUsers, setRegularUsers] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [locationAdmins, setLocationAdmins] = useState({});
+  
+  // UI state
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedAdmins, setSelectedAdmins] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
 
-  // If you have more locations, add them here
-  const locations = [
-    'Aurora',
-    'Agua Viva Lyons',
-    'Agua Viva',
-    'Agua Viva Elgin R7',
-    'Agua Viva Joliet',
-    'Agua Viva Wheeling',
-  ];
-
+  // Initial data loading
   useEffect(() => {
-    fetchAdmins();
-    fetchAllUsers();
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        await Promise.all([
+          fetchAdmins(),
+          fetchRegularUsers(),
+          fetchLocations(),
+          fetchLocationPermissions()
+        ]);
+      } catch (err) {
+        setError('Failed to load data. Please try again.');
+        console.error('Error loading initial data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
   }, []);
 
-  // 1) Fetch all users that are NOT admin/super-admin (for suggestion dropdown)
-  const fetchAllUsers = async () => {
+  // Fetch all users with admin/super-admin roles
+  // Fetch all users with admin/super-admin roles
+const fetchAdmins = async () => {
+  try {
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    if (snapshot.exists()) {
+      const usersData = snapshot.val();
+      const adminsArray = Object.entries(usersData)
+        .filter(([_, data]) => {
+          if (!data.profile || !data.profile.role) return false;
+          
+          // Check for all possible role formats
+          const role = data.profile.role.toLowerCase();
+          return role === 'admin' || 
+                 role === 'super_admin' || 
+                 role === 'super-admin' ||
+                 role === 'ADMIN' || 
+                 role === 'SUPER_ADMIN';
+        })
+        .map(([id, data]) => ({
+          id,
+          ...data.profile,
+          stats: data.stats // include stats if present
+        }));
+      setAdmins(adminsArray);
+    } else {
+      setAdmins([]);
+    }
+  } catch (err) {
+    console.error('Error fetching admins:', err);
+    throw err;
+  }
+};
+
+  // Fetch regular users (not admin/super-admin)
+  const fetchRegularUsers = async () => {
     try {
       const usersRef = ref(database, 'users');
       const snapshot = await get(usersRef);
+      
       if (snapshot.exists()) {
         const usersData = snapshot.val();
-        // Use the "profile" subnode for filtering role
         const usersArray = Object.entries(usersData)
           .filter(([_, data]) => 
             data.profile && 
@@ -63,361 +102,563 @@ const ManageAdmins = () => {
           )
           .map(([id, data]) => ({
             id,
-            ...data.profile
+            ...data.profile,
+            location: data.profile.location || data.profile.primaryLocation,
+            primaryLocation: data.profile.primaryLocation || data.profile.location,
+            managedBy: data.profile.managedBy || null
           }));
-        setAllUsers(usersArray);
+        
+        setRegularUsers(usersArray);
+      } else {
+        setRegularUsers([]);
       }
     } catch (err) {
       console.error('Error fetching users:', err);
+      throw err;
     }
   };
-
-  // 2) Fetch all current admins (where role === 'admin' or 'super-admin')
-  const fetchAdmins = async () => {
-    setLoading(true);
+  
+  // Extract unique locations from all users
+  const fetchLocations = async () => {
     try {
       const usersRef = ref(database, 'users');
       const snapshot = await get(usersRef);
+      
       if (snapshot.exists()) {
         const usersData = snapshot.val();
-        // Filter for admins using the profile subnode and flatten the profile data.
-        const adminsArray = Object.entries(usersData)
-          .filter(([_, data]) => data.profile && (data.profile.role === 'admin' || data.profile.role === 'super-admin'))
-          .map(([id, data]) => ({
-            id,
-            ...data.profile,
-            stats: data.stats // include stats if present
-          }));
-        setAdmins(adminsArray);
+        const allLocations = new Set();
+        
+        Object.values(usersData).forEach(data => {
+          if (data.profile) {
+            const location = data.profile.primaryLocation || data.profile.location;
+            if (location) {
+              allLocations.add(location);
+            }
+          }
+        });
+        
+        setLocations(Array.from(allLocations).sort());
       } else {
-        setAdmins([]);
+        setLocations([]);
       }
     } catch (err) {
-      setError('Failed to fetch administrators');
-      console.error('Error fetching admins:', err);
+      console.error('Error extracting locations:', err);
+      throw err;
+    }
+  };
+  
+  // Fetch location permissions map (which admins manage which locations)
+  const fetchLocationPermissions = async () => {
+    try {
+      const managementRef = ref(database, 'managementStructure');
+      const snapshot = await get(managementRef);
+      
+      if (snapshot.exists()) {
+        const managementData = snapshot.val();
+        const locationPermissions = {};
+        
+        // First, initialize all locations with empty admin arrays
+        locations.forEach(location => {
+          locationPermissions[location] = [];
+        });
+        
+        // Then populate with admin IDs
+        Object.entries(managementData).forEach(([adminId, data]) => {
+          if (data.managedLocations) {
+            Object.keys(data.managedLocations).forEach(location => {
+              if (!locationPermissions[location]) {
+                locationPermissions[location] = [];
+              }
+              locationPermissions[location].push(adminId);
+            });
+          }
+        });
+        
+        setLocationAdmins(locationPermissions);
+      } else {
+        // Initialize empty permissions
+        const emptyPermissions = {};
+        locations.forEach(location => {
+          emptyPermissions[location] = [];
+        });
+        setLocationAdmins(emptyPermissions);
+      }
+    } catch (err) {
+      console.error('Error fetching location permissions:', err);
+      throw err;
+    }
+  };
+
+  // Handle selecting a location to manage
+  const handleLocationSelect = (location) => {
+    setSelectedLocation(location);
+    
+    // Initialize selected admins with current admins for this location
+    const initialSelectedAdmins = {};
+    const currentAdmins = locationAdmins[location] || [];
+    
+    admins.forEach(admin => {
+      initialSelectedAdmins[admin.id] = currentAdmins.includes(admin.id);
+    });
+    
+    setSelectedAdmins(initialSelectedAdmins);
+  };
+  
+  // Toggle an admin's selection status
+  const toggleAdminSelection = (adminId) => {
+    setSelectedAdmins(prev => ({
+      ...prev,
+      [adminId]: !prev[adminId]
+    }));
+  };
+  
+  // Save location admin assignments
+  const saveLocationAdmins = async () => {
+    if (!selectedLocation) {
+      setError('Please select a location first');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Get the admin IDs that are selected
+      const selectedAdminIds = Object.entries(selectedAdmins)
+        .filter(([_, isSelected]) => isSelected)
+        .map(([adminId]) => adminId);
+      
+      // Batch updates for better performance
+      const updates = {};
+      
+      // 1. First remove this location from all admins who no longer manage it
+      const currentAdmins = locationAdmins[selectedLocation] || [];
+      const adminsToRemove = currentAdmins.filter(adminId => !selectedAdminIds.includes(adminId));
+      
+      adminsToRemove.forEach(adminId => {
+        updates[`managementStructure/${adminId}/managedLocations/${selectedLocation}`] = null;
+      });
+      
+      // 2. Add this location to newly selected admins
+      selectedAdminIds.forEach(adminId => {
+        if (!currentAdmins.includes(adminId)) {
+          // Make sure the management structure exists for this admin
+          updates[`managementStructure/${adminId}/managedLocations/${selectedLocation}`] = true;
+        }
+      });
+      
+      // 3. Update the users in this location to be managed by the first selected admin
+      // (or null if no admins selected)
+      const primaryAdminId = selectedAdminIds.length > 0 ? selectedAdminIds[0] : null;
+      
+      regularUsers
+        .filter(user => (user.primaryLocation || user.location) === selectedLocation)
+        .forEach(user => {
+          updates[`users/${user.id}/profile/managedBy`] = primaryAdminId;
+        });
+      
+      // Execute all updates
+      await update(ref(database), updates);
+      
+      // Update local state
+      setLocationAdmins(prev => ({
+        ...prev,
+        [selectedLocation]: selectedAdminIds
+      }));
+      
+      setSuccessMessage(`Successfully updated admins for ${selectedLocation}`);
+      
+      // Refresh data to ensure consistency
+      await fetchLocationPermissions();
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setError('Failed to update location admins');
+      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
-
-  // 3) Live-search existing (non-admin) users by name
-  const handleSearch = (value) => {
-    if (value.length > 0) {
-      const filteredSuggestions = allUsers.filter(user =>
-        (user.name || '').toLowerCase().includes(value.toLowerCase())
-      );
-      setSuggestions(filteredSuggestions);
-      setShowSuggestions(true);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
+  
+  // Count users in a location
+  const getUserCountByLocation = (location) => {
+    return regularUsers.filter(user => 
+      (user.primaryLocation || user.location) === location
+    ).length;
   };
-
-  // When clicking a suggestion from the dropdown, fill form fields
-  const handleSelectUser = (user) => {
-    setNewAdmin({
-      ...newAdmin,
-      name: user.name || '',
-      email: user.email || '',
-      phone: user.phone || '',
-      location: user.location || '',
-    });
-    setShowSuggestions(false);
-  };
-
-  // Handle typed input in the "Add Admin" form
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewAdmin(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (name === 'name') {
-      handleSearch(value);
-    }
-  };
-
-  // 4) Create or Update an admin from the form
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (isEditing && editingId) {
-        const adminRef = ref(database, `users/${editingId}/profile`);
-        // Overwrite the existing profile with newAdmin data (forcing role: 'admin')
-        await set(adminRef, { ...newAdmin, role: 'admin' });
-        setSuccessMessage('Administrator updated successfully');
-      } else {
-        // Create a new user node; here we generate a new ID (using current timestamp)
-        const newId = new Date().getTime().toString();
-        const adminRef = ref(database, `users/${newId}/profile`);
-        await set(adminRef, { ...newAdmin, role: 'admin', status: 'active' });
-        setSuccessMessage('Administrator added successfully');
+  
+  // Get admin name by ID
+  const getAdminName = (adminId) => {
+    const admin = admins.find(a => a.id === adminId);
+    return admin ? admin.name : 'Unknown';
+  };// Filter admins based on search and role filter
+  const filteredAdmins = admins.filter(admin => {
+    // Filter by search query
+    const matchesSearch = !searchQuery || 
+      (admin.name && admin.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    // Filter by role with improved role matching
+    let matchesRole = filterRole === 'all';
+    
+    if (!matchesRole) {
+      const adminRole = (admin.role || '').toLowerCase();
+      
+      if (filterRole === 'super-admin') {
+        // Match any super admin format
+        matchesRole = adminRole === 'super-admin' || 
+                     adminRole === 'super_admin' || 
+                     adminRole === 'super admin' ||
+                     adminRole === 'superadmin';
+      } else if (filterRole === 'admin') {
+        // Only match regular admin (not super admin)
+        matchesRole = adminRole === 'admin' && 
+                     !adminRole.includes('super');
       }
-
-      // Reset form
-      setNewAdmin({ name: '', email: '', location: '', phone: '', role: 'admin' });
-      setIsEditing(false);
-      setEditingId(null);
-
-      // Refresh admin list
-      fetchAdmins();
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      setError(isEditing ? 'Failed to update administrator' : 'Failed to add administrator');
-      console.error('Error saving admin:', err);
     }
+    
+    return matchesSearch && matchesRole;
+  });
+  
+  // Update the dropdown options to be more comprehensive
+  const roleFilterOptions = [
+    { value: 'all', label: 'All Roles' },
+    { value: 'admin', label: 'Admin Only' },
+    { value: 'super-admin', label: 'Super Admin Only' }
+  ];
+  
+  // Clear any error or success messages
+  const clearMessages = () => {
+    setError(null);
+    setSuccessMessage('');
   };
-
-  // 5) Load an existing admin into the form for editing
-  const handleEdit = (admin) => {
-    setIsEditing(true);
-    setEditingId(admin.id);
-    // Since we flattened profile data in fetchAdmins, we can simply set the form data
-    setNewAdmin({
-      name: admin.name || '',
-      email: admin.email || '',
-      phone: admin.phone || '',
-      location: admin.location || '',
-      role: admin.role || 'admin'
-    });
-  };
-
-  // 6) Remove admin privileges (set role to 'employee')
-  const handleDelete = async (adminId) => {
-    if (window.confirm('Are you sure you want to remove admin privileges from this user?')) {
-      try {
-        const adminRef = ref(database, `users/${adminId}/profile`);
-        const snapshot = await get(adminRef);
-        if (snapshot.exists()) {
-          const profileData = snapshot.val();
-          await set(adminRef, {
-            ...profileData,
-            role: 'employee'
-          });
-          setSuccessMessage('Admin privileges removed successfully');
-          fetchAdmins();
-          setTimeout(() => setSuccessMessage(''), 3000);
+  
+  // Loading overlay component
+  const LoadingOverlay = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-md bg-black bg-opacity-50">
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg flex flex-col items-center">
+        <Loader2 className="animate-spin h-10 w-10 text-blue-500 mb-4" />
+        <p className="text-white font-medium">Processing your request...</p>
+      </div>
+    </div>
+  );
+  
+  // Notification component
+  const Notification = ({ type, message, onDismiss }) => (
+    <div className={`fixed top-4 right-4 max-w-md z-50 shadow-lg rounded-lg p-4 flex items-start gap-3 backdrop-blur-sm
+      ${type === 'error' ? 'bg-red-900 bg-opacity-20 border border-red-500 text-red-400' : 
+        'bg-green-900 bg-opacity-20 border border-green-500 text-green-400'}`}>
+      <span className="flex-shrink-0 mt-1">
+        {type === 'error' ? 
+          <AlertCircle className="h-5 w-5" /> : 
+          <CheckCircle className="h-5 w-5" />
         }
-      } catch (err) {
-        setError('Failed to remove admin privileges');
-        console.error('Error updating user:', err);
-      }
-    }
-  };
+      </span>
+      <div className="flex-1">
+        <div className="font-medium mb-1">
+          {type === 'error' ? 'Error' : 'Success'}
+        </div>
+        <p className="text-sm opacity-90">{message}</p>
+      </div>
+      <button 
+        onClick={onDismiss}
+        className="flex-shrink-0 text-gray-400 hover:text-white"
+        aria-label="Dismiss"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
 
-  // 7) Directly change the role from a <select> in the table
-  const handleChangeRole = async (userId, newRole) => {
-    try {
-      const userRef = ref(database, `users/${userId}/profile`);
-      const snapshot = await get(userRef);
-      if (snapshot.exists()) {
-        const profileData = snapshot.val();
-        await set(userRef, {
-          ...profileData,
-          role: newRole
-        });
-        setSuccessMessage(`User role updated to "${newRole}"`);
-        // Re-fetch admins to update the list if needed
-        fetchAdmins();
-        setTimeout(() => setSuccessMessage(''), 3000);
-      }
-    } catch (err) {
-      setError('Failed to update user role');
-      console.error('Error updating user:', err);
-    }
-  };
-
-  // 8) Render the component
-  if (loading) {
+  if (loading && admins.length === 0) {
     return (
-      <div className="loading-overlay flex flex-col items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin h-8 w-8 text-blue-500 mb-2" />
-        <p className="text-white">Loading administrators...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin h-12 w-12 text-blue-500 mb-4" />
+        <p className="text-white">Loading admin dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container p-6">
+    <div className="p-4 md:p-6 max-w-screen-2xl mx-auto">
+      {/* Page Title */}
+      <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Location Management Dashboard</h1>
+      
+      {/* Notifications */}
       {error && (
-        <div className="error-banner mb-4 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-20 text-red-400 p-4 rounded-lg flex items-center gap-2">
-          <AlertCircle className="h-5 w-5" />
-          <span>{error}</span>
-        </div>
+        <Notification 
+          type="error" 
+          message={error} 
+          onDismiss={() => setError(null)} 
+        />
       )}
 
       {successMessage && (
-        <div className="bg-green-500 bg-opacity-10 border border-green-500 border-opacity-20 text-green-400 p-4 rounded-lg mb-4 backdrop-blur-sm">
-          {successMessage}
-        </div>
+        <Notification 
+          type="success" 
+          message={successMessage} 
+          onDismiss={() => setSuccessMessage('')} 
+        />
       )}
 
-      {/* --- Form for Adding/Editing an Admin --- */}
-      <form onSubmit={handleSubmit} className="quadrant p-6 rounded-lg mb-8 bg-gray-800 bg-opacity-40">
-        <h2 className="text-xl font-semibold text-white mb-6">
-          {isEditing ? 'Edit Administrator' : 'Add New Administrator'}
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Name Input + Suggestions */}
-          <div className="relative">
-            <input
-              type="text"
-              name="name"
-              placeholder="Name"
-              value={newAdmin.name}
-              onChange={handleInputChange}
-              onFocus={() => newAdmin.name && handleSearch(newAdmin.name)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              required
-              className="bg-opacity-20 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-400 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {/* Suggestion Dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-auto">
-                {suggestions.map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex items-center gap-2 p-2 hover:bg-gray-700 cursor-pointer text-white"
-                    onClick={() => handleSelectUser(user)}
-                  >
-                    <User size={16} className="text-gray-400" />
-                    <div>
-                      <div>{user.name}</div>
-                      <div className="text-sm text-gray-400">{user.location}</div>
+      {/* Loading overlay */}
+      {loading && <LoadingOverlay />}
+
+      {/* Main Content */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        {/* Left Column - Locations List */}
+        <div className="md:col-span-4 lg:col-span-3">
+          <div className="bg-gray-900 bg-opacity-40 border border-gray-700 rounded-lg overflow-hidden">
+            <div className="p-4 border-b border-gray-700">
+              <h2 className="text-white text-xl font-medium flex items-center gap-2">
+                <MapPin size={20} className="text-blue-400" /> 
+                Locations
+              </h2>
+            </div>
+            
+            <div className="divide-y divide-gray-700">
+              {locations.length === 0 ? (
+                <div className="p-4 text-center text-gray-400">
+                  No locations found
+                </div>
+              ) : (
+                locations.map(location => {
+                  const isSelected = location === selectedLocation;
+                  const userCount = getUserCountByLocation(location);
+                  const adminCount = (locationAdmins[location] || []).length;
+                  
+                  return (
+                    <div 
+                      key={location}
+                      className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${
+                        isSelected 
+                          ? 'bg-blue-900 bg-opacity-20 border-l-4 border-blue-500'
+                          : 'hover:bg-gray-700 hover:bg-opacity-20 border-l-4 border-transparent'
+                      }`}
+                      onClick={() => handleLocationSelect(location)}
+                    >
+                      <div className="flex-1">
+                        <h3 className="text-white font-medium">{location}</h3>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Users size={12} />
+                            {userCount} users
+                          </span>
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <User size={12} />
+                            {adminCount} admins
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Right Column - Admin Assignment */}
+        <div className="md:col-span-8 lg:col-span-9">
+          <div className="bg-gray-800 bg-opacity-30 border border-gray-700 rounded-lg overflow-hidden">
+            <div className="p-4 border-b border-gray-700">
+              <h2 className="text-white text-xl font-medium flex items-center gap-2">
+                <Users size={20} className="text-blue-400" /> 
+                {selectedLocation ? `Assign Admins to ${selectedLocation}` : 'Select a Location'}
+              </h2>
+            </div>
+            
+            {!selectedLocation ? (
+              <div className="p-8 text-center text-gray-400">
+                Please select a location from the left panel to manage its administrators
               </div>
+            ) : (
+              <>
+                {/* Admin Filter and Search */}
+                <div className="p-4 border-b border-gray-700 bg-gray-800 bg-opacity-20">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search administrators..."
+                        className="w-full bg-gray-800 bg-opacity-40 border border-gray-700 rounded-lg p-2 pl-9 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                        <Users size={16} />
+                      </div>
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                          aria-label="Clear search"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 bg-gray-800 bg-opacity-40 border border-gray-700 rounded-lg p-2 pl-3">
+  <Filter size={16} className="text-gray-400" />
+  <select
+    value={filterRole}
+    onChange={(e) => setFilterRole(e.target.value)}
+    className="bg-transparent text-white focus:outline-none"
+  >
+    {roleFilterOptions.map(option => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+</div>
+                  </div>
+                </div>
+                
+                {/* Admin List */}
+                <div className="max-h-96 overflow-y-auto">
+                  {filteredAdmins.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400">
+                      No administrators match your search criteria
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-700">
+                      {filteredAdmins.map(admin => {
+                        const isSelected = selectedAdmins[admin.id];
+                        
+                        return (
+                          <div 
+                            key={admin.id}
+                            className={`p-4 flex items-center justify-between cursor-pointer transition-colors ${
+                              isSelected 
+                                ? 'bg-blue-900 bg-opacity-20' 
+                                : 'hover:bg-gray-700 hover:bg-opacity-20'
+                            }`}
+                            onClick={() => toggleAdminSelection(admin.id)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleAdminSelection(admin.id)}
+                                className="h-5 w-5 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-medium">{admin.name}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    admin.role === 'super-admin' 
+                                      ? 'bg-purple-900 bg-opacity-30 text-purple-400'
+                                      : 'bg-blue-900 bg-opacity-30 text-blue-400'
+                                  }`}>
+                                    {admin.role}
+                                  </span>
+                                </div>
+                                {admin.primaryLocation || admin.location ? (
+                                  <div className="text-sm text-gray-400 flex items-center gap-1 mt-1">
+                                    <MapPin size={14} />
+                                    {admin.primaryLocation || admin.location}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            
+                            {/* Show badge for already assigned admins */}
+                            {locationAdmins[selectedLocation]?.includes(admin.id) && !isSelected && (
+                              <span className="text-xs text-yellow-400 bg-yellow-900 bg-opacity-20 px-2 py-1 rounded-full">
+                                Currently assigned
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="p-4 border-t border-gray-700 bg-gray-800 bg-opacity-20 flex justify-between items-center">
+                  <div className="text-sm text-gray-400">
+                    {Object.values(selectedAdmins).filter(Boolean).length} administrators selected
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleLocationSelect(selectedLocation)} // Reset selections
+                      className="px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-700 hover:bg-opacity-30"
+                    >
+                      Reset
+                    </button>
+                    
+                    <button
+                      onClick={saveLocationAdmins}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white flex items-center gap-2"
+                    >
+                      <CheckCircle size={18} />
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
-
-          {/* Email */}
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={newAdmin.email}
-            onChange={handleInputChange}
-            required
-            className="bg-opacity-20 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-400 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-
-          {/* Location */}
-          <select
-            name="location"
-            value={newAdmin.location}
-            onChange={handleInputChange}
-            required
-            className="bg-opacity-20 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Select Location</option>
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
-              </option>
-            ))}
-          </select>
-
-          {/* Phone */}
-          <input
-            type="tel"
-            name="phone"
-            placeholder="Phone"
-            value={newAdmin.phone}
-            onChange={handleInputChange}
-            required
-            className="bg-opacity-20 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-400 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="mt-6 bg-blue-500 bg-opacity-20 hover:bg-opacity-30 text-blue-400 font-medium px-6 py-2 rounded-lg flex items-center gap-2 border border-blue-500 border-opacity-20 transition-all duration-300"
-        >
-          <PlusCircle size={20} />
-          {isEditing ? 'Update Administrator' : 'Add Administrator'}
-        </button>
-      </form>
-
-      {/* --- Admins List Table --- */}
-      <div className="quadrant rounded-lg overflow-hidden bg-gray-800 bg-opacity-40">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-700">
-            <thead className="bg-gray-800 bg-opacity-40">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Phone</th>
-                {/* New Column: Attendance Grade */}
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Attendance</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700 bg-opacity-20">
-              {admins.map((admin) => {
-                // Use admin.stats.attendanceRate if available; otherwise, null.
-                const attendanceRate = admin.stats?.attendanceRate ?? null;
-                const attendanceGrade = getAttendanceGrade(attendanceRate);
-
-                return (
-                  <tr
-                    key={admin.id}
-                    className="hover:bg-gray-700 hover:bg-opacity-20 transition-colors"
-                  >
-                    {/* Name (with link to Profile) */}
-                    <td className="px-6 py-4 whitespace-nowrap text-white">
-                      <Link
-                        to={`/super-admin/users/${admin.id}`}
-                        className="hover:underline text-blue-400"
-                      >
-                        {admin.name}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">{admin.email}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">{admin.location}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">{admin.phone}</td>
-                    {/* Attendance Grade column */}
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">{attendanceGrade}</td>
-                    {/* Role with a <select> to change it */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <select
-                        value={admin.role}
-                        onChange={(e) => handleChangeRole(admin.id, e.target.value)}
-                        className="bg-gray-800 bg-opacity-40 text-white rounded px-2 py-1 focus:outline-none"
-                        disabled={admin.role === 'super-admin'}
-                      >
-                        <option value="employee">Employee</option>
-                        <option value="admin">Admin</option>
-                        <option value="super-admin">Super Admin</option>
-                      </select>
-                    </td>
-                    {/* Actions: Edit or Delete */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEdit(admin)}
-                          className="text-blue-400 hover:text-blue-300"
-                          disabled={admin.role === 'super-admin'}
+          
+          {/* Location Details */}
+          {selectedLocation && (
+            <div className="mt-6 bg-gray-800 bg-opacity-30 border border-gray-700 rounded-lg overflow-hidden">
+              <div className="p-4 border-b border-gray-700">
+                <h2 className="text-white text-xl font-medium flex items-center gap-2">
+                  <MapPin size={20} className="text-blue-400" /> 
+                  {selectedLocation} Details
+                </h2>
+              </div>
+              
+              <div className="p-4">
+                <h3 className="text-white font-medium mb-2">Current Administrators:</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                  {(locationAdmins[selectedLocation] || []).length === 0 ? (
+                    <div className="text-gray-400">No administrators assigned</div>
+                  ) : (
+                    locationAdmins[selectedLocation].map(adminId => {
+                      const admin = admins.find(a => a.id === adminId);
+                      if (!admin) return null;
+                      
+                      return (
+                        <div 
+                          key={adminId}
+                          className="bg-gray-800 bg-opacity-40 border border-gray-700 rounded-lg p-3"
                         >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(admin.id)}
-                          className="text-red-400 hover:text-red-300"
-                          disabled={admin.role === 'super-admin'}
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                          <div className="flex items-center gap-2">
+                            <User size={16} className="text-blue-400" />
+                            <span className="text-white">{admin.name}</span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">{admin.role}</div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                
+                <h3 className="text-white font-medium mb-2">Users in this location:</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {regularUsers
+                    .filter(user => (user.primaryLocation || user.location) === selectedLocation)
+                    .map(user => (
+                      <div 
+                        key={user.id}
+                        className="flex items-center gap-2 bg-gray-800 bg-opacity-30 p-2 rounded-lg border border-gray-700 border-opacity-50"
+                      >
+                        <User size={16} className="text-gray-400" />
+                        <span className="text-white text-sm truncate">{user.name}</span>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    ))
+                  }
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

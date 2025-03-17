@@ -1,34 +1,38 @@
 // Load environment variables from .env file
-require('dotenv').config();
+require('dotenv').config({ path: '/Users/it/code/qr-system/qr-system/qr-code-system/.env' });
+
+console.log("Database URL from env:", process.env.REACT_APP_FIREBASE_DATABASE_URL);
+
 const express = require('express');
 const cors = require('cors');
 const moment = require('moment-timezone');
 const admin = require('firebase-admin');
 
-// Check if the DATABASE_URL is properly loaded
-if (!process.env.DATABASE_URL) {
-  console.error('Error: DATABASE_URL environment variable is not defined. Make sure .env file is properly loaded and DATABASE_URL is set.');
+// Check if the FIREBASE_DATABASE_URL is properly loaded
+if (!process.env.REACT_APP_FIREBASE_DATABASE_URL) {
+  console.error('Error: REACT_APP_FIREBASE_DATABASE_URL environment variable is not defined. Make sure .env file is properly loaded and REACT_APP_FIREBASE_DATABASE_URL is set.');
   process.exit(1);
 }
 
 // Create a service account object using environment variables
 const serviceAccount = {
-  type: process.env.TYPE,
+  type: process.env.TYPE || "service_account",
   project_id: process.env.PROJECT_ID,
   private_key_id: process.env.PRIVATE_KEY_ID,
-  private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n'),
+  private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n'), // Convert `\n` back to actual newlines
   client_email: process.env.CLIENT_EMAIL,
   client_id: process.env.CLIENT_ID,
   auth_uri: process.env.AUTH_URI,
   token_uri: process.env.TOKEN_URI,
   auth_provider_x509_cert_url: process.env.AUTH_PROVIDER_X509_CERT_URL,
   client_x509_cert_url: process.env.CLIENT_X509_CERT_URL,
+  universe_domain: process.env.UNIVERSE_DOMAIN
 };
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.DATABASE_URL,
+  databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
 });
 
 // Get Firebase Admin Database reference

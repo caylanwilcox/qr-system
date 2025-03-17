@@ -146,18 +146,26 @@ body {
   margin-left: 70px;
 }
 
+/* Ensure the main header doesn't interfere with the dropdown */
 .main-header {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  z-index: 100;
 }
 
 .header-content {
-  padding: 12px 30px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 .header-content h1 {
@@ -224,3 +232,161 @@ body {
     width: 40px;
   }
 }@import 'react-big-calendar/lib/css/react-big-calendar.css';
+
+/* User info button and container */
+/* Ensure the container also has proper positioning context */
+.user-info-container {
+  position: relative;
+  z-index: 9000;
+}
+.user-info-button {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-info-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.user-button-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-name {
+  font-weight: 500;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Role badges */
+.role-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.super-admin-badge {
+  background-color: #7c3aed;
+  color: white;
+}
+
+.admin-badge {
+  background-color: #0ea5e9;
+  color: white;
+}
+
+.employee-badge {
+  background-color: #10b981;
+  color: white;
+}
+
+/* User dropdown */
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 300px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 9999 !important;
+  animation: fadeIn 0.2s ease;
+  overflow: hidden;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.user-dropdown-header {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #f9fafb;
+}
+
+.user-dropdown-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  color: #111827;
+}
+
+.user-email {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.user-permissions {
+  padding: 16px;
+}
+
+.user-permissions h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: #374151;
+  text-transform: uppercase;
+}
+
+.permission-item {
+  display: flex;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.permission-label {
+  width: 100px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.permission-value {
+  color: #111827;
+  flex: 1;
+}
+
+.settings-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: #f3f4f6;
+  color: #374151;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
+}
+
+.settings-link:hover {
+  background-color: #e5e7eb;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .header-right {
+    gap: 10px;
+  }
+  
+  .current-date {
+    display: none;
+  }
+  
+  .user-dropdown {
+    width: 260px;
+    right: -10px;
+  }
+}
