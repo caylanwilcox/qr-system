@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { Loader2, AlertCircle } from 'lucide-react';
 import './SuperAdminDashboard.css';
@@ -8,8 +8,8 @@ import './SuperAdminDashboard.css';
 import LocationNav from './LocationNav';
 import MetricsGrid from './MetricsGrid';
 import TimeFilter from './TimeFilter';
-import AttendanceMetrics from './AttendanceMetrics';
-import EmployeeList from './EmployeeList';
+import ClockedInList from './ClockedInList';
+import NotClockedInList from './NotClockedInList';
 
 const SuperAdminDashboard = () => {
   // ---------------------------
@@ -18,6 +18,8 @@ const SuperAdminDashboard = () => {
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [colorUpdateStatus, setColorUpdateStatus] = useState(null);
+  const [filteredData, setFilteredData] = useState({});
 
   const [activeTab, setActiveTab] = useState('All');
   const [activeFilter, setActiveFilter] = useState(null);
@@ -31,23 +33,51 @@ const SuperAdminDashboard = () => {
   // For example, your location tabs
   const locationMap = {
     All: 'All',
-    Aurora: 'Aurora',
+    Aurora: 'aurora',
     Elgin: 'Elgin',
     Joliet: 'Joliet',
     Lyons: 'Lyons',
-    'West Chicago': 'West Chicago',
-    Wheeling: 'Wheeling',
-    Retreat: 'Retreat',
+    'West Chicago': 'westchicago',
+    Wheeling: 'wheeling',
   };
 
   // ---------------------------
   // 2) Utility Functions
   // ---------------------------
-  // A simple fraction -> percentage (e.g., attendance rates)
   const calculateFraction = useCallback((numerator, denominator) => {
-    if (!denominator) return 0;
-    const result = (numerator / denominator) * 100;
-    return isNaN(result) ? 0 : result;
+    if (typeof numerator !== 'number' || typeof denominator !== 'number') {
+      console.error('calculateFraction: Numerator and denominator must be numbers', { numerator, denominator });
+      return null;  // clearly indicates calculation failed
+    }
+  
+    if (denominator === 0) {
+      console.error('calculateFraction: Cannot divide by zero', { numerator, denominator });
+      return null;  // again, clearly indicates issue
+    }
+  
+    return (numerator / denominator) * 100;
+  }, []);
+  
+
+  // Calculate color for a user based on their metrics
+  const calculateUserColor = useCallback((profile, stats) => {
+    if (!stats) return 'blue'; // Default color
+    
+    // Color assignment logic - modify as needed based on your business rules
+    const attendanceRate = stats.attendanceRate || 0;
+    const daysPresent = stats.daysPresent || 0;
+    
+    if (daysPresent === 0) {
+      return 'red';
+    } else if (attendanceRate >= 90) {
+      return 'green';
+    } else if (attendanceRate >= 70) {
+      return 'blue';
+    } else if (attendanceRate >= 50) {
+      return 'orange';
+    } else {
+      return 'red';
+    }
   }, []);
 
   // ---------------------------
@@ -78,11 +108,57 @@ const SuperAdminDashboard = () => {
     }));
   }, []);
 
+  // Function to update padrino colors for all users
+  const updatePadrinoColors = useCallback(async (userData) => {
+    try {
+      setColorUpdateStatus('updating');
+      
+      // Create batch updates object
+      const updates = {};
+      
+      // Assign colors based on rules
+      Object.entries(userData).forEach(([userId, userRecord]) => {
+        if (!userRecord || !userRecord.profile) return;
+        
+        const { profile, stats } = userRecord;
+        const color = calculateUserColor(profile, stats);
+        
+        // Only update if different from current value
+        if (profile.padrinoColor !== color) {
+          updates[`users/${userId}/profile/padrinoColor`] = color;
+        }
+      });
+      
+      // Execute the batch update
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates);
+        console.log(`Updated padrinoColor for ${Object.keys(updates).length} users`);
+        setColorUpdateStatus('success');
+      } else {
+        console.log('No color updates needed');
+        setColorUpdateStatus('no-changes');
+      }
+    } catch (error) {
+      console.error('Error updating padrinoColor:', error);
+      setColorUpdateStatus('error');
+    }
+  }, [calculateUserColor]);
+
   // ---------------------------
   // 4) processMetrics
   //    (Adapts to nested "profile" & "stats")
   // ---------------------------
   const processMetrics = useCallback((data, activeLocation) => {
+    // Get today's date for comparison
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Use the timeFilter to determine the relevant date
+    const relevantDate = timeFilter.type === 'range' && timeFilter.dateRange.end 
+      ? timeFilter.dateRange.end 
+      : today;
+    
+    console.log(`Processing metrics for date: ${relevantDate}`);
+    
     const metricsObj = {
       total: {
         notClockedIn: 0,
@@ -101,6 +177,8 @@ const SuperAdminDashboard = () => {
         totalApoyos: 0,
         monthlyAttendance: 0,
       },
+      // Store the relevant date for reference in attendance filtering
+      date: relevantDate
     };
   
     // Helper: check if a user is in the correct location
@@ -114,15 +192,26 @@ const SuperAdminDashboard = () => {
     let totalDaysAll = 0;
   
     Object.entries(data).forEach(([userId, userRecord]) => {
-      if (!userRecord) return;
+      if (!userRecord) return; 
   
-      const { profile, stats } = userRecord;
+      const { profile, stats, attendance } = userRecord;
       if (!profile) return; // skip if no profile at all
   
       // Extract relevant fields
       const userLocation = profile.primaryLocation || 'Unknown';
-      const color = profile.padrinoColor?.toLowerCase?.() || '';
-      const lastClockIn = stats?.lastClockIn;
+      
+      // Get color from profile or calculate it if missing
+      let color = profile.padrinoColor?.toLowerCase?.();
+      if (!color) {
+        color = calculateUserColor(profile, stats)?.toLowerCase?.() || '';
+      }
+      
+      // Check if user attended on the relevant date
+      // This assumes you have a structure like: attendance[date] = { clockedIn: true, onTime: true }
+      const dateAttendance = attendance?.[relevantDate];
+      const isClockInToday = Boolean(dateAttendance?.clockedIn);
+      const isOnTime = Boolean(dateAttendance?.onTime);
+      
       const daysPresent = stats?.daysPresent || 0;
       const daysAbsent = stats?.daysAbsent || 0;
       const daysLate = stats?.daysLate || 0;
@@ -147,17 +236,17 @@ const SuperAdminDashboard = () => {
         };
       }
   
-      // If there's a valid `lastClockIn`, count user as clockedIn
-      if (lastClockIn) {
+      // Count attendance for the relevant date specifically
+      if (isClockInToday) {
         metricsObj.total.clockedIn++;
         metricsObj.perLocation[userLocation].clockedIn++;
   
-        if (daysLate > 0) {
-          metricsObj.total.late++;
-          metricsObj.perLocation[userLocation].late++;
-        } else {
+        if (isOnTime) {
           metricsObj.total.onTime++;
           metricsObj.perLocation[userLocation].onTime++;
+        } else {
+          metricsObj.total.late++;
+          metricsObj.perLocation[userLocation].late++;
         }
       } else {
         metricsObj.total.notClockedIn++;
@@ -182,7 +271,7 @@ const SuperAdminDashboard = () => {
     }
   
     return metricsObj;
-  }, []);
+  }, [calculateUserColor, timeFilter]);
   
   // ---------------------------
   // 5) Fetch from Firebase
@@ -190,16 +279,19 @@ const SuperAdminDashboard = () => {
   useEffect(() => {
     setLoading(true);
     setError(null);
-
+    
     const usersRef = ref(database, 'users');
-    const unsubscribe = onValue(usersRef, (snapshot) => {
+    const unsubscribe = onValue(usersRef, async (snapshot) => {
       try {
         const data = snapshot.val();
         if (!data) throw new Error('No user data available');
 
+        // Update padrino colors on each data fetch (per render)
+        await updatePadrinoColors(data);
+
         // Filter data if needed
         const activeKey = locationMap[activeTab];
-        const filteredData =
+        const filteredUserData =
           activeKey === 'All'
             ? data
             : Object.fromEntries(
@@ -208,8 +300,17 @@ const SuperAdminDashboard = () => {
                 )
               );
 
+        // Store filtered data for the attendance lists
+        setFilteredData(filteredUserData);
+        
         // Process it
-        const processedMetrics = processMetrics(filteredData, activeKey);
+        const processedMetrics = processMetrics(filteredUserData, activeKey);
+        
+        // If we're using a date range, add the end date to metrics for reference
+        if (timeFilter.type === 'range' && timeFilter.dateRange.end) {
+          processedMetrics.date = timeFilter.dateRange.end;
+        }
+        
         setMetrics(processedMetrics);
         setLoading(false);
       } catch (err) {
@@ -219,7 +320,7 @@ const SuperAdminDashboard = () => {
     });
 
     return () => unsubscribe();
-  }, [activeTab, processMetrics]);
+  }, [activeTab, processMetrics, updatePadrinoColors, timeFilter]);
 
   // ---------------------------
   // 6) Render
@@ -229,6 +330,9 @@ const SuperAdminDashboard = () => {
       <div className="loading-overlay">
         <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
         <p className="mt-2">Loading dashboard data...</p>
+        {colorUpdateStatus === 'updating' && (
+          <p className="mt-1 text-sm text-gray-500">Updating padrino colors...</p>
+        )}
       </div>
     );
   }
@@ -244,6 +348,17 @@ const SuperAdminDashboard = () => {
 
   return (
     <div className="dashboard-container">
+      {colorUpdateStatus === 'success' && (
+        <div className="bg-green-100 text-green-800 px-4 py-2 rounded mb-4">
+          Padrino colors updated successfully
+        </div>
+      )}
+      {colorUpdateStatus === 'error' && (
+        <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4">
+          Error updating padrino colors
+        </div>
+      )}
+      
       <div className="dashboard-grid">
         {/* Quadrant 1: Location Navigation and Metrics */}
         <div className="quadrant quadrant-1">
@@ -257,24 +372,24 @@ const SuperAdminDashboard = () => {
             activeFilter={activeFilter}
             onColorClick={handleColorClick}
           />
-        </div>
-
-        {/* Quadrant 2: Time Filter and Attendance Metrics */}
-        <div className="quadrant quadrant-2">
+          {/* Add TimeFilter component here for date selection */}
           <TimeFilter
             timeFilter={timeFilter}
             onTimeFilterChange={handleTimeFilterChange}
             onDateRangeChange={handleDateRangeChange}
           />
-          <AttendanceMetrics
-            metrics={metrics}
-            calculateFraction={calculateFraction}
-          />
         </div>
 
-        {/* Quadrant 3: Employee List */}
-        <div className="quadrant quadrant-3">
-          <EmployeeList colorFilter={activeFilter} />
+        {/* Quadrant 2: Two side-by-side lists */}
+        <div className="quadrant quadrant-2 flex gap-4">
+          <ClockedInList
+            data={filteredData}
+            date={metrics?.date || ''}
+          />
+          <NotClockedInList
+            data={filteredData}
+            date={metrics?.date || ''}
+          />
         </div>
       </div>
     </div>

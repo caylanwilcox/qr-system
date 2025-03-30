@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Users, User, Filter, Check, MapPin, AlertCircle } from 'lucide-react';
+import { X, Search, Users, User, Filter, Check, MapPin, AlertCircle, Loader2 } from 'lucide-react';
 import { useSchedulerContext } from '../context/SchedulerContext';
 import '../styles/ParticipantSelectionDialog.css';
-import { ref, get, set } from 'firebase/database';
+import { ref, get } from 'firebase/database';
 import { database } from '../../../services/firebaseConfig';
 
 const ParticipantSelectionDialog = ({ eventId, onClose }) => {
@@ -54,14 +54,23 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
           console.log("Found event in local state:", foundEvent);
           setEvent(foundEvent);
           
-          // Update filters based on event
-          setFilters({
-            location: foundEvent.location || '',
-            department: foundEvent.department || ''
-          });
+          // IMPORTANT: For "All Locations" events, don't set a location filter
+          if (foundEvent.location === "All Locations") {
+            setFilters({
+              location: '', // Empty string means "All Locations" in the filter dropdown
+              department: foundEvent.department || ''
+            });
+          } else {
+            // For specific locations, we can pre-filter
+            setFilters({
+              location: foundEvent.location || '',
+              department: foundEvent.department || ''
+            });
+          }
           
           // If the event has participants, pre-select them
           if (foundEvent.participants) {
+            console.log("Pre-selecting participants:", foundEvent.participants);
             setSelectedUsers(Object.keys(foundEvent.participants));
           }
           
@@ -86,14 +95,23 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
           console.log("Fetched event from Firebase:", formattedEvent);
           setEvent(formattedEvent);
           
-          // Update filters based on event
-          setFilters({
-            location: formattedEvent.location || '',
-            department: formattedEvent.department || ''
-          });
+          // IMPORTANT: For "All Locations" events, don't set a location filter
+          if (formattedEvent.location === "All Locations") {
+            setFilters({
+              location: '', // Empty string means "All Locations" in the filter dropdown
+              department: formattedEvent.department || ''
+            });
+          } else {
+            // For specific locations, we can pre-filter
+            setFilters({
+              location: formattedEvent.location || '',
+              department: formattedEvent.department || ''
+            });
+          }
           
           // If the event has participants, pre-select them
           if (formattedEvent.participants) {
+            console.log("Pre-selecting participants from Firebase:", formattedEvent.participants);
             setSelectedUsers(Object.keys(formattedEvent.participants));
           }
           
@@ -113,11 +131,53 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
     loadEvent();
   }, [eventId, events]);
 
-  // Fetch users by location
+  // Fetch all users regardless of location
+  const fetchAllUsers = async () => {
+    try {
+      console.log("Fetching all users");
+      
+      const usersRef = ref(database, 'users');
+      const snapshot = await get(usersRef);
+      
+      if (!snapshot.exists()) {
+        console.log("No users found in database");
+        return [];
+      }
+      
+      const usersData = snapshot.val();
+      console.log(`Total users in database: ${Object.keys(usersData).length}`);
+      
+      const allUsers = Object.entries(usersData)
+        .filter(([_, userData]) => userData.profile) // Only users with profiles
+        .map(([id, userData]) => ({
+          id,
+          name: userData.profile?.name || 'Unknown User',
+          email: userData.profile?.email || '',
+          department: userData.profile?.department || '',
+          position: userData.profile?.position || '',
+          primaryLocation: userData.profile?.primaryLocation || userData.profile?.location || '',
+          hasSchedule: Boolean(userData.schedule)
+        }));
+      
+      console.log(`Found ${allUsers.length} total users`);
+      return allUsers;
+    } catch (error) {
+      console.error('Error fetching all users:', error);
+      return [];
+    }
+  };
+
+  // Fetch users by specific location
   const fetchUsersByLocation = async (location) => {
     if (!location) {
       console.log("No location provided to fetch users");
       return [];
+    }
+    
+    // Special case for All Locations
+    if (location === "All Locations") {
+      console.log("Location is 'All Locations', fetching all users");
+      return await fetchAllUsers();
     }
     
     try {
@@ -173,47 +233,21 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
           }));
           
         console.log(`Fuzzy search found ${fuzzyUsersInLocation.length} users in location "${location}"`);
-        return fuzzyUsersInLocation;
+        
+        if (fuzzyUsersInLocation.length > 0) {
+          return fuzzyUsersInLocation;
+        }
+        
+        // If still no matches, fall back to all users
+        console.log(`No users found with fuzzy match. Falling back to all users.`);
+        return await fetchAllUsers();
       }
       
       return usersInLocation;
     } catch (error) {
       console.error(`Error fetching users for location ${location}:`, error);
-      return [];
-    }
-  };
-
-  // Fetch all users as fallback
-  const fetchAllUsers = async () => {
-    try {
-      console.log("Fetching all users");
-      
-      const usersRef = ref(database, 'users');
-      const snapshot = await get(usersRef);
-      
-      if (!snapshot.exists()) {
-        return [];
-      }
-      
-      const usersData = snapshot.val();
-      
-      const allUsers = Object.entries(usersData)
-        .filter(([_, userData]) => userData.profile)
-        .map(([id, userData]) => ({
-          id,
-          name: userData.profile?.name || 'Unknown User',
-          email: userData.profile?.email || '',
-          department: userData.profile?.department || '',
-          position: userData.profile?.position || '',
-          primaryLocation: userData.profile?.primaryLocation || userData.profile?.location || '',
-          hasSchedule: Boolean(userData.schedule)
-        }));
-      
-      console.log(`Found ${allUsers.length} total users`);
-      return allUsers;
-    } catch (error) {
-      console.error('Error fetching all users:', error);
-      return [];
+      // On error, fall back to all users
+      return await fetchAllUsers();
     }
   };
 
@@ -226,29 +260,32 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
       try {
         let usersToShow = [];
         
-        // If event has a location, directly fetch users by that location
-        if (event.location) {
+        // Special handling for "All Locations" events
+        if (event.location === "All Locations") {
+          console.log("Fetching users for ALL LOCATIONS event");
+          usersToShow = await fetchAllUsers();
+        }
+        // If event has a specific location, directly fetch users by that location
+        else if (event.location) {
           console.log(`Fetching users for event location: ${event.location}`);
-          const locationUsers = await fetchUsersByLocation(event.location);
-          
-          // If no users found for this location, try fetching all users as fallback
-          if (locationUsers.length === 0) {
-            console.log(`No users found for location "${event.location}", fetching all users`);
-            usersToShow = await fetchAllUsers();
-          } else {
-            usersToShow = locationUsers;
-          }
-          
-          // Ensure all users have schedule nodes
-          for (const user of usersToShow) {
-            if (!user.hasSchedule && ensureUserScheduleNode) {
-              console.log(`Ensuring schedule node for user ${user.id}`);
-              await ensureUserScheduleNode(user.id);
-            }
-          }
+          usersToShow = await fetchUsersByLocation(event.location);
         } else {
           // Fall back to the regular getManageableUsers function
+          console.log("No location specified, using getManageableUsers");
           usersToShow = await getManageableUsers();
+        }
+        
+        // Ensure all users have schedule nodes
+        for (const user of usersToShow) {
+          if (!user.hasSchedule && ensureUserScheduleNode) {
+            console.log(`Ensuring schedule node for user ${user.id}`);
+            try {
+              await ensureUserScheduleNode(user.id);
+            } catch (error) {
+              console.warn(`Failed to ensure schedule node for user ${user.id}:`, error);
+              // Continue even if this fails
+            }
+          }
         }
         
         if (usersToShow.length === 0) {
@@ -257,6 +294,7 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
           setError(null);
         }
         
+        console.log(`Total users to display: ${usersToShow.length}`);
         setUsers(usersToShow);
         
         // Extract unique locations and departments for filters
@@ -283,6 +321,7 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
       return;
     }
     
+    console.log(`Saving ${selectedUsers.length} participants for event ${eventId}`);
     handleAssignParticipants(eventId, selectedUsers);
     onClose();
   };
@@ -315,6 +354,15 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
       // Select all filtered users
       setSelectedUsers(filtered.map(user => user.id));
     }
+  };
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilters({
+      location: '',
+      department: ''
+    });
   };
 
   // Filter users based on search term and filters
@@ -364,7 +412,10 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
             </button>
           </div>
           <div className="dialog-content">
-            <div className="loading">Loading event details...</div>
+            <div className="loading">
+              <Loader2 size={24} className="animate-spin" />
+              <span>Loading event details...</span>
+            </div>
           </div>
         </div>
       </div>
@@ -406,6 +457,15 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="search-input"
               />
+              {(searchTerm || filters.location || filters.department) && (
+                <button 
+                  className="clear-filters-button"
+                  onClick={handleClearFilters}
+                  title="Clear all filters"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
             
             <div className="filters">
@@ -440,7 +500,10 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
           </div>
 
           {loading ? (
-            <div className="loading">Loading users...</div>
+            <div className="loading">
+              <Loader2 size={24} className="animate-spin" />
+              <span>Loading users...</span>
+            </div>
           ) : (
             <div className="user-selection">
               <div className="selection-header">
@@ -452,6 +515,7 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
                 <button 
                   className="select-all-button"
                   onClick={() => handleSelectAll(filteredUsers)}
+                  disabled={filteredUsers.length === 0}
                 >
                   {filteredUsers.length === selectedUsers.length && filteredUsers.length > 0 
                     ? 'Deselect All' 
@@ -497,11 +561,17 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
                   <div className="no-results">
                     <Users size={24} />
                     <p>No users match your criteria</p>
-                    {event?.location && (
-                      <div className="suggestion">
+                    <div className="suggestion">
+                      {event?.location && (
                         <p>Try clearing your filters or check that users exist in "{event.location}"</p>
-                      </div>
-                    )}
+                      )}
+                      <button 
+                        className="reset-search-button"
+                        onClick={handleClearFilters}
+                      >
+                        Clear All Filters
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

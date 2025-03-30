@@ -20,530 +20,228 @@ admin.initializeApp({
   databaseURL: "https://qr-system-1cea7-default-rtdb.firebaseio.com"
 });
 
+// Initialize with your service account credentials
+// IMPORTANT: Load from a JSON file instead of hardcoding the credentials
+// This avoids issues with the private key format
+
 const db = admin.database();
-// Helper: Generate email
 
-// Helper: Generate email
+// Helper: Generate email from name
 const generateEmail = (name) => {
-    if (!name) return "unknown@example.com";
-    const emailName = name.toLowerCase().replace(/[^a-z0-9]/g, ".");
-    return `${emailName}@avjoliet.com`;
-  };
-  
-  // Helper: Determine position
-  const determinePosition = (service) => {
-    if (!service || service.toLowerCase() === "no") return "Member";
-    if (service.toLowerCase().includes("coordinador")) return "Coordinator";
-    if (service.toLowerCase().includes("tesoreria")) return "Treasurer";
-    if (service.toLowerCase().includes("atraccion")) return "Attraction";
-    if (service.toLowerCase().includes("lider")) return "Leader";
-    if (service.toLowerCase().includes("secretaria")) return "Secretary";
-    return "Staff";
-  };
-  
-  // Replace Users Function
-  const replaceUsers = async (users) => {
-    const usersRef = db.ref("users");
-    const locationsRef = db.ref("locations");
-    const locationId = "joliet";
-  
-    // Clear all existing users
-    await usersRef.set(null);
-  
-    // Ensure Joliet location exists
-    const locationSnapshot = await locationsRef.child(locationId).get();
-    if (!locationSnapshot.exists()) {
-      await locationsRef.child(locationId).set({
-        name: "Joliet",
-        address: "123 Main St, Joliet, IL",
-        activeUsers: []
-      });
-    }
-  
-    const activeUsers = [];
-  
-    // Process each user
-    for (const user of users) {
-      if (!user.name || user.name.trim() === "") {
-        console.warn("Skipping user due to missing name:", user);
-        continue;
-      }
-  
-      const id = uuidv4(); // Generate unique ID
-      const fullName = `${user.name} ${user.lastName || ""} ${user.secondLastName || ""}`.trim();
-  
-      const userData = {
-        name: fullName,
-        email: generateEmail(fullName),
-        phone: user.phone || "No Phone Provided",
-        position: determinePosition(user.service),
-        status: user.service && user.service.toLowerCase() !== "no" ? "active" : "inactive",
-        locationHistory: [
-          {
-            locationId: locationId,
-            date: new Date().toISOString(),
-            changedBy: "system"
-          }
-        ],
-        stats: {
-          daysPresent: 0,
-          daysLate: 0,
-          daysAbsent: 0,
-          rank: 0
-        }
-      };
-  
-      // Add user to Firebase
-      await usersRef.child(id).set(userData);
-  
-      // If the user is active, add them to the active users list
-      if (userData.status === "active") {
-        activeUsers.push(id);
-      }
-  
-      console.log(`Processed user: ${fullName} (${userData.status})`);
-    }
-  
-    // Update active users in Joliet location
-    await locationsRef.child(locationId).child("activeUsers").set(activeUsers);
-  };
-  
-  const main = async () => {
-    try {
-      // Users parsed from the Joliet list
-      const users = [
-        {
-          "name": "Alex Gutierrez",
-          "lastName": "Salcedo",
-          "service": "No",
-          "phone": "(331) 385 3542"
-        },
-        {
-          "name": "Alfonso Nocelotl",
-          "lastName": "Velazquez",
-          "service": "No",
-          "phone": "(331) 454 3729"
-        },
-        {
-          "name": "Alvaro Aponte",
-          "lastName": "Peña",
-          "service": "No",
-          "phone": "(612) 261 5858"
-        },
-        {
-          "name": "Antonia Cardenas",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 618 1870"
-        },
-        {
-          "name": "Araceli Flores",
-          "lastName": "",
-          "service": "Coordinador de Oracion y Meditacion",
-          "phone": "(630) 373 5570"
-        },
-        {
-          "name": "Benjamin Elizalde",
-          "lastName": "Ruiz",
-          "service": "No",
-          "phone": "(630) 639 9409"
-        },
-        {
-          "name": "Blanca Rubio",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 823 1892"
-        },
-        {
-          "name": "Blanca Ramos",
-          "lastName": "Garcia",
-          "service": "No",
-          "phone": "(630) 945 6204"
-        },
-        {
-          "name": "Cecilia Magallanes",
-          "lastName": "",
-          "service": "No",
-          "phone": "(331) 274 8628"
-        },
-        {
-          "name": "Crisanto Mendez",
-          "lastName": "Ayala",
-          "service": "Coordinador de Alabanza",
-          "phone": "(630) 506 7174"
-        },
-        {
-          "name": "Diana Xique",
-          "lastName": "Magaña",
-          "service": "No",
-          "phone": "(630) 644 8402"
-        },
-        {
-          "name": "Diana Cruz",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 303 7954"
-        },
-        {
-          "name": "Edi Ferro",
-          "lastName": "",
-          "service": "No",
-          "phone": "(815) 766 4323"
-        },
-        {
-          "name": "Edith Morales",
-          "lastName": "Beltran",
-          "service": "No",
-          "phone": "(331) 274 6707"
-        },
-        {
-          "name": "Eli Nocelotl",
-          "lastName": "",
-          "service": "Coordinador JAV",
-          "phone": "(331) 758 2607"
-        },
-        {
-          "name": "Elizabeth Perez",
-          "lastName": "",
-          "service": "No",
-          "phone": "(219) 292 1128"
-        },
-        {
-          "name": "Elssy Chavez",
-          "lastName": "Orozco",
-          "service": "Tesoreria de Grupo",
-          "phone": "(630) 456 0323"
-        },
-        {
-          "name": "Erendira Bedolla",
-          "lastName": "Sanchez",
-          "service": "No",
-          "phone": "(630) 731 6730"
-        },
-        {
-          "name": "Erik Hernandez",
-          "lastName": "Gonzalez",
-          "service": "No",
-          "phone": "(630) 742 5374"
-        },
-        {
-          "name": "Francisco Lopez",
-          "lastName": "",
-          "service": "Alterno Coordinador de Hacienda",
-          "phone": "(630) 806 5994"
-        },
-        {
-          "name": "Gerardo Nuñez",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 677 5994"
-        },
-        {
-          "name": "Guadalupe Pantoja",
-          "lastName": "",
-          "service": "No",
-          "phone": "(708) 341 1823"
-        },
-        {
-          "name": "Ines Aguilar",
-          "lastName": "Flores",
-          "service": "No",
-          "phone": "(773) 980 0663"
-        },
-        {
-          "name": "Janet Gonzalez",
-          "lastName": "A",
-          "service": "No",
-          "phone": "(630) 888 9208"
-        },
-      
-        {
-          "name": "Javier Arreguin",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 901 3858"
-        },
-        {
-          "name": "Jeovanni Sarmiento",
-          "lastName": "",
-          "service": "No",
-          "phone": "(773) 615 7634"
-        },
-        {
-          "name": "Jhon Jairo Gutierrez",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 788 7291"
-        },
-        {
-          "name": "Jorge Alberto Garcia",
-          "lastName": "Guerrero",
-          "service": "Atraccion Externa",
-          "phone": "(630) 345 2395"
-        },
-        {
-          "name": "Jose Muñoz",
-          "lastName": "",
-          "service": "No",
-          "phone": "(331) 454 1438"
-        },
-        {
-          "name": "Jose E Cruz",
-          "lastName": "Gallardo",
-          "service": "No",
-          "phone": "(630) 401 9540"
-        },
-        {
-          "name": "Josefina Cielo",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 450 7387"
-        },
-        {
-          "name": "Joselyn Gallardo",
-          "lastName": "Rivera",
-          "service": "Atraccion Interna JAV",
-          "phone": "(331) 431 7434"
-        },
-        {
-          "name": "Juanis Rios",
-          "lastName": "Peña",
-          "service": "No",
-          "phone": "(630) 450 4968"
-        },
-        {
-          "name": "Juliana Elizondo",
-          "lastName": "Almaraz",
-          "service": "No",
-          "phone": "(630) 236 1227"
-        },
-        {
-          "name": "Julissa Rodriguez",
-          "lastName": "Varela",
-          "service": "No",
-          "phone": "(630) 518 0437"
-        },
-        {
-          "name": "Kike Rios",
-          "lastName": "Peña",
-          "service": "Atraccion Interna",
-          "phone": "(630) 450 6517"
-        },
-        {
-          "name": "Laura Muñoz",
-          "lastName": "",
-          "service": "No",
-          "phone": "(331) 431 9066"
-        },
-        {
-          "name": "Liz A",
-          "lastName": "",
-          "service": "No",
-          "phone": "(331) 262 3294"
-        },
-        {
-          "name": "Lolis Rivera",
-          "lastName": "Nuñez",
-          "service": "No",
-          "phone": "(331) 575 4269"
-        },
-        {
-          "name": "Luly Ch",
-          "lastName": "",
-          "service": "No",
-          "phone": "(630) 809 6107"
-        },
-        {
-          "name": "Maria Camacho",
-          "lastName": "",
-          "service": "No",
-          "phone": "(331) 575 6486"
-        },
-        {
-          "name": "Maria Ruiz",
-          "lastName": "Aguilera",
-          "service": "No",
-          "phone": "(630) 340 6616"
-        },
-        {
-          "name": "Maria de Jesus Hernandez",
-          "lastName": "",
-          "service": "Preparador de Primeros Inventarios",
-          "phone": "(630) 854 3328"
-        },
-        {
-          "name": "Maria del Carmen",
-          "lastName": "Quiroz Loza",
-          "service": "Relaciones Publicas",
-          "phone": "(313) 805 5805"
-        },
-        {
-          "name": "Maria Estela",
-          "lastName": "Ornelas",
-          "service": "No",
-          "phone": "(630) 486 4813"
-        },
-        {
-          "name": "María Guadalupe",
-          "lastName": "Alvarez",
-          "service": "No",
-          "phone": "(708) 965 9261"
-        },
-        {
-          "name": "Maribel",
-          "lastName": "Diaz",
-          "service": "Coordinador de Hacienda",
-          "phone": "(630) 220 3668"
-        },
-        {
-          "name": "Marisela",
-          "lastName": "Romero",
-          "service": "No",
-          "phone": "(331) 425 3405"
-        },
-        {
-          "name": "Mayra",
-          "lastName": "Villanueva Hernandez",
-          "service": "No",
-          "phone": "(331) 262 1583"
-        },
-        {
-          "name": "Miguel",
-          "lastName": "Tochimani",
-          "service": "No",
-          "phone": "(630) 450 3452"
-        },
-        {
-          "name": "Miriam",
-          "lastName": "Gaspar",
-          "service": "No",
-          "phone": "(708) 769 4741"
-        },
-        {
-          "name": "Monica",
-          "lastName": "Nocelotl",
-          "service": "No",
-          "phone": "(331) 300 5758"
-        },
-        {
-          "name": "Nacho",
-          "lastName": "Garcia",
-          "service": "No",
-          "phone": "(331) 425 5141"
-        },
-        {
-          "name": "Nancy",
-          "lastName": "Maravillo Garduño",
-          "service": "No",
-          "phone": "(630) 877 9301"
-        },
-        {
-          "name": "Natalia",
-          "lastName": "Calvo Garcia",
-          "service": "No",
-          "phone": "(630) 457 6970"
-        },
-        {
-          "name": "Nicolás",
-          "lastName": "Bello Camposano",
-          "service": "Lider",
-          "phone": "(630) 625 3011"
-        },
-        {
-          "name": "Noe",
-          "lastName": "Leon",
-          "service": "No",
-          "phone": "(331) 575 1598"
-        },
-        {
-          "name": "Oliver",
-          "lastName": "Ferro",
-          "service": "No",
-          "phone": "(224) 318 6327"
-        },
-        {
-          "name": "Ramon",
-          "lastName": "Rodriguez",
-          "service": "Representante de Servicios Generales",
-          "phone": "(630) 256 9097"
-        },
-        {
-          "name": "Remedios",
-          "lastName": "Xochitecatl",
-          "service": "Manager de Hacienda",
-          "phone": "(630) 877 7031"
-        },
-        {
-          "name": "Rocio",
-          "lastName": "Elizalde",
-          "service": "No",
-          "phone": "(630) 639 0150"
-        },
-        {
-          "name": "Sandro",
-          "lastName": "Leal",
-          "service": "No",
-          "phone": "(630) 429 6160"
-        },
-        {
-          "name": "Santiago",
-          "lastName": "Hernandez",
-          "service": "Segundo Coordinador 2do Inventario",
-          "phone": "(630) 854 0992"
-        },
-        {
-          "name": "Santiago jr",
-          "lastName": "Hernandez",
-          "service": "No",
-          "phone": "(630) 677 6806"
-        },
-        {
-          "name": "Sergio",
-          "lastName": "Pulido",
-          "service": "No",
-          "phone": "(630) 890 1445"
-        },
-        {
-          "name": "Sergio",
-          "lastName": "Silvan",
-          "service": "No",
-          "phone": "(630) 470 2167"
-        },
-        {
-          "name": "Sergio",
-          "lastName": "Jimenez Sanchez",
-          "service": "No",
-          "phone": "(331) 277 6829"
-        },
-        {
-          "name": "Tanya",
-          "lastName": "Teran",
-          "service": "No",
-          "phone": "(630) 398 0638"
-        },
-        {
-          "name": "Vicky",
-          "lastName": "Angulo",
-          "service": "No",
-          "phone": "(630) 974 7832"
-        },
-        {
-          "name": "Yolanda",
-          "lastName": "Murillo Bañuelos",
-          "service": "No",
-          "phone": "(630) 644 2169"
-        }
-      ]
+  if (!name) return "unknown@example.com";
+  const emailName = name.toLowerCase().replace(/[^a-z0-9]/g, ".");
+  return `${emailName}@avelgin.com`;
+};
 
-      console.log("Replacing users...");
-      await replaceUsers(users);
+// Helper: Generate random phone number if not provided
+const generatePhone = () => {
+  const areaCode = Math.floor(Math.random() * 900) + 100;
+  const firstPart = Math.floor(Math.random() * 900) + 100;
+  const secondPart = Math.floor(Math.random() * 9000) + 1000;
+  return `(${areaCode}) ${firstPart} ${secondPart}`;
+};
+
+// Add users to the database with overwrite protection
+const addUsers = async (usersList) => {
+  const usersRef = db.ref("users");
+  const locationsRef = db.ref("locations");
+  const userCredentialsRef = db.ref("userCredentials");
+  const locationId = "Elgin";
   
-      console.log("Replacement and addition process completed successfully!");
-      process.exit(0);
-    } catch (error) {
-      console.error("Error during execution:", error);
-      process.exit(1);
+  // First, ensure the location exists in the locations node
+  await locationsRef.child(locationId).update({
+    name: "West Chicago",
+    address: "123 Main St, West Chicago, IL",
+    activeUsers: {}
+  });
+  
+  console.log("Created or updated West Chicago location in the database");
+  
+  // Clear existing West Chicago users to prevent duplications
+  console.log("Cleaning up existing West Chicago users...");
+  
+  // Get all existing users
+  const existingUsersSnapshot = await usersRef.once("value");
+  const existingUsers = existingUsersSnapshot.val() || {};
+  
+  // Find and remove users with westchicago location
+  for (const [userId, user] of Object.entries(existingUsers)) {
+    if (user.location === locationId) {
+      console.log(`Removing existing user: ${user.name} (${userId})`);
+      await usersRef.child(userId).remove();
+      
+      // Also remove from location's activeUsers
+      await locationsRef.child(locationId).child("activeUsers").child(userId).remove();
     }
-  };
+  }
   
-  main();
+  // Update existing credentials for this location or create new ones
+  const existingCredentialsSnapshot = await userCredentialsRef.once("value");
+  const existingCredentials = existingCredentialsSnapshot.val() || {};
+  const elginEmails = usersList.map(user => generateEmail(user.name));
+  
+  for (const [credId, cred] of Object.entries(existingCredentials)) {
+    if (elginEmails.includes(cred.email)) {
+      console.log(`Removing existing credentials for: ${cred.name} (${cred.email})`);
+      await userCredentialsRef.child(credId).remove();
+    }
+  }
+  
+  console.log(`Adding ${usersList.length} users with location '${locationId}'...`);
+  
+  // Process each user
+  for (const user of usersList) {
+    if (!user.name || user.name.trim() === "") {
+      console.warn("Skipping user due to missing name", user);
+      continue;
+    }
+    
+    // Generate a unique ID
+    const userId = uuidv4();
+    const phone = user.phone || generatePhone();
+    const email = generateEmail(user.name);
+    
+    // Create login credentials
+    const userCredential = {
+      email: email,
+      name: user.name,
+      password: "AV2025" // Default password
+    };
+    
+    // Add to userCredentials collection
+    await userCredentialsRef.push(userCredential);
+    console.log(`Created login credentials for: ${user.name} (${email})`);
+    
+    // Create user data structure directly matching your database structure and app requirements
+    const userData = {
+      name: user.name,
+      location: locationId, // Store location directly in user node
+      locationHistory: [
+        {
+          locationId: locationId,
+          date: new Date().toISOString(),
+          changedBy: "system"
+        }
+      ],
+      profile: {
+        department: "",
+        email: email,
+        emergencyContact: {
+          name: "",
+          phone: ""
+        },
+        joinDate: new Date().toISOString(),
+        managedBy: "",
+        name: user.name,
+        padrinoColor: "red",
+        phone: phone,
+        position: user.position || "Member",
+        primaryLocation: locationId, // This is what the app uses for displaying location
+        role: "employee",
+        status: "active",
+        password: "AV2025" // Add password to profile
+      },
+      stats: {
+        attendanceRate: 0,
+        daysAbsent: 0,
+        daysLate: 0,
+        daysPresent: 0,
+        onTimeRate: 0,
+        totalHours: 0
+      },
+      status: "active"
+    };
+    
+    // Add user to database
+    await usersRef.child(userId).set(userData);
+    
+    // Add user to location's activeUsers
+    await locationsRef.child(locationId).child("activeUsers").child(userId).set({
+      position: userData.profile.position
+    });
+    
+    console.log(`Added user: ${user.name} (${userId})`);
+  }
+  
+  console.log("All users added successfully!");
+};
+// Elgin Users List - all set to "Member" position
+const elginUsers = [
+  { name: "Griselda Gomes", position: "Member" },
+  { name: "Javier Aviles", position: "Member" },
+  { name: "Marlene Avila", position: "Member" },
+  { name: "Nancy Morales", position: "Member" },
+  { name: "Shontal Marines", position: "Member" },
+  { name: "Omar Salazar", position: "Member" },
+  { name: "Oscar Batalla", position: "Member" },
+  { name: "Ignacia Perez", position: "Member" },
+  { name: "Edith Pineda", position: "Member" },
+  { name: "Everardo Tinagero", position: "Member" },
+  { name: "Sandy Martinez", position: "Member" },
+  { name: "Sanjuana Carranza", position: "Member" },
+  { name: "Cindy Cruz", position: "Member" },
+  { name: "Mayra Rodriguez", position: "Member" },
+  { name: "Dulce Rosas", position: "Member" },
+  { name: "Patricia Ramirez", position: "Member" },
+  { name: "Estela Paque", position: "Member" },
+  { name: "Arturo Cruz", position: "Member" },
+  { name: "Claudia Mestizo", position: "Member" },
+  { name: "Janis Vergara", position: "Member" },
+  { name: "Edilia Esquebel", position: "Member" },
+  { name: "Maria Montes", position: "Member" },
+  { name: "Rene Espinosa", position: "Member" },
+  { name: "Katheryne Mesa", position: "Member" },
+  { name: "Sergio Avila", position: "Member" },
+  { name: "Ramon Cruz", position: "Member" },
+  { name: "Jose Vega", position: "Member" },
+  { name: "Valente Guido", position: "Member" },
+  { name: "Araceli Luis", position: "Member" },
+  { name: "Jennifer Montoya", position: "Member" },
+  { name: "Agustin Hernandez", position: "Member" },
+  { name: "Hilda Oliva", position: "Member" },
+  { name: "Juan Rosas", position: "Member" },
+  { name: "Jay Juarez", position: "Member" },
+  { name: "Ana Lopez", position: "Member" },
+  { name: "Jose Baesa", position: "Member" },
+  { name: "Juan Guadalupe", position: "Member" },
+  { name: "Rosalba Aguilar", position: "Member" },
+  { name: "Antonio Vega", position: "Member" },
+  { name: "Cristina Burgos", position: "Member" },
+  { name: "Citiali Bautista", position: "Member" },
+  { name: "Sarai Gomar", position: "Member" },
+  { name: "Nelson Calero", position: "Member" },
+  { name: "Crisanto Burgos", position: "Member" },
+  { name: "Manuela Reyes", position: "Member" },
+  { name: "Tony Antunez", position: "Member" },
+  { name: "Veronica Orosco", position: "Member" },
+  { name: "Alejandro Amador", position: "Member" },
+  { name: "Alfredo Veldanez", position: "Member" },
+  { name: "Angelina Cruz", position: "Member" },
+  { name: "Christian Ramirez", position: "Member" },
+  { name: "Hilda Barrios", position: "Member" },
+  { name: "Jose Acevedo", position: "Member" },
+  { name: "Jorge Lara", position: "Member" },
+  { name: "Miguel Reyna", position: "Member" },
+  { name: "Pedro Aguirre", position: "Member" }
+];
+
+// Main function
+const main = async () => {
+  try {
+    console.log("Starting user addition process...");
+    await addUsers(elginUsers);
+    console.log("User addition process completed successfully!");
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during execution:", error);
+    process.exit(1);
+  }
+};
+
+// Instructions for setting up the serviceAccountKey.json file:
+// 1. Go to your Firebase console -> Project settings -> Service accounts
+// 2. Click "Generate new private key"
+// 3. Save the downloaded JSON file as "serviceAccountKey.json" in the same directory as this script
+
+// Run the script
+main();

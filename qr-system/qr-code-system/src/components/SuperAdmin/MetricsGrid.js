@@ -1,23 +1,35 @@
 'use client';
+
 import React from 'react';
-import { useNavigate } from 'react-router-dom'; // <-- for React Router navigation
+import { useNavigate } from 'react-router-dom';
 import './MetricsGrid.css'; // optional if you need custom classes
 
 const MetricsGrid = ({ metrics, activeFilter, onColorClick }) => {
   const navigate = useNavigate();
 
-  // Handler to navigate to your employee-list route
-  const handleMetricClick = () => {
-    navigate('/employee-list');
+  // Handlers for different metric types
+  const handleTotalMembersClick = () => {
+    // Navigate to employee list with all members filter
+    navigate('/employee-list', { state: { filter: 'all' } });
+  };
+
+  const handleOrejasClick = () => {
+    // Navigate to employee list with Orejas filter
+    navigate('/employee-list', { state: { filter: 'RSG' } });
+  };
+
+  const handleApoyosClick = () => {
+    // Navigate to employee list with Apoyos filter
+    navigate('/employee-list', { state: { filter: 'COM' } });
   };
 
   return (
     <div className="metrics-grid">
       {/* Metric Card: Total Members (clickable) */}
-      <div 
+      <div
         className="metric-box"
         style={{ cursor: 'pointer' }}
-        onClick={handleMetricClick}
+        onClick={handleTotalMembersClick}
       >
         <h3 className="metric-title">TOTAL DE MIEMBROS DEL GRUPO</h3>
         <p className="metric-number">{metrics.overview.totalMembers}</p>
@@ -67,26 +79,24 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick }) => {
       </div>
 
       {/* Metric Card: Orejas (clickable) */}
-      <div 
+      <div
         className="metric-box"
         style={{ cursor: 'pointer' }}
-        onClick={handleMetricClick}
+        onClick={handleOrejasClick}
       >
         <h3 className="metric-title">TOTAL DE OREJAS</h3>
         <p className="metric-number">{metrics.overview.totalOrejas}</p>
       </div>
 
       {/* Metric Card: Apoyos (clickable) */}
-      <div 
+      <div
         className="metric-box"
         style={{ cursor: 'pointer' }}
-        onClick={handleMetricClick}
+        onClick={handleApoyosClick}
       >
         <h3 className="metric-title">TOTAL DE APOYOS</h3>
         <p className="metric-number">{metrics.overview.totalApoyos}</p>
       </div>
-
-  
     </div>
   );
 };

@@ -11,6 +11,7 @@ import EmployeeListPage from './components/EmployeeListPage';
 /* Direct imports */
 import Scheduler from './components/Scheduler/SchedulerContainer';
 import SuperAdmin from './components/SuperAdmin/SuperAdmin';
+import LocationAdmin from './components/LocationAdmin';
 import LocationAdminDashboard from './components/LocationAdminDashboard';
 import ManageEmployees from './components/ManageEmployees';
 import ManageAdmins from './components/ManageAdmins';
@@ -81,18 +82,22 @@ function AppContent() {
           <Route path="stats/:status" element={<StatDetails />} />
         </Route>
 
-        {/* Location Admin Routes */}
-        <Route path="/location-admin/*" element={<PrivateRoute requiredRole="ADMIN"><LocationAdminDashboard /></PrivateRoute>}>
-          <Route path="employees" element={<ManageEmployees />} />
+        {/* Location Admin Routes - FIXED to properly use LocationAdmin as parent */}
+        <Route path="/location-admin/*" element={<PrivateRoute requiredRole="ADMIN"><LocationAdmin /></PrivateRoute>}>
+          <Route index element={<LocationAdminDashboard />} />
+          <Route path="manage-employees" element={<ManageEmployees locationFiltered={true} />} />
+          <Route path="reports" element={<Reports locationFiltered={true} />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="add-user" element={<AddUser locationRestricted={true} />} />
           <Route path="scheduler" element={
-            <SchedulerProvider>
+            <SchedulerProvider locationFiltered={true}>
               <Scheduler />
             </SchedulerProvider>
           } />
-          <Route path="reports" element={<Reports />} />
-          <Route path="settings" element={<Settings />} />
           <Route path="account-settings" element={<AccountSettings />} />
           <Route path="qr-scanner" element={<QRScannerPage />} />
+          <Route path="users/:employeeId" element={<EmployeeProfile locationRestricted={true} />} />
+          <Route path="stats/:status" element={<StatDetails locationFiltered={true} />} />
         </Route>
 
         {/* Shared Routes */}

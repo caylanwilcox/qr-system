@@ -1,296 +1,325 @@
-// src/components/UserProfile/UserProfile.js
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ref, get, update } from 'firebase/database';
-import { database, auth } from '../../services/firebaseConfig';
-import { formatAttendanceRecords, calculateStats, formatScheduledDates } from '../utils/employeeUtils';
-import './styles/UserProfile.css';
-import { User, BarChart2, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import PropTypes from 'prop-types';
+import { ref, update } from 'firebase/database';
+import { database } from '../../services/firebaseConfig';
+import { Mail, Phone, MapPin, Calendar, AlertCircle, Lock, Users } from 'lucide-react';
 
-import ProfileHeader from './ProfileHeader';
-import PersonalInfoSection from './PersonalInfoSection';
-import StatsSection from './StatsSection';
-import AttendanceSection from './AttendanceSection';
-import ScheduleSection from './ScheduleSection';
-import IdCardSection from './IdCardSection';
-
-const LOCATIONS = [
-  'Aurora', 'Agua Viva West Chicago', 'Agua Viva Lyons',
-  'Agua Viva Elgin R7', 'Agua Viva Joliet', 'Agua Viva Wheeling', 'Retreat',
-];
-
-const SERVICE_TYPES = [
-  'LIDER',
-  'RSG',
-  'COM',
-  'TESORERO DE GRUPO',
-  'PPI',
-  'MANAGER DE HACIENDA',
-  'COORDINADOR DE HACIENDA',
-  'ATRACCION INTERNA',
-  'ATRACCION EXTERNA',
-  'SECRETARY',
-  'LITERATURA',
-  'SERVIDOR DE CORO',
-  'SERVIDOR DE JAV EN MESA',
-  'SERVIDOR DE SEGUIMIENTOS'
-];
-
-const INITIAL_FORM_DATA = {
-  name: '',
-  email: '',
-  phone: '',
-  position: '',
-  SERVICE_TYPES: '',
-  joinDate: '',
-  role: 'employee',
-  status: 'inactive',
-  emergencyContact: '',
-  emergencyPhone: '',
-  notes: '',
-  padrino: false,
-  padrinoColor: null,
-};
-
-const INITIAL_STATS = {
-  attendanceRate: 0,
-  punctualityRate: 0,
-  totalHours: 0,
-  avgHoursPerDay: 0,
-  previousMonthHours: 0,
-  hoursChange: 0,
-  perfectStreak: 0,
-  earlyArrivalRate: 0,
-  mostActiveDay: '',
-};
-
-const TabButton = ({ active, onClick, icon: Icon, label }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium rounded-lg
-               transition-all duration-200 ${
-      active
-        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-        : 'text-white/70 hover:bg-white/5'
-    }`}
-  >
-    <Icon className="w-4 h-4" />
-    {label}
-  </button>
+const FormField = ({
+  label,
+  icon,
+  name,
+  type = 'text',
+  value,
+  onChange,
+  disabled,
+  error,
+  required,
+  children,
+}) => (
+  <div className="form-group">
+    <label htmlFor={name} className="block mb-2">
+      <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+        {icon}
+        <span>{label}</span>
+      </span>
+    </label>
+    {children || (
+      <input
+        id={name}
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        required={required}
+        aria-invalid={error ? 'true' : 'false'}
+        aria-describedby={error ? `${name}-error` : undefined}
+        className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+          px-3 py-2 text-white/90 placeholder-white/50
+          focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+          disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+          backdrop-blur-md transition-all duration-200
+          ${error ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+        `}
+      />
+    )}
+    {error && (
+      <div id={`${name}-error`} className="text-red-400 text-sm mt-1 flex items-center gap-1">
+        <AlertCircle size={14} />
+        <span>{error}</span>
+      </div>
+    )}
+  </div>
 );
 
-const UserProfile = () => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-  const [activeTab, setActiveTab] = useState('personal');
-  const [userDetails, setUserDetails] = useState(null);
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
-  const [scheduledDates, setScheduledDates] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [stats, setStats] = useState(INITIAL_STATS);
+const PersonalInfoSection = ({
+  formData,
+  editMode,
+  handleInputChange,
+  errors = {},
+  onSave,
+  onCancel,
+  userId, // Add userId as a prop to allow admin to edit different users
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
 
-  const showNotification = useCallback((message, type = 'success') => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => {
-      setNotification({ show: false, message: '', type: '' });
-    }, 3000);
-  }, []);
+  // Custom handler for password field to ensure it works with the form's overall input handling
+  const handlePasswordChange = (e) => {
+    if (handleInputChange) {
+      handleInputChange(e);
+    }
+  };
 
-  const handleInputChange = (e) => {
-    const { name, type, checked, value } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: newValue,
-    }));
+  const togglePasswordVisibility = () => {
+    setShowPassword(prevState => !prevState);
   };
 
   const handleSave = async () => {
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
-
-      const updates = {
-        ...formData,
-        email: formData.email,
-        phone: formData.phone,
-        emergencyContact: formData.emergencyContact,
-        emergencyPhone: formData.emergencyPhone,
-      };
-
-      await update(ref(database, `users/${userId}`), updates);
-      setUserDetails(prev => ({
-        ...prev,
-        ...updates
-      }));
-      setEditMode(false);
-      showNotification('Changes saved successfully');
-    } catch (err) {
-      console.error('Save error:', err);
-      showNotification('Failed to save changes', 'error');
-    }
-  };
-
-  const fetchUserDetails = useCallback(async () => {
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
-
-      const userRef = ref(database, `users/${userId}`);
-      const snapshot = await get(userRef);
-
-      if (!snapshot.exists()) {
-        throw new Error('User data not found');
+      if (!userId) {
+        setUpdateStatus({ type: 'error', message: 'No user ID provided' });
+        return;
       }
 
-      const data = snapshot.val();
-      setUserDetails(data);
+      // Create updates for database fields
+      const updates = {};
+      
+      // Only update phone and service in the profile object
+      updates[`users/${userId}/profile/phone`] = formData.phone || '';
+      
+      // Add service if it exists
+      if (formData.service) {
+        console.log("Updating service type to:", formData.service);
+        updates[`users/${userId}/profile/service`] = formData.service;
+      }
 
-      const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
-      setAttendanceRecords(records);
+      // Add password update if it exists and is not empty
+      if (formData.password && formData.password.trim() !== '') {
+        console.log("Updating password (normally would use Firebase Auth instead of direct DB update)");
+        updates[`users/${userId}/profile/password`] = formData.password;
+      }
 
-      const calculatedStats = calculateStats(records);
-      setStats(calculatedStats);
+      // Update Firebase database only
+      console.log("Updating user profile:", updates);
+      await update(ref(database), updates);
+      console.log("Database update completed successfully");
 
-      setFormData({
-        name: data.name || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        position: data.position || '',
-        SERVICE_TYPES: data.SERVICE_TYPES || '',
-        location: data.location || '',
-        joinDate: data.joinDate || '',
-        role: data.role || 'employee',
-        status: data.status || 'inactive',
-        emergencyContact: data.emergencyContact || '',
-        emergencyPhone: data.emergencyPhone || '',
-        notes: data.notes || '',
-        padrino: data.padrino ?? false,
-        padrinoColor: data.padrinoColor || null,
+      setUpdateStatus({ 
+        type: 'success', 
+        message: 'Profile updated successfully!' 
       });
 
-      const formattedDates = formatScheduledDates(data.assignedDates || []);
-      setScheduledDates(formattedDates);
-    } catch (err) {
-      console.error('Error fetching user details:', err);
-      setError(err.message || 'Failed to fetch user data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchUserDetails();
-  }, [fetchUserDetails]);
-
-  const tabs = [
-    { id: 'personal', label: 'Personal Information', icon: User },
-    { id: 'stats', label: 'Statistics', icon: BarChart2 },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-  ];
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'personal':
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="glass-panel p-6">
-              <PersonalInfoSection
-                formData={formData}
-                editMode={editMode}
-                handleInputChange={handleInputChange}
-                locations={LOCATIONS}
-                SERVICE_TYPES={SERVICE_TYPES}
-              />
-            </div>
-            <div className="glass-panel p-6">
-              <IdCardSection userDetails={userDetails} userId={auth.currentUser?.uid} />
-            </div>
-            <div className="glass-panel p-6">
-              <AttendanceSection
-                attendanceRecords={attendanceRecords}
-                deleteConfirm={null}
-                onDeleteRecord={() => {}}
-              />
-            </div>
-          </div>
-        );
-      case 'stats':
-        return (
-          <div className="glass-panel p-6">
-            <StatsSection userDetails={userDetails} />
-          </div>
-        );
-      case 'calendar':
-        return (
-          <div className="glass-panel">
-            <ScheduleSection userId={auth.currentUser?.uid} userDetails={userDetails} />
-          </div>
-        );
-      default:
-        return null;
+      // Call the onSave callback if provided
+      if (onSave) {
+        onSave();
+      }
+      
+      // Clear status after 3 seconds
+      setTimeout(() => setUpdateStatus(null), 3000);
+      
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      setUpdateStatus({ 
+        type: 'error', 
+        message: `Error: ${error.message}` 
+      });
     }
   };
 
-  if (loading) {
-    return (
-      <div className="loading-overlay">
-        <div className="loading-spinner" />
-        <p>Loading user details...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="error-container glass-panel">
-        <p>{error}</p>
-        <button onClick={fetchUserDetails} className="btn primary">Retry</button>
-      </div>
-    );
-  }
-
   return (
-    <div className="user-profile-container">
-      {notification.show && (
-        <div className={`notification ${notification.type}`}>
-          {notification.message}
+    <div className="bg-[rgba(13,25,48,0.4)] backdrop-blur-xl rounded-lg border border-white/10 shadow-xl">
+      <div className="p-6 border-b border-white/10">
+        <h2 className="text-lg font-semibold text-white/90">Personal Information</h2>
+        {userId && <p className="text-xs text-white/50 mt-1">User ID: {userId}</p>}
+      </div>
+
+      {updateStatus && (
+        <div className={`mx-6 mt-4 p-3 rounded ${
+          updateStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+        }`}>
+          {updateStatus.message}
         </div>
       )}
 
-      <ProfileHeader
-        formData={formData}
-        editMode={editMode}
-        employeeId={auth.currentUser?.uid}
-        onEdit={() => setEditMode(!editMode)}
-        onSave={handleSave}
-        onStatusToggle={() => {}}
-        handleInputChange={handleInputChange}
-      />
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FormField
+            label="Email"
+            icon={<Mail size={16} className="text-white/70" />}
+            name="email"
+            type="email"
+            value={formData.email || ''}
+            onChange={handleInputChange}
+            disabled={true}
+            error={errors.email}
+            required
+          />
 
-      <div className="bg-glass-dark backdrop-blur border border-glass-light rounded-lg mt-6 mb-6">
-        <div className="p-2 flex flex-wrap gap-2">
-          {tabs.map((tab) => (
-            <TabButton
-              key={tab.id}
-              active={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              icon={tab.icon}
-              label={tab.label}
-            />
-          ))}
+          <FormField
+            label="Phone"
+            icon={<Phone size={16} className="text-white/70" />}
+            name="phone"
+            type="tel"
+            value={formData.phone || ''}
+            onChange={handleInputChange}
+            disabled={!editMode}
+            error={errors.phone}
+            required
+          />
+
+          <FormField
+            label="Location"
+            icon={<MapPin size={16} className="text-white/70" />}
+            name="location"
+            value={formData.location || ''}
+            disabled={true}
+          />
+
+          <FormField
+            label="Join Date"
+            icon={<Calendar size={16} className="text-white/70" />}
+            name="joinDate"
+            type="date"
+            value={formData.joinDate || ''}
+            disabled={true}
+          />
+
+          <FormField
+            label="Service Type"
+            icon={<Users size={16} className="text-white/70" />}
+            name="service"
+            disabled={!editMode}
+            error={errors.service}
+          >
+            <select
+              id="service"
+              name="service"
+              value={formData.service || ''}
+              onChange={handleInputChange}
+              disabled={!editMode}
+              className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+                px-3 py-2 text-white/90
+                focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+                disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+                backdrop-blur-md transition-all duration-200
+                ${errors.service ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+              `}
+            >
+              <option value="">Select Service Type</option>
+              <option value="RSG">Orejas</option>
+              <option value="COM">Apoyos</option>
+              <option value="LIDER">Lider</option>
+              <option value="TESORERO DE GRUPO">Tesorero de Grupo</option>
+              <option value="PPI">PPI</option>
+              <option value="MANAGER DE HACIENDA">Manager de Hacienda</option>
+              <option value="COORDINADOR DE HACIENDA">Coordinador de Hacienda</option>
+              <option value="ATRACCION INTERNA">Atraccion Interna</option>
+              <option value="ATRACCION EXTERNA">Atraccion Externa</option>
+              <option value="SECRETARY">Secretary</option>
+              <option value="LITERATURA">Literatura</option>
+              <option value="SERVIDOR DE CORO">Servidor de Coro</option>
+              <option value="SERVIDOR DE JAV EN MESA">Servidor de JAV en Mesa</option>
+              <option value="SERVIDOR DE SEGUIMIENTOS">Servidor de Seguimientos</option>
+            </select>
+          </FormField>
+          
+          {/* Custom Password Field with Toggle Button */}
+          <div className="form-group">
+            <label htmlFor="password" className="block mb-2">
+              <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+                <Lock size={16} className="text-white/70" />
+                <span>Password</span>
+              </span>
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={formData.password || ''}
+                onChange={handlePasswordChange}
+                disabled={!editMode}
+                placeholder="Enter password"
+                className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+                  px-3 py-2 text-white/90 placeholder-white/50
+                  focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+                  disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+                  backdrop-blur-md transition-all duration-200 pr-12
+                  ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+                `}
+              />
+              {editMode && (
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                >
+                  {showPassword ? "HIDE" : "SHOW"}
+                </button>
+              )}
+            </div>
+            {errors.password && (
+              <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
+                <AlertCircle size={14} />
+                <span>{errors.password}</span>
+              </div>
+            )}
+          </div>
+
+          {editMode && (
+            <div>
+              <div className="text-amber-400 text-sm mb-2">
+                <strong>Note:</strong> For security reasons, your password changes here will only affect the database. 
+                For full authentication updates, please contact your administrator.
+              </div>
+              <div className="text-gray-300 text-xs">
+                You can update your phone number, service type, and password from this form.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="tab-content">
-        {renderTabContent()}
-      </div>
+      {editMode && (
+        <div className="px-6 py-4 border-t border-white/10 flex justify-end gap-2">
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-500"
+          >
+            Save Chsdsdsdes
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
-export default UserProfile;
+PersonalInfoSection.propTypes = {
+  formData: PropTypes.shape({
+    email: PropTypes.string,
+    phone: PropTypes.string,
+    location: PropTypes.string,
+    joinDate: PropTypes.string,
+    password: PropTypes.string,
+    service: PropTypes.string,
+  }).isRequired,
+  editMode: PropTypes.bool.isRequired,
+  handleInputChange: PropTypes.func.isRequired,
+  errors: PropTypes.object,
+  onSave: PropTypes.func,
+  onCancel: PropTypes.func,
+  userId: PropTypes.string, // User ID to update (for admin purposes)
+};
+
+export default PersonalInfoSection;

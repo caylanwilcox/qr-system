@@ -15,12 +15,13 @@ const ManageEmployees = () => {
 
   const locations = [
     'Aurora',
-    'West Chicago',
-    'Lyons',
+    'westchicago',
+    'lyons',
     'Elgin',
     'Joliet',
     'Wheeling',
-    'Retreat',
+  
+    'Javs',
   ];
 
   useEffect(() => {

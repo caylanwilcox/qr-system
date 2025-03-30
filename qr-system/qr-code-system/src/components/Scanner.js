@@ -8,10 +8,14 @@ const Scanner = ({ onScan, location, isProcessing }) => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [error, setError] = useState('');
   const [scannerReady, setScannerReady] = useState(false);
+  const [isScannerActive, setIsScannerActive] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
   
   const scannerRef = useRef(null);
   const barcodeTimeoutRef = useRef(null);
   const mountedRef = useRef(true);
+  const initializingRef = useRef(false);
 
   // Calculate QR box size using useMemo to prevent unnecessary recalculations
   const calculateQrBoxSize = useCallback(() => {
@@ -51,32 +55,75 @@ const Scanner = ({ onScan, location, isProcessing }) => {
     }
   }), [calculateQrBoxSize]);
 
-  // Handle scanner errors
+  // Handle scanner errors with improved filtering
   const handleScannerError = useCallback((error) => {
     const ignoredErrors = [
       'No QR code found',
       'NotFoundException',
-      'No MultiFormat Readers'
+      'No MultiFormat Readers',
+      'ZXing did not provide an output'
     ];
     
+    // Don't show benign scanning errors
     if (!ignoredErrors.some(msg => error.includes(msg))) {
       console.error('Scanner error:', error);
-      setError(error);
+      // Only update the error state if it's a new error
+      setError(prevError => {
+        if (prevError !== error) {
+          return error;
+        }
+        return prevError;
+      });
     }
   }, []);
 
-  // Handle successful scans
-  const handleSuccessfulScan = useCallback((decodedText) => {
-    if (!isProcessing && decodedText && mountedRef.current) {
-      onScan(decodedText.trim());
+  // Handle successful scans with debouncing
+  const handleSuccessfulScan = useMemo(() => 
+    debounce((decodedText) => {
+      if (!isProcessing && decodedText && mountedRef.current) {
+        onScan(decodedText.trim());
+      }
+    }, 300),
+    [isProcessing, onScan]
+  );
+
+  // Stop the scanner safely
+  const stopScanner = useCallback(async () => {
+    if (!scannerRef.current) return;
+    
+    try {
+      const isScanning = await scannerRef.current.isScanning();
+      if (isScanning) {
+        await scannerRef.current.stop();
+      }
+      // Don't clear the scanner element immediately - this can cause media interruption errors
+      setTimeout(() => {
+        if (scannerRef.current && mountedRef.current) {
+          scannerRef.current.clear();
+        }
+      }, 100);
+      
+      setIsScannerActive(false);
+    } catch (err) {
+      console.error('Error stopping scanner:', err);
     }
-  }, [isProcessing, onScan]);
+  }, []);
 
   // Initialize camera and check permissions
   const initializeCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // First check if media devices are available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Media devices not supported in this browser');
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }
+      });
+      
+      // Always clean up the stream properly
       stream.getTracks().forEach(track => track.stop());
+      
       if (mountedRef.current) {
         setHasCameraPermission(true);
       }
@@ -86,29 +133,68 @@ const Scanner = ({ onScan, location, isProcessing }) => {
       if (mountedRef.current) {
         setHasCameraPermission(false);
         setError('Camera access denied - USB scanner still available');
+        // Enable manual mode automatically when camera fails
+        setManualMode(true);
       }
       return false;
     }
   }, []);
 
-  // Initialize scanner with improved error handling
+  // Initialize scanner with improved error handling and state management
   const initializeScanner = useCallback(async () => {
-    if (!location || !mountedRef.current) return;
-
+    // Prevent multiple initializations
+    if (!location || !mountedRef.current || initializingRef.current || isScannerActive) return;
+    
+    initializingRef.current = true;
+    setError('');
+    
     try {
       const hasCamera = await initializeCamera();
-      if (!hasCamera || !mountedRef.current) return;
+      if (!hasCamera || !mountedRef.current) {
+        initializingRef.current = false;
+        // If camera fails, don't prevent moving forward - enable manual input
+        setManualMode(true);
+        return;
+      }
 
+      // Clear any existing scanner instance
+      if (scannerRef.current) {
+        await stopScanner();
+        scannerRef.current = null;
+      }
+      
+      // Create scanner instance with error handling
+      const qrContainer = document.getElementById('qr-reader');
+      if (!qrContainer) {
+        throw new Error('Scanner container not found');
+      }
+      
+      // Ensure the container is empty before initializing
+      qrContainer.innerHTML = '';
+      
       const scanner = new Html5Qrcode("qr-reader", { verbose: false });
       scannerRef.current = scanner;
 
       const startScanner = async (config) => {
-        await scanner.start(
-          { facingMode: "environment" },
-          config,
-          handleSuccessfulScan,
-          handleScannerError
-        );
+        try {
+          await scanner.start(
+            { facingMode: "environment" },
+            config,
+            handleSuccessfulScan,
+            handleScannerError
+          );
+        } catch (err) {
+          // Additional error logging
+          console.error('Scanner start error details:', err);
+          // Try to provide more specific error messages
+          if (err.message && err.message.includes('NotReadableError')) {
+            throw new Error('Cannot access camera. The camera may be in use by another application.');
+          } else if (err.message && err.message.includes('NotAllowedError')) {
+            throw new Error('Camera access denied. Please check your browser permissions.');
+          } else {
+            throw err;
+          }
+        }
       };
 
       try {
@@ -118,19 +204,30 @@ const Scanner = ({ onScan, location, isProcessing }) => {
           disableFlip: false,
           experimentalFeatures: {
             ...scannerConfig.experimentalFeatures,
-            useBarCodeDetectorIfSupported: true,
-            allowNonGrantedPermissions: true
+            useBarCodeDetectorIfSupported: true
           }
         });
       } catch (startError) {
-        if (startError.message.includes('CanvasRenderingContext2D')) {
+        console.error('First scanner start attempt failed:', startError);
+        // Try fallback if first attempt fails
+        if (startError.message && (
+            startError.message.includes('CanvasRenderingContext2D') || 
+            startError.message.includes('NotFoundError') ||
+            startError.message.includes('NotAllowedError') ||
+            startError.message.includes('NotReadableError')
+        )) {
           console.log('Attempting fallback scanning mode...');
-          await startScanner({
-            ...scannerConfig,
-            experimentalFeatures: {
-              useBarCodeDetectorIfSupported: false
-            }
-          });
+          try {
+            await startScanner({
+              ...scannerConfig,
+              experimentalFeatures: {
+                useBarCodeDetectorIfSupported: false
+              }
+            });
+          } catch (fallbackError) {
+            console.error('Fallback scanner also failed:', fallbackError);
+            throw new Error('Scanner initialization failed. Please try manual input.');
+          }
         } else {
           throw startError;
         }
@@ -138,14 +235,18 @@ const Scanner = ({ onScan, location, isProcessing }) => {
 
       if (mountedRef.current) {
         setScannerReady(true);
+        setIsScannerActive(true);
       }
     } catch (err) {
       console.error('Scanner initialization error:', err);
       if (mountedRef.current) {
-        setError(err.message);
+        setError(err.message || 'Failed to initialize scanner. Try manual input.');
+        setManualMode(true);
       }
+    } finally {
+      initializingRef.current = false;
     }
-  }, [location, handleSuccessfulScan, handleScannerError, initializeCamera, scannerConfig]);
+  }, [location, handleSuccessfulScan, handleScannerError, initializeCamera, scannerConfig, isScannerActive, stopScanner]);
 
   // Handle barcode input with improved debouncing
   const handleBarcodeInput = useCallback((event) => {
@@ -180,19 +281,40 @@ const Scanner = ({ onScan, location, isProcessing }) => {
     }
   }, [isProcessing, location, barcodeInput, onScan]);
 
-  // Resize handler with proper cleanup
+  // Handle resize with debounce and proper error handling
   const handleResize = useMemo(() => 
     debounce(() => {
-      if (scannerRef.current) {
-        const newConfig = {
-          ...scannerConfig,
-          qrbox: calculateQrBoxSize()
-        };
-        scannerRef.current.applyVideoConstraints(newConfig);
+      if (scannerRef.current && isScannerActive) {
+        try {
+          const newConfig = {
+            ...scannerConfig,
+            qrbox: calculateQrBoxSize()
+          };
+          scannerRef.current.applyVideoConstraints(newConfig);
+        } catch (err) {
+          console.error('Error applying video constraints:', err);
+        }
       }
     }, 250),
-    [scannerConfig, calculateQrBoxSize]
+    [scannerConfig, calculateQrBoxSize, isScannerActive]
   );
+
+  // Handle visibility changes to properly pause/resume camera
+  const handleVisibilityChange = useCallback(() => {
+    if (!scannerRef.current) return;
+    
+    if (document.hidden) {
+      // Page is hidden, pause the scanner to avoid media interruption
+      if (isScannerActive) {
+        stopScanner()
+          .catch(err => console.error('Error pausing scanner:', err));
+      }
+    } else if (!document.hidden && location && !isProcessing && !isScannerActive && !initializingRef.current) {
+      // Page is visible again, restart the scanner
+      initializeScanner()
+        .catch(err => console.error('Error resuming scanner:', err));
+    }
+  }, [location, isProcessing, isScannerActive, stopScanner, initializeScanner]);
 
   // Setup effect with improved cleanup
   useEffect(() => {
@@ -202,31 +324,28 @@ const Scanner = ({ onScan, location, isProcessing }) => {
       initializeScanner();
       document.addEventListener('keydown', handleBarcodeInput);
       window.addEventListener('resize', handleResize);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
       
       return () => {
         mountedRef.current = false;
         document.removeEventListener('keydown', handleBarcodeInput);
         window.removeEventListener('resize', handleResize);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         handleResize.cancel();
+        handleSuccessfulScan.cancel();
         
-        const cleanup = async () => {
-          if (scannerRef.current) {
-            try {
-              const isScanning = await scannerRef.current.isScanning();
-              if (isScanning) {
-                await scannerRef.current.stop();
-              }
-              scannerRef.current.clear();
-            } catch (err) {
-              console.error('Scanner cleanup error:', err);
-            }
-          }
-        };
-
-        cleanup();
+        // Enhanced cleanup with proper error handling
+        if (scannerRef.current) {
+          stopScanner()
+            .catch(err => console.error('Final scanner cleanup error:', err))
+            .finally(() => {
+              scannerRef.current = null;
+            });
+        }
         
         if (barcodeTimeoutRef.current) {
           clearTimeout(barcodeTimeoutRef.current);
+          barcodeTimeoutRef.current = null;
         }
       };
     }
@@ -234,7 +353,39 @@ const Scanner = ({ onScan, location, isProcessing }) => {
     return () => {
       mountedRef.current = false;
     };
-  }, [location, handleBarcodeInput, initializeScanner, handleResize]);
+  }, [location, handleBarcodeInput, initializeScanner, handleResize, handleVisibilityChange, handleSuccessfulScan, stopScanner]);
+
+  // Reset scanner when processing state changes (successful scan)
+  useEffect(() => {
+    if (!isProcessing && location && !isScannerActive && !initializingRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        initializeScanner()
+          .catch(err => console.error('Error reinitializing scanner after processing:', err));
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isProcessing, location, isScannerActive, initializeScanner]);
+
+  // Handle manual barcode submission
+  const handleManualSubmit = (e) => {
+    e.preventDefault();
+    if (manualBarcode.trim()) {
+      onScan(manualBarcode.trim());
+      setManualBarcode('');
+    }
+  };
+
+  // Toggle between camera and manual input
+  const toggleInputMode = () => {
+    setManualMode(!manualMode);
+    if (manualMode && scannerRef.current === null) {
+      // If switching to camera mode, initialize scanner
+      initializeScanner()
+        .catch(err => console.error('Error initializing scanner after manual mode:', err));
+    }
+  };
 
   return (
     <div className="max-w-lg w-full mx-auto mb-8">
@@ -242,11 +393,48 @@ const Scanner = ({ onScan, location, isProcessing }) => {
         <div className="aspect-square rounded-2xl overflow-hidden bg-black bg-opacity-20 border border-white border-opacity-10 flex items-center justify-center text-white text-opacity-70">
           Please select a location to activate scanner
         </div>
+      ) : manualMode ? (
+        <div className="aspect-square rounded-2xl overflow-hidden bg-black bg-opacity-20 border border-white border-opacity-10 flex flex-col items-center justify-center p-4">
+          <h3 className="text-white text-lg mb-4">Manual Barcode Entry</h3>
+          <form onSubmit={handleManualSubmit} className="w-full max-w-sm">
+            <div className="flex items-center border-b border-white border-opacity-20 py-2 mb-4">
+              <input 
+                type="text" 
+                value={manualBarcode}
+                onChange={(e) => setManualBarcode(e.target.value)}
+                placeholder="Enter barcode/ID"
+                className="appearance-none bg-transparent border-none w-full text-white mr-3 py-1 px-2 leading-tight focus:outline-none"
+              />
+              <button 
+                type="submit"
+                className="flex-shrink-0 bg-blue-500 hover:bg-blue-700 border-blue-500 hover:border-blue-700 text-sm border-4 text-white py-1 px-2 rounded"
+                disabled={isProcessing}
+              >
+                Submit
+              </button>
+            </div>
+          </form>
+          <p className="text-white text-opacity-70 text-sm mb-4">
+            You can scan with USB scanner or type the ID
+          </p>
+          <button 
+            onClick={toggleInputMode}
+            className="mt-4 text-blue-400 hover:text-blue-300 underline"
+          >
+            Switch to camera scanner
+          </button>
+        </div>
       ) : hasCameraPermission === false ? (
         <div className="aspect-square rounded-2xl overflow-hidden bg-black bg-opacity-20 border border-white border-opacity-10 flex flex-col items-center justify-center text-white text-opacity-70">
           <Ban size={48} className="mb-4 text-red-400" />
           <p>Camera access denied</p>
           <p className="text-sm mt-2">USB scanner still available</p>
+          <button 
+            onClick={toggleInputMode}
+            className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Use Manual Input
+          </button>
         </div>
       ) : (
         <div 
@@ -260,6 +448,26 @@ const Scanner = ({ onScan, location, isProcessing }) => {
       {error && (
         <div className="mt-4 text-red-400 text-sm text-center">
           {error}
+          {error.toLowerCase().includes('scanner') && (
+            <button 
+              onClick={toggleInputMode}
+              className="ml-2 text-blue-400 hover:text-blue-300 underline"
+            >
+              Switch to manual input
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Toggle button at the bottom for easy switching */}
+      {location && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={toggleInputMode}
+            className="text-blue-400 hover:text-blue-300 text-sm underline"
+          >
+            {manualMode ? 'Try camera scanner' : 'Use manual input instead'}
+          </button>
         </div>
       )}
     </div>

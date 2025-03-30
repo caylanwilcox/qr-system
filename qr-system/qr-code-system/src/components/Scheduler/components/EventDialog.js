@@ -4,8 +4,62 @@ import { useSchedulerContext } from '../context/SchedulerContext';
 import { useAuth } from '../../../services/authContext';
 import { ref, get } from 'firebase/database';
 import { database } from '../../../services/firebaseConfig';
+import moment from 'moment-timezone';
 import '../styles/EventDialog.css';
+import { 
+  EVENT_TYPES, 
+  EVENT_TYPE_DISPLAY_NAMES, 
+  normalizeEventType,
+  getChicagoTime
+} from '../../../utils/eventUtils';
 
+// Export meeting type mapping
+export const MEETING_TYPE_MAPPING = {
+  "PADRINOS Y OREJAS": "padrinos",
+  "GENERAL": "general", 
+  "INICIANDO EL CAMINO": "iniciando",
+  "CIRCULO DE RECUPERACION": "recuperacion",
+  "TRIBUNA": "tribuna",
+  "SEGUIMIENTO": "seguimiento",
+  "CIRCULO DE ESTUDIO": "estudio",
+  "NOCHE DE GUERRO": "guerrero"
+};
+
+// Define standardized event types for the dropdown
+const eventTypes = [
+  { 
+    id: EVENT_TYPES.WORKSHOPS, 
+    name: EVENT_TYPE_DISPLAY_NAMES[EVENT_TYPES.WORKSHOPS] || 'PO Workshop (Monthly)',
+    category: EVENT_TYPES.WORKSHOPS
+  },
+  { 
+    id: EVENT_TYPES.MEETINGS, 
+    name: EVENT_TYPE_DISPLAY_NAMES[EVENT_TYPES.MEETINGS] || 'PO Group Meeting',
+    category: EVENT_TYPES.MEETINGS
+  },
+  { 
+    id: EVENT_TYPES.HACIENDAS, 
+    name: EVENT_TYPE_DISPLAY_NAMES[EVENT_TYPES.HACIENDAS] || 'Hacienda',
+    category: EVENT_TYPES.HACIENDAS
+  },
+  { 
+    id: EVENT_TYPES.JUNTA_HACIENDA, 
+    name: EVENT_TYPE_DISPLAY_NAMES[EVENT_TYPES.JUNTA_HACIENDA] || 'Junta de Hacienda',
+    category: EVENT_TYPES.JUNTA_HACIENDA
+  },
+  { 
+    id: EVENT_TYPES.GESTION, 
+    name: EVENT_TYPE_DISPLAY_NAMES[EVENT_TYPES.GESTION] || 'Gestion',
+    category: EVENT_TYPES.GESTION
+  },
+  { 
+    id: 'other', 
+    name: 'Other (Will not appear in timeline)',
+    category: null
+  }
+];
+
+// Define the event dialog component
 const EventDialog = () => {
   const {
     events,
@@ -34,6 +88,7 @@ const EventDialog = () => {
     description: '',
     location: '',
     department: '',
+    eventType: '',  // Field for event type
     start: new Date(),
     end: new Date(),
     isUrgent: false
@@ -45,6 +100,7 @@ const EventDialog = () => {
       console.log("Selected event changed:", {
         id: selectedEvent.id,
         title: selectedEvent.title,
+        eventType: selectedEvent.eventType, // Log the event type if it exists
         start: selectedEvent.start instanceof Date ? selectedEvent.start.toISOString() : selectedEvent.start,
         end: selectedEvent.end instanceof Date ? selectedEvent.end.toISOString() : selectedEvent.end
       });
@@ -63,12 +119,15 @@ const EventDialog = () => {
         setLoading(true);
         
         // Start with the locations from context
-        const baseLocations = [...locations];
+        let baseLocations = [...locations];
+        
+        // Add "All Locations" option at the beginning
+        baseLocations = ["All Locations", ...baseLocations];
         
         // For admins, filter by permissions
         if (currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'super_admin') {
           const filteredLocations = baseLocations.filter(location => 
-            canManageLocation(location)
+            location === "All Locations" || canManageLocation(location)
           );
           setAvailableLocations(filteredLocations);
         } else {
@@ -104,6 +163,7 @@ const EventDialog = () => {
         description: selectedEvent.description || '',
         location: selectedEvent.location || '',
         department: selectedEvent.department || '',
+        eventType: selectedEvent.eventType || 'other', // Set default to 'other' if not specified
         start: selectedEvent.start || new Date(),
         end: selectedEvent.end || new Date(),
         isUrgent: selectedEvent.isUrgent || false
@@ -112,7 +172,8 @@ const EventDialog = () => {
       // For new event, set default location to first managed location
       setFormData(prev => ({
         ...prev,
-        location: availableLocations[0]
+        location: availableLocations[0],
+        eventType: 'other' // Default event type for new events
       }));
     }
   }, [selectedEvent, availableLocations, currentUser]);
@@ -125,6 +186,7 @@ const EventDialog = () => {
       description: '',
       location: availableLocations.length > 0 ? availableLocations[0] : '',
       department: '',
+      eventType: 'other', // Reset to default
       start: new Date(),
       end: new Date(),
       isUrgent: false
@@ -140,40 +202,45 @@ const EventDialog = () => {
       return;
     }
     
+    // Validate event type is selected
+    if (!formData.eventType) {
+      setAuthError('Please select an event type.');
+      return;
+    }
+    
     try {
+      // Convert date objects to Chicago timezone ISO strings
+      const chicagoStart = moment(formData.start).tz('America/Chicago').toISOString();
+      const chicagoEnd = moment(formData.end).tz('America/Chicago').toISOString();
+      
+      // Find the selected event type option
+      const selectedEventType = eventTypes.find(type => type.id === formData.eventType);
+      
+      // Create data with standardized time
+      const eventDataToSave = {
+        ...formData,
+        start: chicagoStart,
+        end: chicagoEnd,
+        // Use the canonical eventType ID which matches the DB category
+        eventType: formData.eventType, 
+        // Include display name for UI
+        eventTypeName: selectedEventType?.name || 'Other'
+      };
+      
+      console.log("EVENT DATA TO SAVE:", eventDataToSave);
+      
       if (selectedEvent?.id) {
         // Add debugging before update
-        console.log("EVENT UPDATE - Current events in state:", events);
         console.log("EVENT UPDATE - Selected event before update:", selectedEvent);
-        console.log("EVENT UPDATE - Form data for update:", formData);
-        
-        // Format dates for better logging
-        const debugFormData = {
-          ...formData,
-          start: formData.start instanceof Date ? formData.start.toISOString() : formData.start,
-          end: formData.end instanceof Date ? formData.end.toISOString() : formData.end
-        };
-        
-        console.log("EVENT UPDATE - Form data with formatted dates:", debugFormData);
+        console.log("EVENT UPDATE - Form data for update:", eventDataToSave);
         
         // Perform the update
-        await handleUpdateEvent(selectedEvent.id, formData);
+        await handleUpdateEvent(selectedEvent.id, eventDataToSave);
         
         // Add debugging after update
         console.log("EVENT UPDATE - Update completed successfully");
-        setTimeout(() => {
-          console.log("EVENT UPDATE - Events in state after update:", events);
-          
-          // Check if the event is still in state
-          const eventStillExists = events.some(e => e.id === selectedEvent.id);
-          console.log(`EVENT UPDATE - Event ${selectedEvent.id} exists in state: ${eventStillExists}`);
-          
-          if (!eventStillExists) {
-            console.error("EVENT UPDATE - Event disappeared after update!");
-          }
-        }, 1000); // Check state after a short delay
       } else {
-        await handleCreateEvent(formData);
+        await handleCreateEvent(eventDataToSave);
       }
       handleClose();
     } catch (error) {
@@ -211,6 +278,7 @@ const EventDialog = () => {
     const { name, value } = e.target;
     
     try {
+      // Parse the date from the input value (already in local timezone)
       const newDate = new Date(value);
       
       // Validate the date
@@ -238,7 +306,18 @@ const EventDialog = () => {
     
     // Only save the event if it doesn't exist yet
     if (!selectedEvent?.id) {
-      handleCreateEvent(formData).then(() => {
+      // Convert date objects to Chicago timezone ISO strings
+      const chicagoStart = moment(formData.start).tz('America/Chicago').toISOString();
+      const chicagoEnd = moment(formData.end).tz('America/Chicago').toISOString();
+      
+      // Create data with standardized time
+      const eventDataToSave = {
+        ...formData,
+        start: chicagoStart,
+        end: chicagoEnd
+      };
+      
+      handleCreateEvent(eventDataToSave).then(() => {
         // The assignment dialog will open automatically after creation
         // (handled in useEventHandlers hook)
       }).catch(error => {
@@ -319,6 +398,29 @@ const EventDialog = () => {
               />
             </div>
 
+            {/* Event Type dropdown field */}
+            <div className="form-group">
+              <label htmlFor="eventType">Event Type <span className="required-field">*</span></label>
+              <select
+                id="eventType"
+                name="eventType"
+                value={formData.eventType}
+                onChange={handleChange}
+                required
+                className="form-input"
+              >
+                <option value="">Select Event Type</option>
+                {eventTypes.map(type => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+              <small className="input-help-text">
+                Event type determines how this event appears in employee timelines
+              </small>
+            </div>
+
             <div className="form-group">
               <label htmlFor="description">Description</label>
               <textarea
@@ -356,6 +458,11 @@ const EventDialog = () => {
                     ))}
                   </select>
                 )}
+                {formData.location === "All Locations" && (
+                  <small className="input-help-text">
+                    This event will be visible across all locations
+                  </small>
+                )}
               </div>
 
               <div className="form-group">
@@ -379,7 +486,11 @@ const EventDialog = () => {
                   type="datetime-local"
                   id="start"
                   name="start"
-                  value={formData.start instanceof Date ? formData.start.toISOString().slice(0, 16) : formData.start}
+                  value={formData.start instanceof Date ? 
+                    // Format for local timezone
+                    moment(formData.start).format('YYYY-MM-DDTHH:mm') : 
+                    formData.start
+                  }
                   onChange={handleDateTimeChange}
                   required
                   className="form-input"
@@ -392,7 +503,11 @@ const EventDialog = () => {
                   type="datetime-local"
                   id="end"
                   name="end"
-                  value={formData.end instanceof Date ? formData.end.toISOString().slice(0, 16) : formData.end}
+                  value={formData.end instanceof Date ? 
+                    // Format for local timezone
+                    moment(formData.end).format('YYYY-MM-DDTHH:mm') : 
+                    formData.end
+                  }
                   onChange={handleDateTimeChange}
                   required
                   className="form-input"
@@ -437,7 +552,7 @@ const EventDialog = () => {
                 <button 
                   type="submit" 
                   className="submit-button"
-                  disabled={availableLocations.length === 0}
+                  disabled={availableLocations.length === 0 || !formData.eventType}
                 >
                   {selectedEvent ? 'Update Event' : 'Create Event'}
                 </button>

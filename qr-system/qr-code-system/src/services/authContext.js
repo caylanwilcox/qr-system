@@ -3,7 +3,10 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  getIdTokenResult
+  getIdTokenResult,
+  updatePassword, 
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import { ref, get, set } from 'firebase/database';
 import { auth, database } from './firebaseConfig';
@@ -97,6 +100,42 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Reauthenticate the user (required before changing password)
+  const reauthenticateUser = async (currentPassword) => {
+    try {
+      if (!auth.currentUser) {
+        throw new Error('No user is logged in');
+      }
+      
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email,
+        currentPassword
+      );
+      
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      return true;
+    } catch (error) {
+      console.error('Reauthentication error:', error);
+      throw error;
+    }
+  };
+
+  // Change user password
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      // First reauthenticate
+      await reauthenticateUser(currentPassword);
+      
+      // Then update password
+      await updatePassword(auth.currentUser, newPassword);
+      
+      return true;
+    } catch (error) {
+      console.error('Password change error:', error);
+      throw error;
+    }
+  };
+
   // Check if user has required role
   const hasRequiredRole = (userRole, requiredRole) => {
     return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
@@ -130,7 +169,7 @@ export const AuthProvider = ({ children }) => {
     return user.managementPermissions.managedDepartments.includes(department);
   };
 
-  // NEW FUNCTION: Get all locations that the current user can manage
+  // Get all locations that the current user can manage
   const getManagedLocations = async () => {
     if (!user) return [];
     
@@ -253,7 +292,9 @@ export const AuthProvider = ({ children }) => {
     canManageLocation,
     canManageDepartment,
     managementPermissions,
-    getManagedLocations // Add the new function
+    getManagedLocations,
+    changePassword,
+    reauthenticateUser
   };
 
   return (
