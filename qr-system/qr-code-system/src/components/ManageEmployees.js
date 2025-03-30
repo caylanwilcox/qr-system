@@ -3,15 +3,17 @@ import { ref, onValue, update } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, Search, Users, Activity } from 'lucide-react';
+import { useAuth } from '../services/authContext';
 import './ManageEmployees.css';
 
-const ManageEmployees = () => {
+const ManageEmployees = ({ locationFiltered = false }) => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   const locations = [
     'Aurora',
@@ -20,9 +22,35 @@ const ManageEmployees = () => {
     'Elgin',
     'Joliet',
     'Wheeling',
-  
     'Javs',
   ];
+
+  // Determine admin's location or admin status
+  const [adminLocation, setAdminLocation] = useState(null);
+  
+  useEffect(() => {
+    const fetchAdminLocation = async () => {
+      if (!user || !locationFiltered) return;
+      
+      // Fetch the admin's profile to get their primary location
+      try {
+        const userRef = ref(database, `users/${user.uid}/profile`);
+        
+        onValue(userRef, (snapshot) => {
+          const userData = snapshot.val();
+          if (userData && userData.primaryLocation) {
+            setAdminLocation(userData.primaryLocation);
+            // Automatically set selected location for location admin
+            setSelectedLocation(userData.primaryLocation);
+          }
+        });
+      } catch (err) {
+        console.error('Error fetching admin location:', err);
+      }
+    };
+    
+    fetchAdminLocation();
+  }, [user, locationFiltered]);
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -84,7 +112,15 @@ const ManageEmployees = () => {
               };
             });
 
-          setEmployees(employeeList);
+          // If location filtering is enabled and admin location is set, filter by admin's location
+          let filteredList = employeeList;
+          if (locationFiltered && adminLocation) {
+            filteredList = employeeList.filter(
+              emp => emp.location.toLowerCase() === adminLocation.toLowerCase()
+            );
+          }
+
+          setEmployees(filteredList);
           setError(null);
           setLoading(false);
         });
@@ -96,7 +132,7 @@ const ManageEmployees = () => {
     };
 
     fetchEmployees();
-  }, []);
+  }, [adminLocation, locationFiltered]);
 
   const filterEmployees = (employeeList) => {
     let filtered = employeeList;
@@ -198,7 +234,12 @@ const ManageEmployees = () => {
           {employees.map((employee) => (
             <tr key={employee.id}>
               <td>
-                <Link to={`/super-admin/users/${employee.id}`} className="employee-name">
+                <Link 
+                  to={locationFiltered 
+                    ? `/location-admin/users/${employee.id}` 
+                    : `/super-admin/users/${employee.id}`}
+                  className="employee-name"
+                >
                   {employee.name}
                 </Link>
               </td>
@@ -275,6 +316,8 @@ const ManageEmployees = () => {
     );
   }
 
+  // For location admins, we already set their location automatically
+  // and don't need to show location selection cards
   if (selectedLocation) {
     const locationEmployees = employees.filter(
       (emp) => emp.location.toLowerCase() === selectedLocation.toLowerCase()
@@ -286,47 +329,50 @@ const ManageEmployees = () => {
 
     return (
       <div className="manage-dashboard">
-        <div className="location-header">
-          <button onClick={() => setSelectedLocation(null)} className="back-button">
-            <ChevronLeft size={20} />
-            Back to Locations
-          </button>
+        {/* Only show back button if not a location admin with fixed location */}
+        {!locationFiltered && (
+          <div className="location-header">
+            <button onClick={() => setSelectedLocation(null)} className="back-button">
+              <ChevronLeft size={20} />
+              Back to Locations
+            </button>
+          </div>
+        )}
+        
+        <div className="header-content">
+          <h2 className="location-title">{selectedLocation}</h2>
+          <div className="location-summary">
+            <div className="summary-item">
+              <Users size={16} />
+              Total Members: {locationEmployees.length}
+            </div>
+            <div className="summary-item active-count">
+              <Activity size={16} />
+              Active Members: {activeCount}
+            </div>
+          </div>
           
-          <div className="header-content">
-            <h2 className="location-title">{selectedLocation}</h2>
-            <div className="location-summary">
-              <div className="summary-item">
-                <Users size={16} />
-                Total Members: {locationEmployees.length}
-              </div>
-              <div className="summary-item active-count">
-                <Activity size={16} />
-                Active Members: {activeCount}
-              </div>
+          <div className="header-controls">
+            <div className="search-container">
+              <Search size={20} />
+              <input
+                type="text"
+                placeholder="Search members..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="search-input"
+              />
             </div>
             
-            <div className="header-controls">
-              <div className="search-container">
-                <Search size={20} />
-                <input
-                  type="text"
-                  placeholder="Search members..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
-                />
-              </div>
-              
-              <select 
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="filter-select"
-              >
-                <option value="all">All Members</option>
-                <option value="active">Active Members</option>
-                <option value="inactive">Inactive Members</option>
-              </select>
-            </div>
+            <select 
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Members</option>
+              <option value="active">Active Members</option>
+              <option value="inactive">Inactive Members</option>
+            </select>
           </div>
         </div>
 
@@ -341,6 +387,7 @@ const ManageEmployees = () => {
     );
   }
 
+  // Only super admins should see the location grid
   return (
     <div className="manage-dashboard">
       <div className="dashboard-header">
