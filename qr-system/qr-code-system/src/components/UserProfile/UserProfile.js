@@ -1,325 +1,431 @@
-'use client';
-
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import { ref, update } from 'firebase/database';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ref, onValue, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
-import { Mail, Phone, MapPin, Calendar, AlertCircle, Lock, Users } from 'lucide-react';
+import { useAuth } from '../../services/authContext';
+import { ArrowLeft, Edit, Save, X, AlertTriangle, Award, PieChart, Clock } from 'lucide-react';
+import PersonalInfoSection from './PersonalInfoSection';
+import './styles/UserProfile.css';
 
-const FormField = ({
-  label,
-  icon,
-  name,
-  type = 'text',
-  value,
-  onChange,
-  disabled,
-  error,
-  required,
-  children,
-}) => (
-  <div className="form-group">
-    <label htmlFor={name} className="block mb-2">
-      <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-        {icon}
-        <span>{label}</span>
-      </span>
-    </label>
-    {children || (
-      <input
-        id={name}
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        required={required}
-        aria-invalid={error ? 'true' : 'false'}
-        aria-describedby={error ? `${name}-error` : undefined}
-        className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-          px-3 py-2 text-white/90 placeholder-white/50
-          focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-          disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-          backdrop-blur-md transition-all duration-200
-          ${error ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-        `}
-      />
-    )}
-    {error && (
-      <div id={`${name}-error`} className="text-red-400 text-sm mt-1 flex items-center gap-1">
-        <AlertCircle size={14} />
-        <span>{error}</span>
-      </div>
-    )}
-  </div>
-);
+const UserProfile = ({ locationRestricted = false }) => {
+  const { employeeId } = useParams();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
+  const [profileData, setProfileData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [editMode, setEditMode] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+  const [successMessage, setSuccessMessage] = useState(null);
 
-const PersonalInfoSection = ({
-  formData,
-  editMode,
-  handleInputChange,
-  errors = {},
-  onSave,
-  onCancel,
-  userId, // Add userId as a prop to allow admin to edit different users
-}) => {
-  const [showPassword, setShowPassword] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState(null);
+  // Determine if viewing own profile or someone else's
+  const isOwnProfile = !employeeId || employeeId === user?.uid;
+  const userId = employeeId || user?.uid;
 
-  // Custom handler for password field to ensure it works with the form's overall input handling
-  const handlePasswordChange = (e) => {
-    if (handleInputChange) {
-      handleInputChange(e);
+  // Prepare editableData state separate from profileData
+  const [editableData, setEditableData] = useState({});
+
+  useEffect(() => {
+    if (!userId) {
+      setError("No user ID available");
+      setLoading(false);
+      return;
     }
+
+    const userRef = ref(database, `users/${userId}`);
+    
+    const unsubscribe = onValue(userRef, (snapshot) => {
+      try {
+        const userData = snapshot.val();
+        
+        if (!userData) {
+          setError("User not found");
+          setProfileData({});
+        } else {
+          // Extract profile data
+          const profile = userData.profile || {};
+          const stats = userData.stats || {};
+          
+          // If location is restricted and the profile's location doesn't match admin's location
+          if (locationRestricted && user?.profile?.primaryLocation && 
+              profile.primaryLocation !== user.profile.primaryLocation) {
+            setError("You don't have permission to view this profile");
+            setProfileData({});
+          } else {
+            // Format data for the profile view
+            const formattedData = {
+              id: userId,
+              email: profile.email || '',
+              name: profile.name || '',
+              phone: profile.phone || '',
+              location: profile.primaryLocation || '',
+              joinDate: profile.joinDate || '',
+              service: profile.service || '',
+              role: profile.role || 'employee',
+              status: profile.status || 'inactive',
+              stats: {
+                daysPresent: stats.daysPresent || 0,
+                daysAbsent: stats.daysAbsent || 0,
+                daysLate: stats.daysLate || 0,
+                attendanceRate: stats.attendanceRate || 0,
+                onTimeRate: stats.onTimeRate || 0,
+              }
+            };
+            
+            setProfileData(formattedData);
+            setEditableData(formattedData);
+          }
+        }
+      } catch (err) {
+        console.error("Error processing user data:", err);
+        setError("Failed to load user profile");
+      } finally {
+        setLoading(false);
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [userId, user, locationRestricted]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditableData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(prevState => !prevState);
+  const validateForm = () => {
+    const errors = {};
+    
+    // Validate phone (simple validation)
+    if (editableData.phone && !/^\d{10,15}$/.test(editableData.phone.replace(/\D/g, ''))) {
+      errors.phone = "Please enter a valid phone number";
+    }
+    
+    // Validate password if provided
+    if (editableData.password && editableData.password.length < 6) {
+      errors.password = "Password must be at least 6 characters";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSave = async () => {
+    if (!validateForm()) return;
+    
     try {
-      if (!userId) {
-        setUpdateStatus({ type: 'error', message: 'No user ID provided' });
-        return;
-      }
-
-      // Create updates for database fields
+      // Format updates for Firebase
       const updates = {};
       
-      // Only update phone and service in the profile object
-      updates[`users/${userId}/profile/phone`] = formData.phone || '';
-      
-      // Add service if it exists
-      if (formData.service) {
-        console.log("Updating service type to:", formData.service);
-        updates[`users/${userId}/profile/service`] = formData.service;
-      }
-
-      // Add password update if it exists and is not empty
-      if (formData.password && formData.password.trim() !== '') {
-        console.log("Updating password (normally would use Firebase Auth instead of direct DB update)");
-        updates[`users/${userId}/profile/password`] = formData.password;
-      }
-
-      // Update Firebase database only
-      console.log("Updating user profile:", updates);
-      await update(ref(database), updates);
-      console.log("Database update completed successfully");
-
-      setUpdateStatus({ 
-        type: 'success', 
-        message: 'Profile updated successfully!' 
-      });
-
-      // Call the onSave callback if provided
-      if (onSave) {
-        onSave();
+      // Only update fields that are editable
+      if (editableData.phone !== profileData.phone) {
+        updates[`users/${userId}/profile/phone`] = editableData.phone || '';
       }
       
-      // Clear status after 3 seconds
-      setTimeout(() => setUpdateStatus(null), 3000);
+      if (editableData.service !== profileData.service) {
+        updates[`users/${userId}/profile/service`] = editableData.service || '';
+      }
       
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setUpdateStatus({ 
-        type: 'error', 
-        message: `Error: ${error.message}` 
-      });
+      if (editableData.password && editableData.password.trim() !== '') {
+        updates[`users/${userId}/profile/password`] = editableData.password;
+      }
+      
+      // Status can be toggled by admins
+      if (!isOwnProfile && editableData.status !== profileData.status) {
+        updates[`users/${userId}/profile/status`] = editableData.status;
+      }
+      
+      // Only update if there are changes
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates);
+        setSuccessMessage("Profile updated successfully");
+        
+        // Clear password field after update
+        setEditableData(prev => ({
+          ...prev,
+          password: ''
+        }));
+        
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 3000);
+      }
+      
+      setEditMode(false);
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      setError(`Update failed: ${err.message}`);
+      
+      setTimeout(() => {
+        setError(null);
+      }, 3000);
     }
   };
 
-  return (
-    <div className="bg-[rgba(13,25,48,0.4)] backdrop-blur-xl rounded-lg border border-white/10 shadow-xl">
-      <div className="p-6 border-b border-white/10">
-        <h2 className="text-lg font-semibold text-white/90">Personal Information</h2>
-        {userId && <p className="text-xs text-white/50 mt-1">User ID: {userId}</p>}
+  const handleCancel = () => {
+    // Reset editable data to current profile data
+    setEditableData(profileData);
+    setEditMode(false);
+    setFormErrors({});
+  };
+
+  const toggleStatus = async () => {
+    try {
+      const newStatus = profileData.status === 'active' ? 'inactive' : 'active';
+      
+      await update(ref(database, `users/${userId}/profile`), {
+        status: newStatus
+      });
+      
+      setSuccessMessage(`User is now ${newStatus}`);
+      
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+    } catch (err) {
+      console.error("Error toggling status:", err);
+      setError(`Failed to update status: ${err.message}`);
+      
+      setTimeout(() => {
+        setError(null);
+      }, 3000);
+    }
+  };
+
+  const handleBack = () => {
+    // Determine correct back navigation path based on user role
+    if (user?.role?.toLowerCase() === 'super_admin') {
+      navigate('/super-admin/manage-employees');
+    } else if (user?.role?.toLowerCase() === 'admin') {
+      navigate('/location-admin/manage-employees');
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+        <p>Loading profile...</p>
       </div>
+    );
+  }
 
-      {updateStatus && (
-        <div className={`mx-6 mt-4 p-3 rounded ${
-          updateStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
-        }`}>
-          {updateStatus.message}
+  if (error) {
+    return (
+      <div className="error-container">
+        <div className="error-icon">
+          <AlertTriangle size={48} />
         </div>
-      )}
+        <h2>Error</h2>
+        <p>{error}</p>
+        <button className="button" onClick={handleBack}>
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            label="Email"
-            icon={<Mail size={16} className="text-white/70" />}
-            name="email"
-            type="email"
-            value={formData.email || ''}
-            onChange={handleInputChange}
-            disabled={true}
-            error={errors.email}
-            required
-          />
+  // Check if we have profile data
+  if (!profileData || !profileData.id) {
+    return (
+      <div className="error-container">
+        <div className="error-icon">
+          <AlertTriangle size={48} />
+        </div>
+        <h2>Profile Not Found</h2>
+        <p>The requested user profile could not be found.</p>
+        <button className="button" onClick={handleBack}>
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
-          <FormField
-            label="Phone"
-            icon={<Phone size={16} className="text-white/70" />}
-            name="phone"
-            type="tel"
-            value={formData.phone || ''}
-            onChange={handleInputChange}
-            disabled={!editMode}
-            error={errors.phone}
-            required
-          />
-
-          <FormField
-            label="Location"
-            icon={<MapPin size={16} className="text-white/70" />}
-            name="location"
-            value={formData.location || ''}
-            disabled={true}
-          />
-
-          <FormField
-            label="Join Date"
-            icon={<Calendar size={16} className="text-white/70" />}
-            name="joinDate"
-            type="date"
-            value={formData.joinDate || ''}
-            disabled={true}
-          />
-
-          <FormField
-            label="Service Type"
-            icon={<Users size={16} className="text-white/70" />}
-            name="service"
-            disabled={!editMode}
-            error={errors.service}
-          >
-            <select
-              id="service"
-              name="service"
-              value={formData.service || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-                px-3 py-2 text-white/90
-                focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-                disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-                backdrop-blur-md transition-all duration-200
-                ${errors.service ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-              `}
-            >
-              <option value="">Select Service Type</option>
-              <option value="RSG">Orejas</option>
-              <option value="COM">Apoyos</option>
-              <option value="LIDER">Lider</option>
-              <option value="TESORERO DE GRUPO">Tesorero de Grupo</option>
-              <option value="PPI">PPI</option>
-              <option value="MANAGER DE HACIENDA">Manager de Hacienda</option>
-              <option value="COORDINADOR DE HACIENDA">Coordinador de Hacienda</option>
-              <option value="ATRACCION INTERNA">Atraccion Interna</option>
-              <option value="ATRACCION EXTERNA">Atraccion Externa</option>
-              <option value="SECRETARY">Secretary</option>
-              <option value="LITERATURA">Literatura</option>
-              <option value="SERVIDOR DE CORO">Servidor de Coro</option>
-              <option value="SERVIDOR DE JAV EN MESA">Servidor de JAV en Mesa</option>
-              <option value="SERVIDOR DE SEGUIMIENTOS">Servidor de Seguimientos</option>
-            </select>
-          </FormField>
+  return (
+    <div className="user-profile-container">
+      {/* Back button */}
+      <button className="back-button" onClick={handleBack}>
+        <ArrowLeft size={18} />
+        <span>Back to Employee List</span>
+      </button>
+      
+      {/* Profile header */}
+      <div className="profile-header">
+        <div className="profile-avatar">
+          {profileData.name?.charAt(0) || 'U'}
+        </div>
+        
+        <div className="profile-info">
+          <h1 className="profile-name">{profileData.name}</h1>
           
-          {/* Custom Password Field with Toggle Button */}
-          <div className="form-group">
-            <label htmlFor="password" className="block mb-2">
-              <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-                <Lock size={16} className="text-white/70" />
-                <span>Password</span>
-              </span>
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                name="password"
-                value={formData.password || ''}
-                onChange={handlePasswordChange}
-                disabled={!editMode}
-                placeholder="Enter password"
-                className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-                  px-3 py-2 text-white/90 placeholder-white/50
-                  focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-                  disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-                  backdrop-blur-md transition-all duration-200 pr-12
-                  ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-                `}
-              />
-              {editMode && (
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-                >
-                  {showPassword ? "HIDE" : "SHOW"}
-                </button>
-              )}
-            </div>
-            {errors.password && (
-              <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                <AlertCircle size={14} />
-                <span>{errors.password}</span>
-              </div>
+          <div className="profile-meta">
+            <span className={`badge ${profileData.role}`}>{profileData.role}</span>
+            <span className={`badge ${profileData.status}`}>{profileData.status}</span>
+            {profileData.service && (
+              <span className="badge service">{profileData.service}</span>
             )}
           </div>
-
-          {editMode && (
-            <div>
-              <div className="text-amber-400 text-sm mb-2">
-                <strong>Note:</strong> For security reasons, your password changes here will only affect the database. 
-                For full authentication updates, please contact your administrator.
-              </div>
-              <div className="text-gray-300 text-xs">
-                You can update your phone number, service type, and password from this form.
-              </div>
-            </div>
+          
+          <div className="profile-location">
+            {profileData.location}
+          </div>
+        </div>
+        
+        <div className="profile-actions">
+          {/* Edit button - shown only if viewing own profile or admin/super_admin */}
+          {(isOwnProfile || 
+            ['admin', 'super_admin'].includes(user?.role?.toLowerCase())) && (
+            <button 
+              className="edit-button"
+              onClick={() => setEditMode(!editMode)}
+            >
+              {editMode ? (
+                <>
+                  <X size={16} />
+                  <span>Cancel</span>
+                </>
+              ) : (
+                <>
+                  <Edit size={16} />
+                  <span>Edit</span>
+                </>
+              )}
+            </button>
+          )}
+          
+          {/* Status toggle button - shown only for admins viewing other profiles */}
+          {!isOwnProfile && 
+           ['admin', 'super_admin'].includes(user?.role?.toLowerCase()) && (
+            <button 
+              className={`status-button ${profileData.status === 'active' ? 'deactivate' : 'activate'}`}
+              onClick={toggleStatus}
+            >
+              {profileData.status === 'active' ? 'Deactivate User' : 'Activate User'}
+            </button>
           )}
         </div>
       </div>
-
-      {editMode && (
-        <div className="px-6 py-4 border-t border-white/10 flex justify-end gap-2">
-          {onCancel && (
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
-            >
-              Cancel
-            </button>
-          )}
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-500"
-          >
-            Save Chsdsdsdes
-          </button>
+      
+      {/* Success/Error messages */}
+      {successMessage && (
+        <div className="success-message">
+          {successMessage}
         </div>
       )}
+      
+      {/* Tabs navigation */}
+      <div className="profile-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          <PieChart size={16} />
+          <span>Overview</span>
+        </button>
+        
+        <button 
+          className={`tab-button ${activeTab === 'performance' ? 'active' : ''}`}
+          onClick={() => setActiveTab('performance')}
+        >
+          <Award size={16} />
+          <span>Performance</span>
+        </button>
+        
+        <button 
+          className={`tab-button ${activeTab === 'attendance' ? 'active' : ''}`}
+          onClick={() => setActiveTab('attendance')}
+        >
+          <Clock size={16} />
+          <span>Attendance</span>
+        </button>
+      </div>
+      
+      {/* Tab content */}
+      <div className="tab-content">
+        {activeTab === 'overview' && (
+          <div className="overview-tab">
+            <PersonalInfoSection 
+              formData={editableData}
+              editMode={editMode}
+              handleInputChange={handleInputChange}
+              errors={formErrors}
+              onSave={handleSave}
+              onCancel={handleCancel}
+              userId={userId}
+            />
+          </div>
+        )}
+        
+        {activeTab === 'performance' && (
+          <div className="performance-tab">
+            <div className="card">
+              <h2>Performance Metrics</h2>
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <div className="metric-title">Attendance Rate</div>
+                  <div className={`metric-value ${
+                    profileData.stats.attendanceRate >= 90 ? 'excellent' :
+                    profileData.stats.attendanceRate >= 80 ? 'good' :
+                    profileData.stats.attendanceRate >= 70 ? 'average' : 'poor'
+                  }`}>
+                    {profileData.stats.attendanceRate}%
+                  </div>
+                </div>
+                
+                <div className="metric-card">
+                  <div className="metric-title">On-Time Rate</div>
+                  <div className={`metric-value ${
+                    profileData.stats.onTimeRate >= 90 ? 'excellent' :
+                    profileData.stats.onTimeRate >= 80 ? 'good' :
+                    profileData.stats.onTimeRate >= 70 ? 'average' : 'poor'
+                  }`}>
+                    {profileData.stats.onTimeRate}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'attendance' && (
+          <div className="attendance-tab">
+            <div className="card">
+              <h2>Attendance History</h2>
+              <div className="attendance-summary">
+                <div className="summary-card">
+                  <div className="summary-title">Days Present</div>
+                  <div className="summary-value">{profileData.stats.daysPresent}</div>
+                </div>
+                
+                <div className="summary-card">
+                  <div className="summary-title">Days Absent</div>
+                  <div className="summary-value">{profileData.stats.daysAbsent}</div>
+                </div>
+                
+                <div className="summary-card">
+                  <div className="summary-title">Days Late</div>
+                  <div className="summary-value">{profileData.stats.daysLate}</div>
+                </div>
+                
+                <div className="summary-card">
+                  <div className="summary-title">Total Days</div>
+                  <div className="summary-value">
+                    {profileData.stats.daysPresent + profileData.stats.daysAbsent}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-PersonalInfoSection.propTypes = {
-  formData: PropTypes.shape({
-    email: PropTypes.string,
-    phone: PropTypes.string,
-    location: PropTypes.string,
-    joinDate: PropTypes.string,
-    password: PropTypes.string,
-    service: PropTypes.string,
-  }).isRequired,
-  editMode: PropTypes.bool.isRequired,
-  handleInputChange: PropTypes.func.isRequired,
-  errors: PropTypes.object,
-  onSave: PropTypes.func,
-  onCancel: PropTypes.func,
-  userId: PropTypes.string, // User ID to update (for admin purposes)
-};
-
-export default PersonalInfoSection;
+export default UserProfile;

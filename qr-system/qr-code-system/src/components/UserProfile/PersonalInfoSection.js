@@ -1,10 +1,8 @@
-'use client';
-
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { ref, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
-import { Mail, Phone, MapPin, Calendar, AlertCircle, Lock, Users, Eye, EyeOff } from 'lucide-react';
+import { Mail, Phone, MapPin, Calendar, AlertCircle, Lock, Users } from 'lucide-react';
 
 const FormField = ({
   label,
@@ -66,6 +64,17 @@ const PersonalInfoSection = ({
   const [showPassword, setShowPassword] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
 
+  // Custom handler for password field to ensure it works with the form's overall input handling
+  const handlePasswordChange = (e) => {
+    if (handleInputChange) {
+      handleInputChange(e);
+    }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(prevState => !prevState);
+  };
+
   const handleSave = async () => {
     try {
       if (!userId) {
@@ -81,20 +90,16 @@ const PersonalInfoSection = ({
       
       // Add service if it exists
       if (formData.service) {
-        console.log("Updating service type to:", formData.service);
         updates[`users/${userId}/profile/service`] = formData.service;
       }
 
       // Add password update if it exists and is not empty
       if (formData.password && formData.password.trim() !== '') {
-        console.log("Updating password (normally would use Firebase Auth instead of direct DB update)");
         updates[`users/${userId}/profile/password`] = formData.password;
       }
 
       // Update Firebase database only
-      console.log("Updating user profile:", updates);
       await update(ref(database), updates);
-      console.log("Database update completed successfully");
 
       setUpdateStatus({ 
         type: 'success', 
@@ -200,52 +205,72 @@ const PersonalInfoSection = ({
               <option value="">Select Service Type</option>
               <option value="RSG">Orejas</option>
               <option value="COM">Apoyos</option>
+              <option value="LIDER">Lider</option>
+              <option value="TESORERO DE GRUPO">Tesorero de Grupo</option>
+              <option value="PPI">PPI</option>
+              <option value="MANAGER DE HACIENDA">Manager de Hacienda</option>
+              <option value="COORDINADOR DE HACIENDA">Coordinador de Hacienda</option>
+              <option value="ATRACCION INTERNA">Atraccion Interna</option>
+              <option value="ATRACCION EXTERNA">Atraccion Externa</option>
+              <option value="SECRETARY">Secretary</option>
+              <option value="LITERATURA">Literatura</option>
+              <option value="SERVIDOR DE CORO">Servidor de Coro</option>
+              <option value="SERVIDOR DE JAV EN MESA">Servidor de JAV en Mesa</option>
+              <option value="SERVIDOR DE SEGUIMIENTOS">Servidor de Seguimientos</option>
             </select>
           </FormField>
           
-          <FormField
-            label="Password"
-            icon={<Lock size={16} className="text-white/70" />}
-            name="password"
-            disabled={!editMode}
-            error={errors.password}
-          >
+          {/* Custom Password Field with Toggle Button */}
+          <div className="form-group">
+            <label htmlFor="password" className="block mb-2">
+              <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+                <Lock size={16} className="text-white/70" />
+                <span>Password</span>
+              </span>
+            </label>
             <div className="relative">
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
                 name="password"
                 value={formData.password || ''}
-                onChange={handleInputChange}
+                onChange={handlePasswordChange}
                 disabled={!editMode}
+                placeholder="Enter password"
                 className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
                   px-3 py-2 text-white/90 placeholder-white/50
                   focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
                   disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-                  backdrop-blur-md transition-all duration-200
+                  backdrop-blur-md transition-all duration-200 pr-12
                   ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
                 `}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-white/70 hover:text-white/90 transition-colors duration-200"
-                disabled={!editMode}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                title={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={18} className="text-blue-400" /> : <Eye size={18} className="text-gray-400" />}
-              </button>
+              {editMode && (
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                >
+                  {showPassword ? "HIDE" : "SHOW"}
+                </button>
+              )}
             </div>
-          </FormField>
+            {errors.password && (
+              <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
+                <AlertCircle size={14} />
+                <span>{errors.password}</span>
+              </div>
+            )}
+          </div>
 
           {editMode && (
             <div>
               <div className="text-amber-400 text-sm mb-2">
-                <strong>Note:</strong> Changing email or password requires additional Firebase configuration.
+                <strong>Note:</strong> For security reasons, your password changes here will only affect the database. 
+                For full authentication updates, please contact your administrator.
               </div>
               <div className="text-gray-300 text-xs">
-                For admin purposes, you can only update database fields like service type and phone.
+                You can update your phone number, service type, and password from this form.
               </div>
             </div>
           )}
