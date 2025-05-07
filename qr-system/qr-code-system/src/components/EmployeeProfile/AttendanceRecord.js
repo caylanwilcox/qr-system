@@ -1,7 +1,7 @@
 // src/components/AttendanceRecord.jsx
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { safeFormatDate, formatHours } from '../utils/dateUtils';
+import { safeFormatDate, formatHours } from '../SuperAdmin/dateUtils';
 
 const AttendanceRecord = ({ record, onDelete }) => {
   // Display the clock-in time safely

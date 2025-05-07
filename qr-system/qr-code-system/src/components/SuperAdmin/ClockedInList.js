@@ -1,25 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { format } from 'date-fns';
 import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
-
-// Helper function to get user's full name from various possible fields
-const getUserFullName = (user) => {
-  const profile = user.profile || {};
-  
-  // Priority order for name fields
-  if (profile.firstName && profile.lastName) {
-    return `${profile.firstName} ${profile.lastName}`;
-  }
-  
-  if (profile.name) return profile.name;
-  if (profile.displayName) return profile.displayName;
-  if (profile.fullName) return profile.fullName;
-  
-  if (profile.firstName) return profile.firstName;
-  if (profile.lastName) return profile.lastName;
-  
-  return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
-};
+import { useNavigate } from 'react-router-dom';
+import DateUtils from './dateUtils';
 
 // Status badge component with consistent styling
 const StatusBadge = ({ clockInTime }) => {
@@ -78,45 +60,35 @@ const StatusBadge = ({ clockInTime }) => {
   }
 };
 
-// Helper to format date in different formats - simplified and more robust
-const formatDateAlt = (isoDate, formatStr) => {
-  try {
-    if (!isoDate) return null;
-    
-    // Parse the ISO date (YYYY-MM-DD)
-    const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return null;
-    
-    const year = parseInt(match[1]);
-    const month = parseInt(match[2]);
-    const day = parseInt(match[3]);
-    
-    // MM/DD/YYYY format (with leading zeroes)
-    if (formatStr === 'MM/DD/YYYY') {
-      return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`;
-    }
-    
-    // M/D/YYYY format (without leading zeroes)
-    if (formatStr === 'M/D/YYYY') {
-      return `${month}/${day}/${year}`;
-    }
-    
-    return isoDate;
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return null;
+// Helper function to get user's full name from various possible fields
+const getUserFullName = (user) => {
+  const profile = user.profile || {};
+  
+  // Priority order for name fields
+  if (profile.firstName && profile.lastName) {
+    return `${profile.firstName} ${profile.lastName}`;
   }
+  
+  if (profile.name) return profile.name;
+  if (profile.displayName) return profile.displayName;
+  if (profile.fullName) return profile.fullName;
+  
+  if (profile.firstName) return profile.firstName;
+  if (profile.lastName) return profile.lastName;
+  
+  return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
 };
 
 const ClockedInList = ({ data, date }) => {
   const [clockedInUsers, setClockedInUsers] = useState([]);
   const [debug, setDebug] = useState({ checked: 0, found: 0 });
+  const navigate = useNavigate();
 
   // Get today's date if date is not provided
-  const effectiveDate = date || format(new Date(), 'yyyy-MM-dd');
-  const formattedDate = effectiveDate ? format(new Date(effectiveDate), 'MMMM d, yyyy') : 'Today';
+  const effectiveDate = date || DateUtils.getCurrentDateISO();
+  const formattedDate = effectiveDate ? DateUtils.formatDisplayDate(effectiveDate) : 'Today';
 
-  // Move the complex filtering logic to useEffect for better debugging
+  // Process data to find clocked in users for the specified date
   useEffect(() => {
     if (!data) {
       console.log("ClockedInList: No data provided");
@@ -137,6 +109,9 @@ const ClockedInList = ({ data, date }) => {
       user.id = id;
       checkedCount++;
       
+      // Get all possible date formats for the target date
+      const dateFormats = DateUtils.getAllDateFormats(effectiveDate);
+      
       // Check for clocked in status across multiple structures
       let isClocked = false;
       let clockInTime = null;
@@ -146,14 +121,9 @@ const ClockedInList = ({ data, date }) => {
       
       // 1. First check attendance object with various date formats
       if (user.attendance) {
-        // Check all possible date formats
-        const possibleDateFormats = [
-          effectiveDate,                      // YYYY-MM-DD
-          formatDateAlt(effectiveDate, 'MM/DD/YYYY'), // MM/DD/YYYY
-          formatDateAlt(effectiveDate, 'M/D/YYYY')    // M/D/YYYY
-        ].filter(Boolean);
-        
-        for (const dateFormat of possibleDateFormats) {
+        for (const dateFormat of dateFormats) {
+          if (!dateFormat) continue;
+          
           const entry = user.attendance[dateFormat];
           if (!entry) continue;
           
@@ -164,6 +134,18 @@ const ClockedInList = ({ data, date }) => {
             clockInTime = entry.time || entry.clockInTime || '';
             clockOutTime = entry.clockOutTime || null;
             onTime = entry.onTime === true;
+            
+            // If onTime is not explicitly set, determine based on time
+            if (onTime === undefined && clockInTime) {
+              try {
+                const clockInTimeObj = new Date(`2000-01-01 ${clockInTime}`);
+                const expectedTime = new Date(`2000-01-01 09:00`);
+                onTime = clockInTimeObj <= expectedTime;
+              } catch (e) {
+                // If parsing fails, default to false
+              }
+            }
+            
             break;
           }
         }
@@ -188,9 +170,14 @@ const ClockedInList = ({ data, date }) => {
               timestamp = ts;
               
               // Determine if on time
-              const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-              const expectedTime = new Date(`2000-01-01 09:00`);
-              onTime = clockInTime9AM <= expectedTime;
+              try {
+                const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
+                const expectedTime = new Date(`2000-01-01 09:00`);
+                onTime = clockInTime9AM <= expectedTime;
+              } catch (e) {
+                // If parsing fails, default to false
+              }
+              
               break;
             }
           } catch (e) {
@@ -255,16 +242,7 @@ const ClockedInList = ({ data, date }) => {
     setDebug({ checked: checkedCount, found: foundCount });
     
     // Log debug info
-    console.log(`ClockedInList: Checked ${checkedCount} users, found ${foundCount} clocked in`);
-    if (results.length === 0 && checkedCount > 0) {
-      console.log('ClockedInList: No users found clocked in, here are the first few user objects:', 
-                  Object.entries(data).slice(0, 2).map(([id, user]) => ({ 
-                    id, 
-                    hasProfile: !!user.profile,
-                    hasAttendance: !!user.attendance,
-                    hasClockInTimes: !!user.clockInTimes
-                  })));
-    }
+    console.log(`ClockedInList: Checked ${checkedCount} users, found ${foundCount} clocked in for date ${effectiveDate}`);
   }, [data, effectiveDate]);
 
   return (
@@ -283,7 +261,12 @@ const ClockedInList = ({ data, date }) => {
       ) : (
         <div className="user-list">
           {clockedInUsers.map(user => (
-            <div key={user.id} className="user-item">
+            <div 
+              key={user.id} 
+              className="user-item" 
+              onClick={() => navigate(`/super-admin/users/${user.id}`)}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="user-info">
                 <div className="user-name">
                   <span className={`status-dot bg-${user.padrinoColor}`}></span>

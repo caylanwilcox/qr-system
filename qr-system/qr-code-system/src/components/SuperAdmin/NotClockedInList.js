@@ -1,7 +1,7 @@
 import React from 'react';
-import { format, isValid, parse } from 'date-fns';
 import { AlertCircle } from 'lucide-react';
-import moment from 'moment-timezone';
+import { useNavigate } from 'react-router-dom';
+import DateUtils from './dateUtils';
 
 // Helper function to get user's full name from various possible fields
 const getUserFullName = (user) => {
@@ -22,91 +22,75 @@ const getUserFullName = (user) => {
   return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
 };
 
-// Helper to get Chicago time (matching the QR Scanner)
-const getChicagoTime = () => {
-  return moment().tz('America/Chicago');
-};
-
 // Function to determine if user is clocked in, checking multiple possible field names and date formats
 const isUserClockedIn = (user, targetDate) => {
   if (!user.attendance && !user.clockInTimes) return { isClocked: false, entry: null };
   
-  // Generate possible date formats to check
-  const possibleDateFormats = [
-    targetDate, // YYYY-MM-DD (original format)
-    formatDateAlt(targetDate, 'MM/DD/YYYY'),
-    formatDateAlt(targetDate, 'M/D/YYYY')
-  ];
+  // Get all possible date formats
+  const dateFormats = DateUtils.getAllDateFormats(targetDate);
   
   // Check attendance object first
   if (user.attendance) {
     // Check if user is clocked in for any of the possible date formats
-    for (const dateFormat of possibleDateFormats) {
+    for (const dateFormat of dateFormats) {
+      if (!dateFormat) continue;
+      
       const attendanceEntry = user.attendance[dateFormat];
       if (!attendanceEntry) continue;
       
       // Check various possible field names that could indicate "clocked in" status
-      if (attendanceEntry.clockedIn === true) return { isClocked: true, entry: attendanceEntry };
-      if (attendanceEntry.isClocked === true) return { isClocked: true, entry: attendanceEntry };
-      if (attendanceEntry.checkedIn === true) return { isClocked: true, entry: attendanceEntry };
-      if (attendanceEntry.present === true) return { isClocked: true, entry: attendanceEntry };
+      if (attendanceEntry.clockedIn === true || 
+          attendanceEntry.isClocked === true || 
+          attendanceEntry.checkedIn === true || 
+          attendanceEntry.present === true) {
+        return { isClocked: true, entry: attendanceEntry };
+      }
     }
   }
   
   // Then check clockInTimes directly (new format from the AttendanceSection)
   if (user.clockInTimes) {
-    // Check if any of the timestamps correspond to today's date
-    const today = new Date(targetDate);
+    // Get target date as object and string
+    const targetDateObj = new Date(targetDate);
+    const targetDateStr = targetDateObj.toISOString().split('T')[0];
     
+    // Check if any of the timestamps correspond to the target date
     for (const timestamp in user.clockInTimes) {
-      const timestampDate = new Date(parseInt(timestamp));
-      
-      // Compare just the date portion
-      if (timestampDate.toISOString().split('T')[0] === today.toISOString().split('T')[0]) {
-        return { 
-          isClocked: true, 
-          entry: {
-            clockInTime: user.clockInTimes[timestamp],
-            clockOutTime: user.clockOutTimes?.[timestamp] || null,
-            timestamp: timestamp
-          }
-        };
+      try {
+        const timestampDate = new Date(parseInt(timestamp));
+        const timestampDateStr = timestampDate.toISOString().split('T')[0];
+        
+        if (timestampDateStr === targetDateStr) {
+          return { 
+            isClocked: true, 
+            entry: {
+              clockInTime: user.clockInTimes[timestamp],
+              clockOutTime: user.clockOutTimes?.[timestamp] || null,
+              timestamp: timestamp
+            }
+          };
+        }
+      } catch (e) {
+        console.error('Error parsing timestamp:', e);
       }
     }
   }
   
-  return { isClocked: false, entry: null };
-};
-
-// Helper to format date in different formats
-const formatDateAlt = (isoDate, formatStr) => {
-  try {
-    // Parse ISO date string (YYYY-MM-DD) into a Date object
-    const dateObj = parse(isoDate, 'yyyy-MM-dd', new Date());
-    
-    if (!isValid(dateObj)) return null;
-    
-    // MM/DD/YYYY format
-    if (formatStr === 'MM/DD/YYYY') {
-      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-      const day = dateObj.getDate().toString().padStart(2, '0');
-      const year = dateObj.getFullYear();
-      return `${month}/${day}/${year}`;
-    }
-    
-    // M/D/YYYY format (no leading zeros)
-    if (formatStr === 'M/D/YYYY') {
-      const month = dateObj.getMonth() + 1;
-      const day = dateObj.getDate();
-      const year = dateObj.getFullYear();
-      return `${month}/${day}/${year}`;
-    }
-    
-    return isoDate;
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return isoDate;
+  // Check direct user properties as fallback
+  if (user.clockedIn === true || 
+      user.isClocked === true || 
+      user.checkedIn === true || 
+      user.present === true) {
+    return { 
+      isClocked: true, 
+      entry: {
+        clockInTime: user.clockInTime || user.time || '',
+        timestamp: null
+      }
+    };
   }
+  
+  return { isClocked: false, entry: null };
 };
 
 // Function to find user's most recent activity
@@ -122,9 +106,13 @@ const getLastActivity = (user) => {
     
     for (const dateStr in user.attendance) {
       try {
-        const date = new Date(dateStr);
-        if (isValid(date) && (!latestDate || date > latestDate)) {
-          latestDate = date;
+        // Try to parse the date from various formats
+        const dateISO = DateUtils.parseToISO(dateStr);
+        if (dateISO) {
+          const date = new Date(dateISO);
+          if (!latestDate || date > latestDate) {
+            latestDate = date;
+          }
         }
       } catch (e) {
         // Invalid date format, skip
@@ -141,7 +129,7 @@ const getLastActivity = (user) => {
     for (const timestamp in user.clockInTimes) {
       try {
         const time = new Date(parseInt(timestamp));
-        if (isValid(time) && (!latestTime || time > latestTime)) {
+        if (!latestTime || time > latestTime) {
           latestTime = time;
         }
       } catch (e) {
@@ -157,8 +145,10 @@ const getLastActivity = (user) => {
 };
 
 const NotClockedInList = ({ data, date }) => {
+  const navigate = useNavigate();
+  
   // Get today's date if date is not provided
-  const effectiveDate = date || format(new Date(), 'yyyy-MM-dd');
+  const effectiveDate = date || DateUtils.getCurrentDateISO();
   
   // Filter users who are NOT clocked in for the specified date
   const notClockedInUsers = Object.entries(data || {})
@@ -170,7 +160,7 @@ const NotClockedInList = ({ data, date }) => {
       return !isClocked;
     })
     .map(([id, user]) => {
-      // Add ID to the user object for name extraction
+      // Add ID to the user object for reference
       user.id = id;
       
       // Get last activity date
@@ -189,7 +179,7 @@ const NotClockedInList = ({ data, date }) => {
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const formattedDate = effectiveDate ? format(new Date(effectiveDate), 'MMMM d, yyyy') : 'Today';
+  const formattedDate = effectiveDate ? DateUtils.formatDisplayDate(effectiveDate) : 'Today';
 
   return (
     <div className="not-clocked-in-list card">
@@ -206,7 +196,12 @@ const NotClockedInList = ({ data, date }) => {
       ) : (
         <div className="user-list">
           {notClockedInUsers.map(user => (
-            <div key={user.id} className="user-item">
+            <div 
+              key={user.id} 
+              className="user-item"
+              onClick={() => navigate(`/super-admin/users/${user.id}`)}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="user-info">
                 <div className="user-name">
                   <span className={`status-dot bg-${user.padrinoColor}`}></span>
@@ -220,7 +215,7 @@ const NotClockedInList = ({ data, date }) => {
               }`}>
                 {user.lastActiveDate ? (
                   <>
-                    Last active: {format(user.lastActiveDate, 'MMM d')}
+                    Last active: {DateUtils.formatDisplayDate(user.lastActiveDate).split(',')[0]}
                     {user.lastActiveDaysAgo > 0 && ` (${user.lastActiveDaysAgo}d ago)`}
                   </>
                 ) : (

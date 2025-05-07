@@ -1,36 +1,35 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './SuperAdminDashboard.css';
 
-// Child components
 import LocationNav from './LocationNav';
 import MetricsGrid from './MetricsGrid';
-import TimeFilter from './TimeFilter';
 import ClockedInList from './ClockedInList';
 import NotClockedInList from './NotClockedInList';
 
 const SuperAdminDashboard = () => {
-  // ---------------------------
-  // 1) Local State
-  // ---------------------------
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [colorUpdateStatus, setColorUpdateStatus] = useState(null);
   const [filteredData, setFilteredData] = useState({});
 
+  // Remove the unused navigate import
   const [activeTab, setActiveTab] = useState('All');
   const [activeFilter, setActiveFilter] = useState(null);
 
-  // Example time filter object (24h or date range)
-  const [timeFilter, setTimeFilter] = useState({
-    type: '24h',
-    dateRange: { start: '', end: '' },
-  });
+  const dataSnapshot = useRef(null);
+  const isUpdatingColors = useRef(false);
 
-  // For example, your location tabs
+  // Helper to get current date in ISO format (YYYY-MM-DD)
+  const getCurrentDateISO = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  // Location mapping
   const locationMap = {
     All: 'All',
     Aurora: 'aurora',
@@ -41,134 +40,81 @@ const SuperAdminDashboard = () => {
     Wheeling: 'wheeling',
   };
 
-  // ---------------------------
-  // 2) Utility Functions
-  // ---------------------------
-  const calculateFraction = useCallback((numerator, denominator) => {
-    if (typeof numerator !== 'number' || typeof denominator !== 'number') {
-      console.error('calculateFraction: Numerator and denominator must be numbers', { numerator, denominator });
-      return null;  // clearly indicates calculation failed
-    }
-  
-    if (denominator === 0) {
-      console.error('calculateFraction: Cannot divide by zero', { numerator, denominator });
-      return null;  // again, clearly indicates issue
-    }
-  
-    return (numerator / denominator) * 100;
-  }, []);
-  
-
-  // Calculate color for a user based on their metrics
+  // Calculate user color based on attendance
   const calculateUserColor = useCallback((profile, stats) => {
-    if (!stats) return 'blue'; // Default color
-    
-    // Color assignment logic - modify as needed based on your business rules
-    const attendanceRate = stats.attendanceRate || 0;
-    const daysPresent = stats.daysPresent || 0;
-    
-    if (daysPresent === 0) {
-      return 'red';
-    } else if (attendanceRate >= 90) {
-      return 'green';
-    } else if (attendanceRate >= 70) {
-      return 'blue';
-    } else if (attendanceRate >= 50) {
-      return 'orange';
-    } else {
-      return 'red';
-    }
+    const attendanceRate = stats?.attendanceRate || 0;
+    const daysPresent = stats?.daysPresent || 0;
+
+    if (daysPresent === 0) return 'red';
+    if (attendanceRate >= 90) return 'blue';
+    if (attendanceRate >= 75) return 'green';
+    if (attendanceRate >= 60) return 'orange';
+    return 'red';
   }, []);
 
-  // ---------------------------
-  // 3) Handlers
-  // ---------------------------
-  const handleTabClick = useCallback((tabName) => {
-    setActiveTab(tabName);
-    setActiveFilter(null); // reset color filter
+  // Apply location and color filters
+  const applyFilters = useCallback((data, locationKey, colorFilter) => {
+    return Object.fromEntries(
+      Object.entries(data).filter(([_, user]) => {
+        const locationMatch = locationKey === 'All' || user.profile?.primaryLocation === locationKey;
+        const colorMatch = !colorFilter || (user.profile?.padrinoColor?.toLowerCase() === colorFilter && user.profile?.padrino);
+        return locationMatch && colorMatch;
+      })
+    );
   }, []);
 
-  const handleColorClick = useCallback((color) => {
-    // Toggle the color filter
-    setActiveFilter((prevFilter) => (prevFilter === color ? null : color));
-  }, []);
+  // Update padrino colors based on attendance
+  const updatePadrinoColors = useCallback(async (data) => {
+    if (isUpdatingColors.current) return;
+    isUpdatingColors.current = true;
+    setColorUpdateStatus('updating');
 
-  const handleTimeFilterChange = useCallback((type) => {
-    setTimeFilter((prev) => ({
-      ...prev,
-      type,
-      dateRange: type === '24h' ? { start: '', end: '' } : prev.dateRange,
-    }));
-  }, []);
+    const updates = {};
 
-  const handleDateRangeChange = useCallback((field, value) => {
-    setTimeFilter((prev) => ({
-      ...prev,
-      dateRange: { ...prev.dateRange, [field]: value },
-    }));
-  }, []);
-
-  // Function to update padrino colors for all users
-  const updatePadrinoColors = useCallback(async (userData) => {
-    try {
-      setColorUpdateStatus('updating');
-      
-      // Create batch updates object
-      const updates = {};
-      
-      // Assign colors based on rules
-      Object.entries(userData).forEach(([userId, userRecord]) => {
-        if (!userRecord || !userRecord.profile) return;
-        
-        const { profile, stats } = userRecord;
+    Object.entries(data).forEach(([id, user]) => {
+      const { profile, stats } = user;
+      if (!profile) return;
+      if (profile.padrino && !profile.manualColorOverride) {
         const color = calculateUserColor(profile, stats);
-        
-        // Only update if different from current value
         if (profile.padrinoColor !== color) {
-          updates[`users/${userId}/profile/padrinoColor`] = color;
+          updates[`users/${id}/profile/padrinoColor`] = color;
         }
-      });
-      
-      // Execute the batch update
-      if (Object.keys(updates).length > 0) {
-        await update(ref(database), updates);
-        console.log(`Updated padrinoColor for ${Object.keys(updates).length} users`);
-        setColorUpdateStatus('success');
-      } else {
-        console.log('No color updates needed');
-        setColorUpdateStatus('no-changes');
+      } else if (!profile.padrino && profile.padrinoColor) {
+        updates[`users/${id}/profile/padrinoColor`] = null;
       }
-    } catch (error) {
-      console.error('Error updating padrinoColor:', error);
-      setColorUpdateStatus('error');
+    });
+
+    if (Object.keys(updates).length > 0) {
+      try {
+        await update(ref(database), updates);
+        setColorUpdateStatus('success');
+      } catch (err) {
+        console.error('Error updating colors:', err);
+        setColorUpdateStatus('error');
+      }
+    } else {
+      setColorUpdateStatus('no-changes');
     }
+
+    setTimeout(() => {
+      setColorUpdateStatus(null);
+    }, 3000);
+
+    isUpdatingColors.current = false;
   }, [calculateUserColor]);
 
-  // ---------------------------
-  // 4) processMetrics
-  //    (Adapts to nested "profile" & "stats")
-  // ---------------------------
-  const processMetrics = useCallback((data, activeLocation) => {
-    // Get today's date for comparison
-    const today = new Date().toISOString().split('T')[0];
+  // Process metrics based on filtered data
+  const processMetrics = useCallback((data, locationKey) => {
+    // Always use today's date
+    const today = getCurrentDateISO();
     
-    // Use the timeFilter to determine the relevant date
-    const relevantDate = timeFilter.type === 'range' && timeFilter.dateRange.end 
-      ? timeFilter.dateRange.end 
-      : today;
-    
-    console.log(`Processing metrics for date: ${relevantDate}`);
-    
-    const metricsObj = {
-      total: {
-        notClockedIn: 0,
-        clockedIn: 0,
-        onTime: 0,
-        late: 0,
-      },
+    // Initialize metrics object
+    const metrics = {
+      total: { clockedIn: 0, notClockedIn: 0, onTime: 0, late: 0 },
       perLocation: {},
       overview: {
-        totalMembers: data ? Object.keys(data).length : 0,
+        totalMembers: Object.keys(data).length,
+        totalPadrinos: 0,
         padrinosBlue: 0,
         padrinosGreen: 0,
         padrinosRed: 0,
@@ -177,174 +123,144 @@ const SuperAdminDashboard = () => {
         totalApoyos: 0,
         monthlyAttendance: 0,
       },
-      // Store the relevant date for reference in attendance filtering
-      date: relevantDate
+      date: today,
     };
-  
-    // Helper: check if a user is in the correct location
-    const locationMatch = (userLocation, targetLocation) => {
-      if (targetLocation === 'All') return true;
-      return userLocation === targetLocation;
-    };
-  
-    // Track group-level attendance totals
+
+    // Track totals for attendance calculations
     let totalPresentAll = 0;
     let totalDaysAll = 0;
-  
-    Object.entries(data).forEach(([userId, userRecord]) => {
-      if (!userRecord) return; 
-  
-      const { profile, stats, attendance } = userRecord;
-      if (!profile) return; // skip if no profile at all
-  
-      // Extract relevant fields
-      const userLocation = profile.primaryLocation || 'Unknown';
+
+    // Process each user to calculate metrics
+    Object.entries(data).forEach(([_, user]) => {
+      const { profile, stats, attendance } = user;
+      if (!profile) return;
       
-      // Get color from profile or calculate it if missing
-      let color = profile.padrinoColor?.toLowerCase?.();
-      if (!color) {
-        color = calculateUserColor(profile, stats)?.toLowerCase?.() || '';
+      // Get user location and attributes
+      const loc = profile?.primaryLocation || 'Unknown';
+      const color = profile?.padrinoColor?.toLowerCase?.();
+      const isPadrino = profile?.padrino;
+      
+      // Initialize location metrics if not exists
+      if (!metrics.perLocation[loc]) {
+        metrics.perLocation[loc] = { clockedIn: 0, notClockedIn: 0, onTime: 0, late: 0 };
       }
       
-      // Check if user attended on the relevant date
-      // This assumes you have a structure like: attendance[date] = { clockedIn: true, onTime: true }
-      const dateAttendance = attendance?.[relevantDate];
-      const isClockInToday = Boolean(dateAttendance?.clockedIn);
-      const isOnTime = Boolean(dateAttendance?.onTime);
-      
-      const daysPresent = stats?.daysPresent || 0;
-      const daysAbsent = stats?.daysAbsent || 0;
-      const daysLate = stats?.daysLate || 0;
-      const service = profile.service?.toUpperCase?.();
-  
-      // (1) Filter by location
-      if (!locationMatch(userLocation, activeLocation)) return;
-  
-      // (2) Count padrinos by color
-      if (color === 'blue')   metricsObj.overview.padrinosBlue++;
-      if (color === 'green')  metricsObj.overview.padrinosGreen++;
-      if (color === 'red')    metricsObj.overview.padrinosRed++;
-      if (color === 'orange') metricsObj.overview.padrinosOrange++;
-  
-      // (3) Initialize location-based counters if missing
-      if (!metricsObj.perLocation[userLocation]) {
-        metricsObj.perLocation[userLocation] = {
-          notClockedIn: 0,
-          clockedIn: 0,
-          onTime: 0,
-          late: 0,
-        };
+      // Count padrinos by color
+      if (isPadrino) {
+        metrics.overview.totalPadrinos++;
+        if (color === 'blue') metrics.overview.padrinosBlue++;
+        if (color === 'green') metrics.overview.padrinosGreen++;
+        if (color === 'orange') metrics.overview.padrinosOrange++;
+        if (color === 'red') metrics.overview.padrinosRed++;
       }
-  
-      // Count attendance for the relevant date specifically
-      if (isClockInToday) {
-        metricsObj.total.clockedIn++;
-        metricsObj.perLocation[userLocation].clockedIn++;
-  
-        if (isOnTime) {
-          metricsObj.total.onTime++;
-          metricsObj.perLocation[userLocation].onTime++;
+      
+      // Count service types
+      const service = profile?.service?.toUpperCase?.();
+      if (service === 'RSG') metrics.overview.totalOrejas++;
+      if (service === 'COM') metrics.overview.totalApoyos++;
+      
+      // Process attendance for today
+      const attend = attendance?.[today];
+      
+      if (attend?.clockedIn) {
+        metrics.total.clockedIn++;
+        metrics.perLocation[loc].clockedIn++;
+        
+        if (attend.onTime) {
+          metrics.total.onTime++;
+          metrics.perLocation[loc].onTime++;
         } else {
-          metricsObj.total.late++;
-          metricsObj.perLocation[userLocation].late++;
+          metrics.total.late++;
+          metrics.perLocation[loc].late++;
         }
       } else {
-        metricsObj.total.notClockedIn++;
-        metricsObj.perLocation[userLocation].notClockedIn++;
+        metrics.total.notClockedIn++;
+        metrics.perLocation[loc].notClockedIn++;
       }
-  
-      // (4) Service-based counts (e.g., RSG => Orejas, COM => Apoyos)
-      if (service === 'RSG') metricsObj.overview.totalOrejas++;
-      if (service === 'COM') metricsObj.overview.totalApoyos++;
-  
-      // (5) Group-level attendance from daysPresent/daysAbsent
-      const totalDays = daysPresent + daysAbsent;
+      
+      // Add to attendance totals
+      const daysPresent = stats?.daysPresent || 0;
+      const daysAbsent = stats?.daysAbsent || 0;
       totalPresentAll += daysPresent;
-      totalDaysAll += totalDays;
+      totalDaysAll += daysPresent + daysAbsent;
     });
-  
-    // Final group attendance ratio
+
+    // Calculate monthly attendance percentage
     if (totalDaysAll > 0) {
-      metricsObj.overview.monthlyAttendance = (totalPresentAll / totalDaysAll) * 100;
-    } else {
-      metricsObj.overview.monthlyAttendance = 0;
+      metrics.overview.monthlyAttendance = (totalPresentAll / totalDaysAll) * 100;
     }
-  
-    return metricsObj;
-  }, [calculateUserColor, timeFilter]);
-  
-  // ---------------------------
-  // 5) Fetch from Firebase
-  // ---------------------------
+
+    return metrics;
+  }, []);
+
+  // Main effect to fetch and process data
   useEffect(() => {
     setLoading(true);
     setError(null);
-    
+
     const usersRef = ref(database, 'users');
     const unsubscribe = onValue(usersRef, async (snapshot) => {
       try {
         const data = snapshot.val();
-        if (!data) throw new Error('No user data available');
-
-        // Update padrino colors on each data fetch (per render)
-        await updatePadrinoColors(data);
-
-        // Filter data if needed
-        const activeKey = locationMap[activeTab];
-        const filteredUserData =
-          activeKey === 'All'
-            ? data
-            : Object.fromEntries(
-                Object.entries(data).filter(([, userRecord]) =>
-                  (userRecord.profile?.primaryLocation || 'Unknown') === activeKey
-                )
-              );
-
-        // Store filtered data for the attendance lists
-        setFilteredData(filteredUserData);
-        
-        // Process it
-        const processedMetrics = processMetrics(filteredUserData, activeKey);
-        
-        // If we're using a date range, add the end date to metrics for reference
-        if (timeFilter.type === 'range' && timeFilter.dateRange.end) {
-          processedMetrics.date = timeFilter.dateRange.end;
+        if (!data) {
+          setError('No user data available');
+          setLoading(false);
+          return;
         }
+
+        // Store the raw data
+        dataSnapshot.current = data;
         
-        setMetrics(processedMetrics);
+        // Apply location and color filters
+        const activeLocationKey = locationMap[activeTab];
+        const filteredResult = applyFilters(data, activeLocationKey, activeFilter);
+        
+        // Set filtered data and calculate metrics
+        setFilteredData(filteredResult);
+        setMetrics(processMetrics(filteredResult, activeLocationKey));
         setLoading(false);
+
+        // Update padrino colors in the background
+        await updatePadrinoColors(data);
       } catch (err) {
-        setError(err.message);
+        console.error('Error processing data:', err);
+        setError('Error processing dashboard data');
         setLoading(false);
       }
+    }, (err) => {
+      console.error('Firebase error:', err);
+      setError(`Error fetching data: ${err.message}`);
+      setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [activeTab, processMetrics, updatePadrinoColors, timeFilter]);
+  }, [activeTab, activeFilter, processMetrics, updatePadrinoColors, applyFilters, locationMap]);
 
-  // ---------------------------
-  // 6) Render
-  // ---------------------------
-  if (loading) {
-    return (
-      <div className="loading-overlay">
-        <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
-        <p className="mt-2">Loading dashboard data...</p>
-        {colorUpdateStatus === 'updating' && (
-          <p className="mt-1 text-sm text-gray-500">Updating padrino colors...</p>
-        )}
-      </div>
-    );
-  }
+  // Handle location tab change
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+    setActiveFilter(null);
+  };
 
-  if (error) {
-    return (
-      <div className="error-banner">
-        <AlertCircle className="h-5 w-5 text-red-500" />
-        <span>{error}</span>
-      </div>
-    );
-  }
+  // Handle color filter change
+  const handleColorClick = (color) => {
+    setActiveFilter((prev) => (prev === color ? null : color));
+  };
+
+  // Loading and error states
+  if (loading) return (
+    <div className="loading-overlay">
+      <Loader2 className="animate-spin" />
+      <p>Loading dashboard data...</p>
+    </div>
+  );
+  
+  if (error) return (
+    <div className="error-banner">
+      <AlertCircle />
+      <p>{error}</p>
+    </div>
+  );
 
   return (
     <div className="dashboard-container">
@@ -353,43 +269,33 @@ const SuperAdminDashboard = () => {
           Padrino colors updated successfully
         </div>
       )}
+      
       {colorUpdateStatus === 'error' && (
         <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4">
           Error updating padrino colors
         </div>
       )}
-      
+
       <div className="dashboard-grid">
-        {/* Quadrant 1: Location Navigation and Metrics */}
+        {/* Quadrant 1 */}
         <div className="quadrant quadrant-1">
-          <LocationNav
-            locationMap={locationMap}
-            activeTab={activeTab}
-            onTabClick={handleTabClick}
+          <LocationNav 
+            locationMap={locationMap} 
+            activeTab={activeTab} 
+            onTabClick={handleTabClick} 
           />
-          <MetricsGrid
-            metrics={metrics}
-            activeFilter={activeFilter}
+          <MetricsGrid 
+            metrics={metrics} 
+            activeFilter={activeFilter} 
             onColorClick={handleColorClick}
-          />
-          {/* Add TimeFilter component here for date selection */}
-          <TimeFilter
-            timeFilter={timeFilter}
-            onTimeFilterChange={handleTimeFilterChange}
-            onDateRangeChange={handleDateRangeChange}
+            activeTab={activeTab}
           />
         </div>
 
-        {/* Quadrant 2: Two side-by-side lists */}
+        {/* Quadrant 2 */}
         <div className="quadrant quadrant-2 flex gap-4">
-          <ClockedInList
-            data={filteredData}
-            date={metrics?.date || ''}
-          />
-          <NotClockedInList
-            data={filteredData}
-            date={metrics?.date || ''}
-          />
+          <ClockedInList data={filteredData} date={metrics?.date} />
+          <NotClockedInList data={filteredData} date={metrics?.date} />
         </div>
       </div>
     </div>

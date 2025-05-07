@@ -1,8 +1,6 @@
-
-//src/components/SuperAdmin/PadrinoStatusSection.js
 import React, { useEffect, useState } from 'react';
-import { Award, AlertCircle, CheckCircle, X } from 'lucide-react';
-import { calculatePadrinoColor, PADRINO_COLORS } from '../utils/padrinoColorCalculator';
+import { Award, AlertCircle, CheckCircle, X, Info } from 'lucide-react';
+import { calculatePadrinoColor, PADRINO_COLORS } from '../../utils/padrinoColorCalculator';
 
 const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoColorChange, editMode }) => {
   const [padrinoStatus, setPadrinoStatus] = useState({
@@ -17,6 +15,7 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
   });
   
   const [autoCalculate, setAutoCalculate] = useState(false);
+  const [manualOverride, setManualOverride] = useState(formData.manualColorOverride || false);
 
   // Calculate padrino status when userData changes
   useEffect(() => {
@@ -63,9 +62,31 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
     const newValue = !autoCalculate;
     setAutoCalculate(newValue);
     
-    // If turning on auto-calculate, immediately update color
+    // If turning on auto-calculate, immediately update color and turn off manual override
     if (newValue && formData.padrino) {
       onPadrinoColorChange({ target: { value: padrinoStatus.color } });
+      setManualOverride(false);
+      onManualOverrideChange(false);
+    }
+  };
+
+  // Handle manual override toggle
+  const handleManualOverrideToggle = () => {
+    const newValue = !manualOverride;
+    setManualOverride(newValue);
+    onManualOverrideChange(newValue);
+    
+    // If turning off manual override, switch to auto-calculate
+    if (!newValue) {
+      setAutoCalculate(true);
+      onPadrinoColorChange({ target: { value: padrinoStatus.color } });
+    }
+  };
+
+  // Update manual override in form data
+  const onManualOverrideChange = (value) => {
+    if (typeof formData.onManualOverrideChange === 'function') {
+      formData.onManualOverrideChange(value);
     }
   };
 
@@ -105,16 +126,28 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
             <div className="mb-4">
               <div className="flex justify-between items-center mb-2">
                 <h4 className="text-sm font-medium text-white/70">Color Selection</h4>
-                <label className="flex items-center text-sm text-white/60 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoCalculate}
-                    onChange={handleAutoCalculateToggle}
-                    className="mr-2 h-4 w-4"
-                    disabled={!editMode}
-                  />
-                  Auto-calculate
-                </label>
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center text-sm text-white/60 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={manualOverride}
+                      onChange={handleManualOverrideToggle}
+                      className="mr-2 h-4 w-4"
+                      disabled={!editMode}
+                    />
+                    Manual Override
+                  </label>
+                  <label className="flex items-center text-sm text-white/60 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoCalculate}
+                      onChange={handleAutoCalculateToggle}
+                      className="mr-2 h-4 w-4"
+                      disabled={!editMode || manualOverride}
+                    />
+                    Auto-calculate
+                  </label>
+                </div>
               </div>
               
               {editMode ? (
@@ -122,11 +155,11 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
                   {Object.values(PADRINO_COLORS).map((color) => (
                     <div 
                       key={color}
-                      onClick={() => !autoCalculate && onPadrinoColorChange({ target: { value: color } })}
+                      onClick={() => (manualOverride && !autoCalculate) && onPadrinoColorChange({ target: { value: color } })}
                       className={`border rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer
                         ${color === formData.padrinoColor ? 'ring-2 ring-white/30' : ''}
                         ${getColorClasses(color)}
-                        ${autoCalculate ? 'opacity-50 cursor-not-allowed' : 'hover:ring-2 hover:ring-white/30'}`}
+                        ${(!manualOverride || autoCalculate) ? 'opacity-50 cursor-not-allowed' : 'hover:ring-2 hover:ring-white/30'}`}
                     >
                       <Award className="w-6 h-6 mb-1" />
                       <span className="text-sm">{getColorDisplayName(color)}</span>
@@ -139,6 +172,17 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
                   <span className="text-lg font-semibold">{getColorDisplayName(formData.padrinoColor || PADRINO_COLORS.BLUE)}</span>
                 </div>
               )}
+
+              {/* Info banner about Padrino colors */}
+              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-start">
+                <Info className="w-5 h-5 text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-white/80">
+                  <p>This member is a Padrino and has a color assignment. Colors indicate status level based on attendance requirements.</p>
+                  {manualOverride && (
+                    <p className="mt-1 text-yellow-400">Manual override is enabled. This color won't be affected by automatic calculations.</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="border-t border-slate-700 pt-4 mt-4">
