@@ -11,8 +11,7 @@ import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  fetchSignInMethodsForEmail,
-  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { database } from '../../services/firebaseConfig';
 
@@ -120,12 +119,6 @@ const EmployeeProfile = () => {
     error: null,
   });
 
-  // Dialog for creating a brand-new Auth user if none exist for the given email
-  const [createUserDialog, setCreateUserDialog] = useState({
-    show: false,
-    error: null,
-  });
-
   const [isCurrentUser, setIsCurrentUser] = useState(false);
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -154,10 +147,32 @@ const EmployeeProfile = () => {
     }));
   };
 
+  // Handle sending a password reset email (for admin use)
+  const handleSendPasswordReset = async () => {
+    try {
+      if (!formData.email) {
+        showNotification('Email address is required to send password reset', 'error');
+        return;
+      }
+      
+      await sendPasswordResetEmail(auth, formData.email);
+      showNotification(`Password reset email sent to ${formData.email}`, 'success');
+    } catch (error) {
+      console.error('Error sending password reset:', error);
+      
+      let errorMessage = 'Failed to send password reset email';
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No Firebase Auth user found with this email address';
+      }
+      
+      showNotification(errorMessage, 'error');
+    }
+  };
+
   // Handle Padrino status (toggle)
   const handlePadrinoChange = async (e) => {
     const { checked } = e.target;
-    try {
+    try { 
       let updates = { padrino: checked };
 
       // If enabling Padrino, attempt to auto-calc color
@@ -217,12 +232,13 @@ const EmployeeProfile = () => {
         currentUser.email,
         passwordDialog.currentPassword
       );
+      
       await reauthenticateWithCredential(currentUser, credential);
 
       // Update Auth password
       await updatePassword(currentUser, formData.password);
 
-      // (Optional) Update RTDB profile password - caution storing plain text
+      // Update RTDB profile password
       await update(ref(database, `users/${employeeId}/profile`), {
         password: formData.password,
       });
@@ -234,11 +250,21 @@ const EmployeeProfile = () => {
       showNotification('Password updated successfully');
     } catch (error) {
       console.error('Error updating password:', error);
+      
+      // More specific error messages
+      let errorMessage = 'Current password is incorrect or authentication failed';
+      
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'The current password you entered is incorrect.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'The new password is too weak. It should be at least 6 characters.';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'For security reasons, please log out and log back in before changing your password.';
+      }
+      
       setPasswordDialog((prev) => ({
         ...prev,
-        error:
-          error?.message ||
-          'Current password is incorrect or authentication failed',
+        error: errorMessage
       }));
     }
   };
@@ -246,40 +272,6 @@ const EmployeeProfile = () => {
   // Cancel re-auth dialog
   const handlePasswordDialogCancel = () => {
     setPasswordDialog({ show: false, currentPassword: '', error: null });
-  };
-
-  // Confirm creation of a brand-new Auth user if none exist
-  const handleCreateUserConfirm = async () => {
-    setCreateUserDialog((prev) => ({ ...prev, error: null }));
-
-    try {
-      // Create new user with email & password
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-
-      // You can store the new user’s UID in the employee’s profile if needed
-      await update(ref(database, `users/${employeeId}/profile`), {
-        authUid: userCredential.user.uid,
-        password: formData.password,
-      });
-
-      setCreateUserDialog({ show: false, error: null });
-      showNotification(`New Auth user created: ${formData.email}`);
-      setFormData((prev) => ({ ...prev, password: '' }));
-    } catch (err) {
-      console.error('Error creating new user:', err);
-      setCreateUserDialog((prev) => ({
-        ...prev,
-        error: err?.message || 'Failed to create new Auth user.',
-      }));
-    }
-  };
-
-  const handleCreateUserCancel = () => {
-    setCreateUserDialog({ show: false, error: null });
   };
 
   // Main "Save" for the entire personal info form
@@ -304,39 +296,7 @@ const EmployeeProfile = () => {
     };
 
     try {
-      // Check if the user typed a new password
-      if (formData.password && formData.password.trim() !== '') {
-        // 1) Check if there is an existing Auth user for the given email
-        const signInMethods = await fetchSignInMethodsForEmail(
-          auth,
-          formData.email
-        );
-
-        // If no sign-in methods (no existing user):
-        if (signInMethods.length === 0) {
-          // Show a dialog to create a brand new user in Firebase Auth
-          setCreateUserDialog({ show: true, error: null });
-        } else {
-          // If sign-in methods exist, we have a user in Auth
-          //   If it's the *current* user, we do re-auth with old password
-          //   If it’s an admin editing someone else, we only update RTDB
-          if (isCurrentUser) {
-            // Let the user confirm re-auth
-            setPasswordDialog({ show: true, currentPassword: '', error: null });
-            // Return so the "re-auth" step can do the actual password update
-            return;
-          } else {
-            // For an admin editing another user
-            updates.password = formData.password;
-            showNotification(
-              'Database password updated. Auth password not changed.',
-              'warning'
-            );
-          }
-        }
-      }
-
-      // Update the user’s profile in RTDB
+      // First update the profile in RTDB
       await update(ref(database, `users/${employeeId}/profile`), updates);
 
       // Update local details
@@ -344,6 +304,32 @@ const EmployeeProfile = () => {
         ...prev,
         profile: { ...prev?.profile, ...updates },
       }));
+
+      // Handle password update separately from general profile updates
+      if (formData.password && formData.password.trim() !== '') {
+        // Check if we're dealing with the current user or an admin editing another user
+        if (isCurrentUser) {
+          // Current user changing their own password - show re-auth dialog
+          setPasswordDialog({ show: true, currentPassword: '', error: null });
+          return; // Exit early - the dialog will handle the actual password update
+        } else {
+          // Admin is updating another user's password
+          try {
+            // Store the password in RTDB for record-keeping
+            await update(ref(database, `users/${employeeId}/profile`), {
+              password: formData.password
+            });
+            
+            showNotification(
+              'Database password updated. For user to update Auth password, they should use the "Forgot Password" option on login page.',
+              'info'
+            );
+          } catch (err) {
+            console.error('Error updating password in database:', err);
+            showNotification('Failed to update password in database', 'error');
+          }
+        }
+      }
 
       // Exit edit mode
       setEditMode(false);
@@ -499,6 +485,7 @@ const EmployeeProfile = () => {
                 errors={{}} // You can pass form validation errors here
                 userData={employeeDetails}
                 isCurrentUser={isCurrentUser}
+                onSendPasswordReset={handleSendPasswordReset}
               />
             </div>
 
@@ -610,43 +597,6 @@ const EmployeeProfile = () => {
                 className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-500"
               >
                 Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create New User Dialog (if no existing Auth record) */}
-      {createUserDialog.show && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg shadow-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-semibold text-white mb-4">
-              Create New Auth User
-            </h3>
-            <p className="text-white/70 mb-4">
-              No existing user found for <strong>{formData.email}</strong>.
-              Would you like to create a new Firebase Auth account with this
-              email and the password you entered?
-            </p>
-
-            {createUserDialog.error && (
-              <div className="mb-4 p-3 bg-red-900/50 border border-red-500/30 rounded-md text-red-300">
-                {createUserDialog.error}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={handleCreateUserCancel}
-                className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateUserConfirm}
-                className="px-4 py-2 rounded-md bg-green-600 text-white font-semibold hover:bg-green-500"
-              >
-                Create User
               </button>
             </div>
           </div>

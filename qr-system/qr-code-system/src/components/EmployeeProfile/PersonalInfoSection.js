@@ -3,12 +3,32 @@
 
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { ref, update } from 'firebase/database';
+import { ref, update, get } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
-import { Mail, Phone, MapPin, Calendar, AlertCircle, Lock, Users, User, Award, CheckCircle, X, AlertTriangle } from 'lucide-react';
+import { 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar, 
+  AlertCircle, 
+  Lock, 
+  Users, 
+  User, 
+  Award, 
+  CheckCircle, 
+  X, 
+  AlertTriangle,
+  Info 
+} from 'lucide-react';
 import { calculatePadrinoColor, PADRINO_COLORS } from '../utils/padrinoColorCalculator';
 import { useAuth } from '../../services/authContext';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { 
+  EmailAuthProvider, 
+  reauthenticateWithCredential, 
+  updatePassword, 
+  updateProfile, 
+  updateEmail 
+} from 'firebase/auth';
 import { auth } from '../../services/firebaseConfig';
 
 const FormField = ({
@@ -276,14 +296,35 @@ const PersonalInfoSection = ({
   onPadrinoChange,
   onPadrinoColorChange,
   userData,
-  isCurrentUser = false
+  isCurrentUser = false,
+  onSendPasswordReset,
+  fetchUserData
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [expandedSection, setExpandedSection] = useState('personal');
   const [currentPassword, setCurrentPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
+  const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
+  const [credentialsChanged, setCredentialsChanged] = useState(false);
+  const { user, logout } = useAuth();
+  
+  // Store original values to track changes
+  const [originalValues, setOriginalValues] = useState({
+    email: userData?.email || '',
+    name: userData?.name || ''
+  });
+  
+  useEffect(() => {
+    // Update original values when userData changes
+    if (userData) {
+      setOriginalValues({
+        email: userData.email || '',
+        name: userData.name || ''
+      });
+    }
+  }, [userData]);
 
   // Toggle password visibility
   const togglePasswordVisibility = () => {
@@ -295,16 +336,118 @@ const PersonalInfoSection = ({
     setShowCurrentPassword(prevState => !prevState);
   };
 
-  // Handle save with password update logic
+  // Helper function to update Firebase Auth user
+  const updateAuthUser = async (updatedFields = {}) => {
+    if (!auth.currentUser) {
+      throw new Error('Not authenticated');
+    }
+    
+    const updates = [];
+    let credChanged = false;
+    
+    // Update display name if changed
+    if (updatedFields.displayName && updatedFields.displayName !== auth.currentUser.displayName) {
+      updates.push(updateProfile(auth.currentUser, {
+        displayName: updatedFields.displayName
+      }));
+    }
+    
+    // Update email if changed
+    if (updatedFields.email && updatedFields.email !== auth.currentUser.email) {
+      // Email changes require recent authentication
+      if (!currentPassword) {
+        throw new Error('Current password is required to update email');
+      }
+      
+      try {
+        const credential = EmailAuthProvider.credential(
+          auth.currentUser.email,
+          currentPassword
+        );
+        
+        await reauthenticateWithCredential(auth.currentUser, credential);
+        updates.push(updateEmail(auth.currentUser, updatedFields.email));
+        credChanged = true;
+      } catch (error) {
+        console.error("Error updating email:", error);
+        throw error;
+      }
+    }
+    
+    // Execute all updates
+    try {
+      await Promise.all(updates);
+      return { success: true, credentialsChanged: credChanged };
+    } catch (error) {
+      console.error("Error updating auth user:", error);
+      throw error;
+    }
+  };
+
+  // Handle user logout
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Redirect to login page
+      window.location.href = '/login';
+    } catch (error) {
+      console.error("Error logging out:", error);
+      // Force page refresh as a fallback
+      window.location.href = '/login';
+    }
+  };
+  
+  // Update the database with correct auth info
+  const updateDatabaseAuthInfo = async (userId, updates) => {
+    try {
+      // Create updates object for Firebase
+      const dbUpdates = {};
+      
+      // Update authUid if needed
+      if (auth.currentUser) {
+        dbUpdates[`users/${userId}/profile/authUid`] = auth.currentUser.uid;
+      }
+      
+      // Add other updates
+      Object.entries(updates).forEach(([key, value]) => {
+        dbUpdates[`users/${userId}/profile/${key}`] = value;
+      });
+      
+      // Also update at root level if needed
+      const userRef = ref(database, `users/${userId}`);
+      const snapshot = await get(userRef);
+      const userData = snapshot.val();
+      
+      if (userData && updates.name && userData.hasOwnProperty('name')) {
+        dbUpdates[`users/${userId}/name`] = updates.name;
+      }
+      
+      // Perform update
+      await update(ref(database), dbUpdates);
+      return true;
+    } catch (error) {
+      console.error("Error updating database auth info:", error);
+      throw error;
+    }
+  };
+
+  // Handle save with authentication updates
   const handleSaveClick = async () => {
     try {
-      // If there's a new password and this is the current user's profile
+      setIsSaving(true);
+      setUpdateStatus(null);
+      setCredentialsChanged(false);
+      
+      let passwordChanged = false;
+      
+      // Step 1: Handle password updates for current user
       if (formData.password && isCurrentUser) {
         if (!currentPassword) {
           setUpdateStatus({ 
             type: 'error', 
             message: 'Current password is required to update password' 
           });
+          setIsSaving(false);
           return;
         }
 
@@ -315,10 +458,11 @@ const PersonalInfoSection = ({
               type: 'error',
               message: 'Authentication error: User not properly authenticated'
             });
+            setIsSaving(false);
             return;
           }
 
-          // First reauthenticate
+          // Reauthenticate
           const credential = EmailAuthProvider.credential(
             user.email,
             currentPassword
@@ -326,56 +470,117 @@ const PersonalInfoSection = ({
           
           await reauthenticateWithCredential(auth.currentUser, credential);
           
-          // Then update password
+          // Update password in Firebase Auth
           await updatePassword(auth.currentUser, formData.password);
           
-          setUpdateStatus({ 
-            type: 'success', 
-            message: 'Password updated successfully!' 
-          });
+          // Mark credentials as changed
+          setCredentialsChanged(true);
+          passwordChanged = true;
           
-          // Clear password fields after successful update
+          // Clear password fields
           setCurrentPassword('');
-          // If you have a handler to update formData directly:
-          // handleInputChange({ target: { name: 'password', value: '' } });
+          
         } catch (authError) {
           console.error("Auth error updating password:", authError);
           
+          let errorMessage = 'Authentication error occurred';
+          
           if (authError.code === 'auth/wrong-password') {
-            setUpdateStatus({ 
-              type: 'error', 
-              message: 'Current password is incorrect' 
-            });
+            errorMessage = 'Current password is incorrect';
           } else if (authError.code === 'auth/weak-password') {
-            setUpdateStatus({ 
-              type: 'error', 
-              message: 'New password is too weak (minimum 6 characters)' 
-            });
+            errorMessage = 'New password is too weak (minimum 6 characters)';
           } else if (authError.code === 'auth/requires-recent-login') {
-            setUpdateStatus({ 
-              type: 'error', 
-              message: 'Please log out and log back in before changing your password' 
-            });
-          } else {
-            setUpdateStatus({ 
-              type: 'error', 
-              message: `Authentication error: ${authError.message}` 
-            });
+            errorMessage = 'Please log out and log back in before changing your password';
+          } else if (authError.code) {
+            errorMessage = `Authentication error: ${authError.code}`;
           }
+          
+          setUpdateStatus({ 
+            type: 'error', 
+            message: errorMessage
+          });
+          setIsSaving(false);
           return;
         }
       }
       
-      // Continue with regular save logic
+      // Step 2: Update Firebase Auth if needed (for current user)
+      if (isCurrentUser) {
+        try {
+          const authUpdates = {};
+          
+          // Check if name has changed
+          if (formData.name !== originalValues.name) {
+            authUpdates.displayName = formData.name;
+          }
+          
+          // Check if email has changed
+          if (formData.email !== originalValues.email) {
+            authUpdates.email = formData.email;
+          }
+          
+          // Only attempt auth updates if there are changes to make
+          if (Object.keys(authUpdates).length > 0) {
+            const result = await updateAuthUser(authUpdates);
+            if (result.credentialsChanged) {
+              setCredentialsChanged(true);
+            }
+          }
+        } catch (authError) {
+          setUpdateStatus({ 
+            type: 'error', 
+            message: `Error updating profile: ${authError.message}` 
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+      
+      // Step 3: Ensure database has correct reference to auth
+      if (isCurrentUser) {
+        try {
+          await updateDatabaseAuthInfo(userId, {
+            email: formData.email,
+            name: formData.name,
+            password: formData.password || undefined
+          });
+        } catch (error) {
+          console.error("Error updating database auth link:", error);
+        }
+      }
+      
+      // Step 4: Update database record through the parent component
       if (onSave) {
         await onSave();
       }
+      
+      // Step 5: Show success and handle logout if needed
+      if (credentialsChanged) {
+        setUpdateStatus({ 
+          type: 'success', 
+          message: 'Profile updated successfully! You need to log in again with your new credentials.' 
+        });
+        setShowLogoutPrompt(true);
+      } else {
+        setUpdateStatus({ 
+          type: 'success', 
+          message: 'Profile updated successfully!' 
+        });
+        
+        // If a fetchUserData function was provided, refresh the user data
+        if (fetchUserData) {
+          await fetchUserData();
+        }
+      }
+      
     } catch (error) {
       console.error("Error saving profile:", error);
       setUpdateStatus({ 
         type: 'error', 
         message: `Error: ${error.message}` 
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -389,7 +594,7 @@ const PersonalInfoSection = ({
           <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
           <span>
             Enter a new password to update your account. You'll need to enter your current 
-            password to confirm this change.
+            password to confirm this change. After changing your password, you'll need to log in again.
           </span>
         </div>
       );
@@ -399,17 +604,96 @@ const PersonalInfoSection = ({
           <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
           <span>
             As an administrator, you can update this user's database password, but this won't change their 
-            authentication credentials. For complete password reset, please use the admin dashboard.
+            authentication credentials. For complete password reset, use the password reset email option.
           </span>
         </div>
       );
     }
   };
 
+  // Render email help text when editing
+  const renderEmailHelpText = () => {
+    if (!editMode || !isCurrentUser) return null;
+    
+    return (
+      <div className="text-blue-400 text-sm mb-2 flex items-start">
+        <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+        <span>
+          Changing your email will require you to log in again with the new email address.
+          You must provide your current password to change your email.
+        </span>
+      </div>
+    );
+  };
+
+  // Render the password field with reset option for admins
+  const renderPasswordField = () => (
+    <div className="form-group md:col-span-2">
+      <label htmlFor="password" className="block mb-2">
+        <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+          <Lock size={16} className="text-white/70" />
+          <span>Password</span>
+        </span>
+      </label>
+      <div className="relative">
+        <input
+          id="password"
+          type={showPassword ? "text" : "password"}
+          name="password"
+          value={formData.password || ''}
+          onChange={handleInputChange}
+          disabled={!editMode}
+          placeholder="Enter new password"
+          className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+            px-3 py-2 text-white/90 placeholder-white/50
+            focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+            disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+            backdrop-blur-md transition-all duration-200 pr-12
+            ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+          `}
+        />
+        {editMode && (
+          <button
+            type="button"
+            onClick={togglePasswordVisibility}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+          >
+            {showPassword ? "HIDE" : "SHOW"}
+          </button>
+        )}
+      </div>
+      {errors.password && (
+        <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
+          <AlertCircle size={14} />
+          <span>{errors.password}</span>
+        </div>
+      )}
+      
+      {/* Add password reset button for admins editing other users */}
+      {editMode && !isCurrentUser && onSendPasswordReset && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={onSendPasswordReset}
+            className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+          >
+            <Mail size={14} />
+            <span className="underline">Send password reset email instead</span>
+          </button>
+        </div>
+      )}
+      
+      {renderPasswordHelpText()}
+    </div>
+  );
+
   // Render current password field when needed
   const renderCurrentPasswordField = () => {
-    // Make sure user is available and we're in the right conditions to show this field
-    if (!editMode || !isCurrentUser || !formData.password || !user) return null;
+    // Show current password field when user is changing their own password or email
+    const needsCurrentPassword = editMode && isCurrentUser && 
+      (formData.password || (formData.email && formData.email !== originalValues.email));
+    
+    if (!needsCurrentPassword) return null;
     
     return (
       <div className="form-group md:col-span-2 mt-4">
@@ -444,14 +728,45 @@ const PersonalInfoSection = ({
           </button>
         </div>
         <p className="text-amber-400 text-xs mt-1">
-          Required to confirm password change
+          Required to confirm changes to sensitive information
         </p>
+      </div>
+    );
+  };
+
+  // Render logout prompt modal
+  const renderLogoutPrompt = () => {
+    if (!showLogoutPrompt) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-slate-800 rounded-lg border border-slate-600 shadow-xl max-w-md w-full">
+          <div className="p-6">
+            <h3 className="text-xl font-semibold text-white mb-4 flex items-center">
+              <Info className="w-6 h-6 text-blue-400 mr-2" />
+              Login Credentials Updated
+            </h3>
+            <p className="text-white/80 mb-6">
+              Your login information has been updated successfully. You need to log in again with your new credentials.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-500"
+              >
+                Log Out Now
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
 
   return (
     <div className="bg-[rgba(13,25,48,0.4)] backdrop-blur-xl rounded-lg border border-white/10 shadow-xl">
+      {renderLogoutPrompt()}
+      
       <div className="p-6 border-b border-white/10">
         <h2 className="text-lg font-semibold text-white/90">Personal Information</h2>
         {userId && <p className="text-xs text-white/50 mt-1">User ID: {userId}</p>}
@@ -461,7 +776,14 @@ const PersonalInfoSection = ({
         <div className={`mx-6 mt-4 p-3 rounded ${
           updateStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
         }`}>
-          {updateStatus.message}
+          <div className="flex items-start">
+            {updateStatus.type === 'success' ? (
+              <CheckCircle size={18} className="mr-2 mt-0.5 flex-shrink-0" />
+            ) : (
+              <AlertCircle size={18} className="mr-2 mt-0.5 flex-shrink-0" />
+            )}
+            <span>{updateStatus.message}</span>
+          </div>
         </div>
       )}
 
@@ -648,6 +970,8 @@ const PersonalInfoSection = ({
               error={errors.email}
               required
             />
+            
+            {renderEmailHelpText()}
 
             <FormField
               label="Phone"
@@ -681,51 +1005,8 @@ const PersonalInfoSection = ({
               error={errors.emergencyPhone}
             />
 
-            {/* Custom Password Field with Toggle Button */}
-            <div className="form-group md:col-span-2">
-              <label htmlFor="password" className="block mb-2">
-                <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-                  <Lock size={16} className="text-white/70" />
-                  <span>Password</span>
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  value={formData.password || ''}
-                  onChange={handleInputChange}
-                  disabled={!editMode}
-                  placeholder="Enter new password"
-                  className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-                    px-3 py-2 text-white/90 placeholder-white/50
-                    focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-                    disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-                    backdrop-blur-md transition-all duration-200 pr-12
-                    ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-                  `}
-                />
-                {editMode && (
-                  <button
-                    type="button"
-                    onClick={togglePasswordVisibility}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-                  >
-                    {showPassword ? "HIDE" : "SHOW"}
-                  </button>
-                )}
-              </div>
-              {errors.password && (
-                <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                  <AlertCircle size={14} />
-                  <span>{errors.password}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Password update help text */}
-            {editMode && renderPasswordHelpText()}
+            {/* Enhanced Password Field with Reset Option */}
+            {renderPasswordField()}
 
             {/* Current password field for verification when changing own password */}
             {renderCurrentPasswordField()}
@@ -749,20 +1030,39 @@ const PersonalInfoSection = ({
             <button
               onClick={onCancel}
               className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
+              disabled={isSaving}
             >
               Cancel
             </button>
           )}
           <button
             onClick={handleSaveClick}
-            className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-500"
+            className={`px-4 py-2 rounded-md ${
+              isSaving 
+                ? 'bg-blue-600/50 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-500'
+            } text-white font-semibold flex items-center justify-center`}
+            disabled={isSaving}
           >
-            Save Changes
+            {isSaving ? (
+              <>
+                <span className="animate-spin inline-block h-4 w-4 border-2 border-white/20 border-t-white rounded-full mr-2"></span>
+                Saving...
+              </>
+            ) : 'Save Changes'}
           </button>
         </div>
       )}
     </div>
   );
+};
+
+PadrinoStatusSection.propTypes = {
+  userData: PropTypes.object,
+  formData: PropTypes.object.isRequired,
+  onPadrinoChange: PropTypes.func.isRequired,
+  onPadrinoColorChange: PropTypes.func.isRequired,
+  editMode: PropTypes.bool.isRequired
 };
 
 PersonalInfoSection.propTypes = {
@@ -779,7 +1079,9 @@ PersonalInfoSection.propTypes = {
   onPadrinoChange: PropTypes.func,
   onPadrinoColorChange: PropTypes.func,
   userData: PropTypes.object,
-  isCurrentUser: PropTypes.bool
+  isCurrentUser: PropTypes.bool,
+  onSendPasswordReset: PropTypes.func,
+  fetchUserData: PropTypes.func
 };
 
 export default PersonalInfoSection;

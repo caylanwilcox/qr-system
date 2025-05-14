@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DateUtils from './dateUtils';
@@ -85,21 +85,30 @@ const ClockedInList = ({ data, date }) => {
   const navigate = useNavigate();
 
   // Get today's date if date is not provided
-  const effectiveDate = date || DateUtils.getCurrentDateISO();
-  const formattedDate = effectiveDate ? DateUtils.formatDisplayDate(effectiveDate) : 'Today';
+  // Use useState and useEffect to avoid recreating this value on every render
+  const [effectiveDate, setEffectiveDate] = useState('');
+  const [formattedDate, setFormattedDate] = useState('');
 
-  // Process data to find clocked in users for the specified date
+  // Set up date only when props change
   useEffect(() => {
-    if (!data) {
-      console.log("ClockedInList: No data provided");
-      setClockedInUsers([]);
-      return;
+    const newDate = date || DateUtils.getCurrentDateISO();
+    setEffectiveDate(newDate);
+    setFormattedDate(newDate ? DateUtils.formatDisplayDate(newDate) : 'Today');
+  }, [date]);
+
+  // Memoize the processing function to prevent recreating it on every render
+  const processUserData = useCallback((data, targetDate) => {
+    if (!data || !targetDate) {
+      return { users: [], stats: { checked: 0, found: 0 } };
     }
 
     // Track how many users we're checking and finding for debugging
     let checkedCount = 0;
     let foundCount = 0;
     const results = [];
+
+    // Get all possible date formats for the target date once
+    const dateFormats = DateUtils.getAllDateFormats(targetDate);
 
     // Process each user to find who's clocked in
     Object.entries(data).forEach(([id, user]) => {
@@ -108,9 +117,6 @@ const ClockedInList = ({ data, date }) => {
       // Add ID to the user object
       user.id = id;
       checkedCount++;
-      
-      // Get all possible date formats for the target date
-      const dateFormats = DateUtils.getAllDateFormats(effectiveDate);
       
       // Check for clocked in status across multiple structures
       let isClocked = false;
@@ -154,35 +160,39 @@ const ClockedInList = ({ data, date }) => {
       // 2. Then check clockInTimes object if not already found
       if (!isClocked && user.clockInTimes) {
         // Parse target date to compare with timestamps
-        const targetDate = new Date(effectiveDate);
-        const targetDateStr = targetDate.toISOString().split('T')[0];
-        
-        // Check each timestamp
-        for (const ts in user.clockInTimes) {
-          try {
-            const timestampDate = new Date(parseInt(ts));
-            const timestampDateStr = timestampDate.toISOString().split('T')[0];
-            
-            if (timestampDateStr === targetDateStr) {
-              isClocked = true;
-              clockInTime = user.clockInTimes[ts];
-              clockOutTime = user.clockOutTimes?.[ts] || null;
-              timestamp = ts;
+        try {
+          const targetDate = new Date(targetDate);
+          const targetDateStr = targetDate.toISOString().split('T')[0];
+          
+          // Check each timestamp
+          for (const ts in user.clockInTimes) {
+            try {
+              const timestampDate = new Date(parseInt(ts));
+              const timestampDateStr = timestampDate.toISOString().split('T')[0];
               
-              // Determine if on time
-              try {
-                const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-                const expectedTime = new Date(`2000-01-01 09:00`);
-                onTime = clockInTime9AM <= expectedTime;
-              } catch (e) {
-                // If parsing fails, default to false
+              if (timestampDateStr === targetDateStr) {
+                isClocked = true;
+                clockInTime = user.clockInTimes[ts];
+                clockOutTime = user.clockOutTimes?.[ts] || null;
+                timestamp = ts;
+                
+                // Determine if on time
+                try {
+                  const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
+                  const expectedTime = new Date(`2000-01-01 09:00`);
+                  onTime = clockInTime9AM <= expectedTime;
+                } catch (e) {
+                  // If parsing fails, default to false
+                }
+                
+                break;
               }
-              
-              break;
+            } catch (e) {
+              // Skip invalid timestamps
             }
-          } catch (e) {
-            console.error('Error parsing timestamp:', e);
           }
+        } catch (e) {
+          // Skip if target date parsing fails
         }
       }
       
@@ -237,13 +247,30 @@ const ClockedInList = ({ data, date }) => {
     // Sort results by name
     results.sort((a, b) => a.name.localeCompare(b.name));
     
-    // Update state with results and debug info
-    setClockedInUsers(results);
-    setDebug({ checked: checkedCount, found: foundCount });
+    return {
+      users: results,
+      stats: { checked: checkedCount, found: foundCount }
+    };
+  }, []);
+
+  // Process data when data or effectiveDate changes
+  useEffect(() => {
+    if (!data || !effectiveDate) {
+      setClockedInUsers([]);
+      setDebug({ checked: 0, found: 0 });
+      return;
+    }
+
+    // Process data to find clocked in users
+    const result = processUserData(data, effectiveDate);
     
-    // Log debug info
-    console.log(`ClockedInList: Checked ${checkedCount} users, found ${foundCount} clocked in for date ${effectiveDate}`);
-  }, [data, effectiveDate]);
+    // Update state with results and debug info
+    setClockedInUsers(result.users);
+    setDebug(result.stats);
+    
+    // Log debug info - only once per data/date change
+    console.log(`ClockedInList: Checked ${result.stats.checked} users, found ${result.stats.found} clocked in for date ${effectiveDate}`);
+  }, [data, effectiveDate, processUserData]);
 
   return (
     <div className="clocked-in-list card">

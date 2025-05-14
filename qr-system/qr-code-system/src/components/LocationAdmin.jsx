@@ -45,7 +45,6 @@ const LocationAdmin = () => {
     { path: '/location-admin/reports', icon: <FileText size={24} />, text: 'Attendance Reports' },
     { path: '/location-admin/settings', icon: <Settings size={24} />, text: 'Settings' },
     { path: '/location-admin/qr-scanner', icon: <QrCode size={24} />, text: 'QR Code Scanner' },
-    { path: '/location-admin/add-user', icon: <User size={24} />, text: 'Add User' },
   ];
 
   const getPageTitle = () => {
