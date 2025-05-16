@@ -22,7 +22,8 @@ import AccountSettings from './components/AccountSettings';
 import QRScannerPage from './components/QRScannerPage';
 import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
 import StatDetails from './components/SuperAdmin/StatDetails';
-import UserProfile from './components/UserProfile/UserProfile';
+import UserProfile from './components/UserProfile/UserDashboard';
+import UserDashboard from './components/UserProfile/UserDashboard';
 
 /* Lazy imports */
 const Login = React.lazy(() => import('./components/Login'));
@@ -62,7 +63,7 @@ function AppContent() {
         <Route path="employee-list" element={<EmployeeListPage />} />
 
         {/* Employee Routes */}
-        <Route path="/dashboard" element={<PrivateRoute requiredRole="EMPLOYEE"><UserProfile /></PrivateRoute>} />
+        <Route path="/dashboard" element={<PrivateRoute requiredRole="EMPLOYEE"><UserDashboard /></PrivateRoute>} />
 
         {/* Super Admin Routes */}
         <Route path="/super-admin/*" element={<PrivateRoute requiredRole="SUPER_ADMIN"><SuperAdmin /></PrivateRoute>}>
