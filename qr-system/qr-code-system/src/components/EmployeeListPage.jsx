@@ -3,7 +3,7 @@ import { ref, onValue } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
 import { User, TrendingUp, TrendingDown, Search, Loader2, UserCircle, MapPin, ChevronLeft, Award } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import './EmployeeListPage.css'; // Make sure to include the CSS file
+import './EmployeeListPage.css';
 
 // Helper function to get user's full name from various possible fields
 const getUserFullName = (user) => {
@@ -24,6 +24,12 @@ const getUserFullName = (user) => {
   return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
 };
 
+// Helper to normalize location keys for comparison
+const normalizeLocationKey = (location) => {
+  if (!location) return '';
+  return location.toLowerCase().replace(/\s+/g, '');
+};
+
 const EmployeeList = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,11 +43,21 @@ const EmployeeList = () => {
     service: null,
     location: null
   });
+  
+  // Map for location keys to display names (for UI purposes)
+  const locationDisplayMap = {
+    'aurora': 'Aurora',
+    'elgin': 'Elgin',
+    'joliet': 'Joliet',
+    'lyons': 'Lyons',
+    'westchicago': 'West Chicago',
+    'wheeling': 'Wheeling'
+  };
 
   // Extract filters from location state if available
   useEffect(() => {
     if (location.state) {
-      console.log("Location state received:", location.state);
+      console.log("Location state received in EmployeeList:", location.state);
       const newFilters = { ...activeFilters };
       
       if (location.state.filter) {
@@ -64,7 +80,7 @@ const EmployeeList = () => {
         newFilters.color = location.state.color;
       }
       
-      // Handle location filter
+      // Handle location filter with additional normalization
       if (location.state.location) {
         console.log("Setting location filter to:", location.state.location);
         newFilters.location = location.state.location;
@@ -92,11 +108,17 @@ const EmployeeList = () => {
           // Add ID to the user object for name extraction
           user.id = id;
           
+          // Get location info from any available location field
+          const userLocation = user.location || 
+                              user.profile?.locationKey || 
+                              user.profile?.primaryLocation || 'N/A';
+          
           return {
             id,
             name: getUserFullName(user),
             position: user.profile?.position || 'N/A',
-            location: user.profile?.primaryLocation || 'N/A',
+            location: userLocation,
+            normalizedLocation: normalizeLocationKey(userLocation),
             padrinoColor: user.profile?.padrinoColor || null,
             service: user.profile?.service || '',
             isPadrino: user.profile?.padrino === true,
@@ -108,6 +130,15 @@ const EmployeeList = () => {
             }
           };
         });
+      
+      // Debug first few employees to check location formats
+      console.log("Sample employees with location data:", 
+        employeeList.slice(0, 3).map(e => ({
+          name: e.name, 
+          location: e.location, 
+          normalized: e.normalizedLocation
+        }))
+      );
 
       setEmployees(employeeList);
       setLoading(false);
@@ -179,11 +210,19 @@ const EmployeeList = () => {
       );
     }
     
-    // Apply location filter
+    // Apply location filter with improved matching
     if (activeFilters.location) {
-      filteredList = filteredList.filter(emp => 
-        emp.location.toLowerCase() === activeFilters.location.toLowerCase()
-      );
+      const normalizedFilterLocation = normalizeLocationKey(activeFilters.location);
+      console.log("Applying normalized location filter:", normalizedFilterLocation);
+      
+      filteredList = filteredList.filter(emp => {
+        // Use normalized location for matching
+        const match = emp.normalizedLocation === normalizedFilterLocation;
+        if (match) {
+          console.log(`Location match found for ${emp.name}: ${emp.location} (normalized: ${emp.normalizedLocation})`);
+        }
+        return match;
+      });
     }
 
     // Apply sorting
@@ -272,7 +311,7 @@ const EmployeeList = () => {
     return null;
   };
 
-  // Get the filter description
+  // Get the filter description with proper location name display
   const getFilterDescription = () => {
     const filters = [];
     
@@ -285,7 +324,13 @@ const EmployeeList = () => {
     }
     
     if (activeFilters.location) {
-      filters.push(`Location: ${activeFilters.location}`);
+      // Get a nicely formatted location name for display
+      const normalizedLocation = normalizeLocationKey(activeFilters.location);
+      const displayLocation = locationDisplayMap[normalizedLocation] || 
+                             (activeFilters.location.charAt(0).toUpperCase() + 
+                              activeFilters.location.slice(1));
+      
+      filters.push(`Location: ${displayLocation}`);
     }
     
     return filters.length > 0 ? filters.join(' • ') : 'All Employees';
@@ -375,6 +420,22 @@ const EmployeeList = () => {
             </button>
           )}
         </div>
+
+        {/* Debug info - remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="p-2 mb-4 bg-slate-800/30 rounded-lg text-xs">
+            <details>
+              <summary className="cursor-pointer font-medium text-blue-400">Debug Filter Info</summary>
+              <div className="mt-2 space-y-1">
+                <p>Current location filter: {activeFilters.location || 'None'}</p>
+                <p>Normalized: {activeFilters.location ? normalizeLocationKey(activeFilters.location) : 'N/A'}</p>
+                <p>Color filter: {activeFilters.color || 'None'}</p>
+                <p>Service filter: {activeFilters.service || 'None'}</p>
+                <p>Filtered employees: {sortedEmployees.length}</p>
+              </div>
+            </details>
+          </div>
+        )}
 
         {/* Legend for Padrino ranks */}
         <div className="mb-4 p-2 bg-slate-800/30 rounded-lg">

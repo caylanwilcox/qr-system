@@ -1,9 +1,16 @@
 'use client';
-//src/components/EmployeeProfile/PersonalInfoSection.js
 
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { ref, update, get } from 'firebase/database';
+import { 
+  getAuth, 
+  updateProfile, 
+  updateEmail, 
+  updatePassword, 
+  EmailAuthProvider, 
+  reauthenticateWithCredential 
+} from 'firebase/auth';
 import { database } from '../../services/firebaseConfig';
 import { 
   Mail, 
@@ -14,22 +21,10 @@ import {
   Lock, 
   Users, 
   User, 
-  Award, 
-  CheckCircle, 
-  X, 
-  AlertTriangle,
-  Info 
+  CheckCircle,
+  Info,
+  AlertTriangle
 } from 'lucide-react';
-import { calculatePadrinoColor, PADRINO_COLORS } from '../utils/padrinoColorCalculator';
-import { useAuth } from '../../services/authContext';
-import { 
-  EmailAuthProvider, 
-  reauthenticateWithCredential, 
-  updatePassword, 
-  updateProfile, 
-  updateEmail 
-} from 'firebase/auth';
-import { auth } from '../../services/firebaseConfig';
 
 const FormField = ({
   label,
@@ -80,208 +75,6 @@ const FormField = ({
   </div>
 );
 
-const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoColorChange, editMode }) => {
-  const [padrinoStatus, setPadrinoStatus] = useState({
-    eligible: false,
-    color: PADRINO_COLORS.BLUE,
-    requirements: {
-      haciendas: { required: 95, actual: 0, met: false },
-      workshops: { required: 60, actual: 0, met: false },
-      meetings: { required: 100, actual: 0, met: false }
-    },
-    allRequirementsMet: false
-  });
-  
-  const [autoCalculate, setAutoCalculate] = useState(false);
-
-  // Calculate padrino status when userData changes
-  useEffect(() => {
-    if (userData && userData.events) {
-      const status = calculatePadrinoColor(userData);
-      setPadrinoStatus(status);
-      
-      // If in auto mode, update the color based on calculations
-      if (autoCalculate && formData.padrino) {
-        onPadrinoColorChange({ target: { value: status.color } });
-      }
-    }
-  }, [userData, autoCalculate, onPadrinoColorChange, formData.padrino]);
-
-  // Get color display name
-  const getColorDisplayName = (color) => {
-    return color ? color.charAt(0).toUpperCase() + color.slice(1) : 'Blue';
-  };
-
-  // Get CSS classes for color display
-  const getColorClasses = (color) => {
-    switch (color) {
-      case PADRINO_COLORS.RED:
-        return 'bg-red-500/20 text-red-500 border-red-500/30';
-      case PADRINO_COLORS.ORANGE:
-        return 'bg-orange-500/20 text-orange-500 border-orange-500/30';
-      case PADRINO_COLORS.GREEN:
-        return 'bg-green-500/20 text-green-500 border-green-500/30';
-      case PADRINO_COLORS.BLUE:
-      default:
-        return 'bg-blue-500/20 text-blue-500 border-blue-500/30';
-    }
-  };
-
-  // Get requirement status display
-  const getRequirementStatus = (requirement) => {
-    if (!requirement.actual) return 'Not enough data';
-    if (requirement.met) return `${requirement.actual}% ✓`;
-    return `${requirement.actual}% (${requirement.required}% required) ✗`;
-  };
-
-  // Toggle auto-calculate mode
-  const handleAutoCalculateToggle = () => {
-    const newValue = !autoCalculate;
-    setAutoCalculate(newValue);
-    
-    // If turning on auto-calculate, immediately update color
-    if (newValue && formData.padrino) {
-      onPadrinoColorChange({ target: { value: padrinoStatus.color } });
-    }
-  };
-
-  return (
-    <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg overflow-hidden mb-6">
-      <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-white/90 flex items-center">
-          <Award className="w-5 h-5 mr-2 text-yellow-400" />
-          Padrino Status
-        </h3>
-        
-        <div className="flex items-center">
-          <label className="relative inline-flex items-center cursor-pointer mr-3">
-            <input
-              type="checkbox"
-              checked={formData.padrino}
-              onChange={onPadrinoChange}
-              className="sr-only peer"
-              disabled={!editMode}
-            />
-            <div className={`w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer 
-              ${formData.padrino ? 'peer-checked:after:translate-x-full peer-checked:bg-blue-600' : ''}
-              after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
-              after:bg-white after:border-gray-300 after:border after:rounded-full 
-              after:h-5 after:w-5 after:transition-all`}>
-            </div>
-            <span className="ml-2 text-sm font-medium text-white/70">
-              {formData.padrino ? 'Enabled' : 'Disabled'}
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div className="p-4">
-        {formData.padrino ? (
-          <>
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="text-sm font-medium text-white/70">Color Selection</h4>
-                <label className="flex items-center text-sm text-white/60 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoCalculate}
-                    onChange={handleAutoCalculateToggle}
-                    className="mr-2 h-4 w-4"
-                    disabled={!editMode}
-                  />
-                  Auto-calculate
-                </label>
-              </div>
-              
-              {editMode ? (
-                <div className="grid grid-cols-4 gap-2">
-                  {Object.values(PADRINO_COLORS).map((color) => (
-                    <div 
-                      key={color}
-                      onClick={() => !autoCalculate && onPadrinoColorChange({ target: { value: color } })}
-                      className={`border rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer
-                        ${color === formData.padrinoColor ? 'ring-2 ring-white/30' : ''}
-                        ${getColorClasses(color)}
-                        ${autoCalculate ? 'opacity-50 cursor-not-allowed' : 'hover:ring-2 hover:ring-white/30'}`}
-                    >
-                      <Award className="w-6 h-6 mb-1" />
-                      <span className="text-sm">{getColorDisplayName(color)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={`border rounded-lg p-3 flex items-center ${getColorClasses(formData.padrinoColor)}`}>
-                  <Award className="w-6 h-6 mr-2" />
-                  <span className="text-lg font-semibold">{getColorDisplayName(formData.padrinoColor || PADRINO_COLORS.BLUE)}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-slate-700 pt-4 mt-4">
-              <h4 className="text-sm font-medium text-white/70 mb-3">Attendance Requirements</h4>
-              <div className="space-y-3">
-                <div className={`rounded-lg p-3 border ${padrinoStatus.requirements.haciendas.met ? 'bg-green-500/10 border-green-500/30' : 'bg-slate-800/50 border-slate-700/30'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white/80">Haciendas (min 95%)</span>
-                    <span className={padrinoStatus.requirements.haciendas.met ? 'text-green-400' : 'text-white/60'}>
-                      {getRequirementStatus(padrinoStatus.requirements.haciendas)}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className={`rounded-lg p-3 border ${padrinoStatus.requirements.workshops.met ? 'bg-green-500/10 border-green-500/30' : 'bg-slate-800/50 border-slate-700/30'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white/80">Workshops (min 60%)</span>
-                    <span className={padrinoStatus.requirements.workshops.met ? 'text-green-400' : 'text-white/60'}>
-                      {getRequirementStatus(padrinoStatus.requirements.workshops)}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className={`rounded-lg p-3 border ${padrinoStatus.requirements.meetings.met ? 'bg-green-500/10 border-green-500/30' : 'bg-slate-800/50 border-slate-700/30'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white/80">Group Meetings (100%)</span>
-                    <span className={padrinoStatus.requirements.meetings.met ? 'text-green-400' : 'text-white/60'}>
-                      {getRequirementStatus(padrinoStatus.requirements.meetings)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className={`mt-4 p-3 rounded-lg border ${padrinoStatus.eligible ? 'bg-green-500/10 border-green-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}>
-                <div className="flex items-center">
-                  {padrinoStatus.eligible ? (
-                    <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
-                  ) : (
-                    <AlertCircle className="w-5 h-5 text-yellow-400 mr-2" />
-                  )}
-                  <span className={padrinoStatus.eligible ? 'text-green-400' : 'text-yellow-400'}>
-                    {padrinoStatus.eligible 
-                      ? 'All requirements met! Eligible for Padrino status.' 
-                      : 'Some requirements not met. See above for details.'}
-                  </span>
-                </div>
-                
-                {padrinoStatus.eligible && autoCalculate && (
-                  <div className="mt-2 text-sm text-white/60">
-                    Recommended color: <span className={`font-semibold ${getColorClasses(padrinoStatus.color).split(' ')[1]}`}>{getColorDisplayName(padrinoStatus.color)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center p-6 text-white/60">
-            <X className="w-8 h-8 mb-2" />
-            <p>Padrino status is currently disabled.</p>
-            <p className="text-sm mt-1">Enable it to manage colors and view requirements.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 const PersonalInfoSection = ({
   formData,
   editMode,
@@ -290,104 +83,75 @@ const PersonalInfoSection = ({
   onSave,
   onCancel,
   userId,
-  onRoleToggle,
-  locations = [],
-  departments = [],
-  onPadrinoChange,
-  onPadrinoColorChange,
+  onSendPasswordReset,
   userData,
   isCurrentUser = false,
-  onSendPasswordReset,
-  fetchUserData
+  fetchUserData,
+  locations = []
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
-  const [expandedSection, setExpandedSection] = useState('personal');
   const [currentPassword, setCurrentPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [credentialsChanged, setCredentialsChanged] = useState(false);
-  const { user, logout } = useAuth();
+  const auth = getAuth();
   
   // Store original values to track changes
   const [originalValues, setOriginalValues] = useState({
-    email: userData?.email || '',
-    name: userData?.name || ''
+    email: formData?.email || '',
+    name: formData?.name || ''
   });
   
   useEffect(() => {
-    // Update original values when userData changes
-    if (userData) {
+    // Update original values when formData changes
+    if (formData) {
       setOriginalValues({
-        email: userData.email || '',
-        name: userData.name || ''
+        email: formData.email || '',
+        name: formData.name || ''
       });
     }
-  }, [userData]);
+  }, [formData]);
 
   // Toggle password visibility
-  const togglePasswordVisibility = () => {
-    setShowPassword(prevState => !prevState);
+  const togglePasswordVisibility = (field) => {
+    if (field === 'current') {
+      setShowCurrentPassword(prevState => !prevState);
+    } else {
+      setShowPassword(prevState => !prevState);
+    }
   };
 
-  // Toggle current password visibility
-  const toggleCurrentPasswordVisibility = () => {
-    setShowCurrentPassword(prevState => !prevState);
+  // Custom handler for password field
+  const handlePasswordChange = (e) => {
+    if (handleInputChange) {
+      handleInputChange(e);
+    }
   };
 
-  // Helper function to update Firebase Auth user
-  const updateAuthUser = async (updatedFields = {}) => {
-    if (!auth.currentUser) {
-      throw new Error('Not authenticated');
-    }
-    
-    const updates = [];
-    let credChanged = false;
-    
-    // Update display name if changed
-    if (updatedFields.displayName && updatedFields.displayName !== auth.currentUser.displayName) {
-      updates.push(updateProfile(auth.currentUser, {
-        displayName: updatedFields.displayName
-      }));
-    }
-    
-    // Update email if changed
-    if (updatedFields.email && updatedFields.email !== auth.currentUser.email) {
-      // Email changes require recent authentication
-      if (!currentPassword) {
-        throw new Error('Current password is required to update email');
-      }
-      
-      try {
-        const credential = EmailAuthProvider.credential(
-          auth.currentUser.email,
-          currentPassword
-        );
-        
-        await reauthenticateWithCredential(auth.currentUser, credential);
-        updates.push(updateEmail(auth.currentUser, updatedFields.email));
-        credChanged = true;
-      } catch (error) {
-        console.error("Error updating email:", error);
-        throw error;
-      }
-    }
-    
-    // Execute all updates
-    try {
-      await Promise.all(updates);
-      return { success: true, credentialsChanged: credChanged };
-    } catch (error) {
-      console.error("Error updating auth user:", error);
-      throw error;
-    }
+  // Handler for current password field
+  const handleCurrentPasswordChange = (e) => {
+    setCurrentPassword(e.target.value);
+  };
+
+  // Check if email or password has changed (requiring authentication)
+  const needsAuthentication = () => {
+    return isCurrentUser && (
+      (formData.email && formData.email !== originalValues.email) ||
+      (formData.password && formData.password.trim() !== '')
+    );
   };
 
   // Handle user logout
   const handleLogout = async () => {
     try {
-      await logout();
+      // If your auth context has a logout function
+      if (window.logout) {
+        await window.logout();
+      } else {
+        await auth.signOut();
+      }
       // Redirect to login page
       window.location.href = '/login';
     } catch (error) {
@@ -396,165 +160,201 @@ const PersonalInfoSection = ({
       window.location.href = '/login';
     }
   };
-  
-  // Update the database with correct auth info
-  const updateDatabaseAuthInfo = async (userId, updates) => {
-    try {
-      // Create updates object for Firebase
-      const dbUpdates = {};
-      
-      // Update authUid if needed
-      if (auth.currentUser) {
-        dbUpdates[`users/${userId}/profile/authUid`] = auth.currentUser.uid;
+
+  // Update Firebase Auth for current user
+  const updateAuthUser = async () => {
+    if (!auth.currentUser) {
+      throw new Error('Not authenticated');
+    }
+    
+    // Authenticate user if required
+    if (needsAuthentication()) {
+      if (!currentPassword) {
+        throw new Error('Current password is required to update email or password');
       }
       
-      // Add other updates
-      Object.entries(updates).forEach(([key, value]) => {
-        dbUpdates[`users/${userId}/profile/${key}`] = value;
+      try {
+        const credential = EmailAuthProvider.credential(
+          auth.currentUser.email,
+          currentPassword
+        );
+        await reauthenticateWithCredential(auth.currentUser, credential);
+      } catch (error) {
+        if (error.code === 'auth/wrong-password') {
+          throw new Error('Current password is incorrect');
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    // Update the user profile
+    const updates = [];
+    let credChanged = false;
+    
+    // Update display name if changed
+    if (formData.name && formData.name !== auth.currentUser.displayName) {
+      updates.push(updateProfile(auth.currentUser, {
+        displayName: formData.name
+      }));
+    }
+    
+    // Update email if changed
+    if (formData.email && formData.email !== auth.currentUser.email) {
+      updates.push(updateEmail(auth.currentUser, formData.email));
+      credChanged = true;
+    }
+    
+    // Update password if provided
+    if (formData.password && formData.password.trim() !== '') {
+      updates.push(updatePassword(auth.currentUser, formData.password));
+      credChanged = true;
+    }
+    
+    // Execute all updates
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+    
+    return { success: true, credentialsChanged: credChanged };
+  };
+
+  // Update Firebase Auth admin API for other users
+  const updateUserAuthViaAdmin = async () => {
+    try {
+      // Create update object
+      const updates = {};
+      
+      if (formData.name) updates.displayName = formData.name;
+      if (formData.email) updates.email = formData.email;
+      if (formData.password && formData.password.trim() !== '') {
+        updates.password = formData.password;
+      }
+      
+      // Only proceed if we have updates
+      if (Object.keys(updates).length === 0) return { success: true };
+      
+      // Get the current user's ID token
+      const idToken = await auth.currentUser.getIdToken();
+      
+      // Call the admin API
+      const response = await fetch('/api/admin/update-user-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          userId,
+          updates
+        })
       });
       
-      // Also update at root level if needed
-      const userRef = ref(database, `users/${userId}`);
-      const snapshot = await get(userRef);
-      const userData = snapshot.val();
-      
-      if (userData && updates.name && userData.hasOwnProperty('name')) {
-        dbUpdates[`users/${userId}/name`] = updates.name;
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to update user authentication');
       }
       
-      // Perform update
-      await update(ref(database), dbUpdates);
-      return true;
+      return { success: true };
     } catch (error) {
-      console.error("Error updating database auth info:", error);
+      console.error('Admin update failed:', error);
       throw error;
     }
   };
 
-  // Handle save with authentication updates
+  // Update the database with correct auth info
+  const updateDatabaseWithAuthInfo = async () => {
+    try {
+      // Create updates object for Firebase
+      const dbUpdates = {};
+      
+      // Update name in both places
+      if (formData.name) {
+        dbUpdates[`users/${userId}/profile/name`] = formData.name;
+        dbUpdates[`users/${userId}/name`] = formData.name; // Update root level too
+      }
+      
+      // Update email
+      if (formData.email) {
+        dbUpdates[`users/${userId}/profile/email`] = formData.email;
+      }
+      
+      // Update phone
+      if (formData.phone !== undefined) {
+        dbUpdates[`users/${userId}/profile/phone`] = formData.phone || '';
+      }
+      
+      // Update service
+      if (formData.service) {
+        dbUpdates[`users/${userId}/profile/service`] = formData.service;
+      }
+      
+      // Update password in database if provided
+      if (formData.password && formData.password.trim() !== '') {
+        dbUpdates[`users/${userId}/profile/password`] = formData.password;
+      }
+      
+      // Also update authUid link for current user
+      if (isCurrentUser && auth.currentUser) {
+        dbUpdates[`users/${userId}/profile/authUid`] = auth.currentUser.uid;
+      }
+      
+      // Perform the database update
+      await update(ref(database), dbUpdates);
+      return true;
+    } catch (error) {
+      console.error("Error updating database:", error);
+      throw error;
+    }
+  };
+
+  // Handle save button click
   const handleSaveClick = async () => {
     try {
       setIsSaving(true);
       setUpdateStatus(null);
       setCredentialsChanged(false);
       
-      let passwordChanged = false;
-      
-      // Step 1: Handle password updates for current user
-      if (formData.password && isCurrentUser) {
-        if (!currentPassword) {
-          setUpdateStatus({ 
-            type: 'error', 
-            message: 'Current password is required to update password' 
-          });
-          setIsSaving(false);
-          return;
-        }
-
-        try {
-          // Make sure user is available before trying to reauthenticate
-          if (!user || !user.email) {
-            setUpdateStatus({
-              type: 'error',
-              message: 'Authentication error: User not properly authenticated'
-            });
-            setIsSaving(false);
-            return;
-          }
-
-          // Reauthenticate
-          const credential = EmailAuthProvider.credential(
-            user.email,
-            currentPassword
-          );
-          
-          await reauthenticateWithCredential(auth.currentUser, credential);
-          
-          // Update password in Firebase Auth
-          await updatePassword(auth.currentUser, formData.password);
-          
-          // Mark credentials as changed
-          setCredentialsChanged(true);
-          passwordChanged = true;
-          
-          // Clear password fields
-          setCurrentPassword('');
-          
-        } catch (authError) {
-          console.error("Auth error updating password:", authError);
-          
-          let errorMessage = 'Authentication error occurred';
-          
-          if (authError.code === 'auth/wrong-password') {
-            errorMessage = 'Current password is incorrect';
-          } else if (authError.code === 'auth/weak-password') {
-            errorMessage = 'New password is too weak (minimum 6 characters)';
-          } else if (authError.code === 'auth/requires-recent-login') {
-            errorMessage = 'Please log out and log back in before changing your password';
-          } else if (authError.code) {
-            errorMessage = `Authentication error: ${authError.code}`;
-          }
-          
-          setUpdateStatus({ 
-            type: 'error', 
-            message: errorMessage
-          });
-          setIsSaving(false);
-          return;
-        }
-      }
-      
-      // Step 2: Update Firebase Auth if needed (for current user)
+      // Step 1: Update Firebase Auth if necessary
       if (isCurrentUser) {
         try {
-          const authUpdates = {};
-          
-          // Check if name has changed
-          if (formData.name !== originalValues.name) {
-            authUpdates.displayName = formData.name;
+          // Update authentication for current user
+          const authResult = await updateAuthUser();
+          if (authResult.credentialsChanged) {
+            setCredentialsChanged(true);
           }
-          
-          // Check if email has changed
-          if (formData.email !== originalValues.email) {
-            authUpdates.email = formData.email;
-          }
-          
-          // Only attempt auth updates if there are changes to make
-          if (Object.keys(authUpdates).length > 0) {
-            const result = await updateAuthUser(authUpdates);
-            if (result.credentialsChanged) {
-              setCredentialsChanged(true);
-            }
-          }
-        } catch (authError) {
-          setUpdateStatus({ 
-            type: 'error', 
-            message: `Error updating profile: ${authError.message}` 
-          });
-          setIsSaving(false);
-          return;
-        }
-      }
-      
-      // Step 3: Ensure database has correct reference to auth
-      if (isCurrentUser) {
-        try {
-          await updateDatabaseAuthInfo(userId, {
-            email: formData.email,
-            name: formData.name,
-            password: formData.password || undefined
-          });
         } catch (error) {
-          console.error("Error updating database auth link:", error);
+          console.error("Auth update error:", error);
+          setUpdateStatus({ 
+            type: 'error', 
+            message: `Authentication error: ${error.message}` 
+          });
+          setIsSaving(false);
+          return;
+        }
+      } else if (auth.currentUser && formData.password) {
+        // Admin updating another user's auth
+        try {
+          await updateUserAuthViaAdmin();
+        } catch (error) {
+          console.error("Admin auth update error:", error);
+          setUpdateStatus({ 
+            type: 'error', 
+            message: `Admin authentication error: ${error.message}` 
+          });
+          // Continue with database update even if Auth update fails
         }
       }
       
-      // Step 4: Update database record through the parent component
+      // Step 2: Update the database
+      await updateDatabaseWithAuthInfo();
+      
+      // Step 3: Call parent onSave if provided
       if (onSave) {
         await onSave();
       }
       
-      // Step 5: Show success and handle logout if needed
+      // Step 4: Update state and show feedback
       if (credentialsChanged) {
         setUpdateStatus({ 
           type: 'success', 
@@ -573,165 +373,18 @@ const PersonalInfoSection = ({
         }
       }
       
+      // Clear sensitive data
+      setCurrentPassword('');
+      
     } catch (error) {
       console.error("Error saving profile:", error);
       setUpdateStatus({ 
         type: 'error', 
-        message: `Error: ${error.message}` 
+        message: `Error updating profile: ${error.message}` 
       });
     } finally {
       setIsSaving(false);
     }
-  };
-
-  // Render appropriate password help text based on user context
-  const renderPasswordHelpText = () => {
-    if (!editMode) return null;
-
-    if (isCurrentUser) {
-      return (
-        <div className="text-blue-400 text-sm mb-2 flex items-start">
-          <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
-          <span>
-            Enter a new password to update your account. You'll need to enter your current 
-            password to confirm this change. After changing your password, you'll need to log in again.
-          </span>
-        </div>
-      );
-    } else {
-      return (
-        <div className="text-amber-400 text-sm mb-2 flex items-start">
-          <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
-          <span>
-            As an administrator, you can update this user's database password, but this won't change their 
-            authentication credentials. For complete password reset, use the password reset email option.
-          </span>
-        </div>
-      );
-    }
-  };
-
-  // Render email help text when editing
-  const renderEmailHelpText = () => {
-    if (!editMode || !isCurrentUser) return null;
-    
-    return (
-      <div className="text-blue-400 text-sm mb-2 flex items-start">
-        <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
-        <span>
-          Changing your email will require you to log in again with the new email address.
-          You must provide your current password to change your email.
-        </span>
-      </div>
-    );
-  };
-
-  // Render the password field with reset option for admins
-  const renderPasswordField = () => (
-    <div className="form-group md:col-span-2">
-      <label htmlFor="password" className="block mb-2">
-        <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-          <Lock size={16} className="text-white/70" />
-          <span>Password</span>
-        </span>
-      </label>
-      <div className="relative">
-        <input
-          id="password"
-          type={showPassword ? "text" : "password"}
-          name="password"
-          value={formData.password || ''}
-          onChange={handleInputChange}
-          disabled={!editMode}
-          placeholder="Enter new password"
-          className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-            px-3 py-2 text-white/90 placeholder-white/50
-            focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-            disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-            backdrop-blur-md transition-all duration-200 pr-12
-            ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-          `}
-        />
-        {editMode && (
-          <button
-            type="button"
-            onClick={togglePasswordVisibility}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-          >
-            {showPassword ? "HIDE" : "SHOW"}
-          </button>
-        )}
-      </div>
-      {errors.password && (
-        <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
-          <AlertCircle size={14} />
-          <span>{errors.password}</span>
-        </div>
-      )}
-      
-      {/* Add password reset button for admins editing other users */}
-      {editMode && !isCurrentUser && onSendPasswordReset && (
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={onSendPasswordReset}
-            className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
-          >
-            <Mail size={14} />
-            <span className="underline">Send password reset email instead</span>
-          </button>
-        </div>
-      )}
-      
-      {renderPasswordHelpText()}
-    </div>
-  );
-
-  // Render current password field when needed
-  const renderCurrentPasswordField = () => {
-    // Show current password field when user is changing their own password or email
-    const needsCurrentPassword = editMode && isCurrentUser && 
-      (formData.password || (formData.email && formData.email !== originalValues.email));
-    
-    if (!needsCurrentPassword) return null;
-    
-    return (
-      <div className="form-group md:col-span-2 mt-4">
-        <label htmlFor="currentPassword" className="block mb-2">
-          <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-            <Lock size={16} className="text-white/70" />
-            <span>Current Password</span>
-            <span className="text-red-400">*</span>
-          </span>
-        </label>
-        <div className="relative">
-          <input
-            id="currentPassword"
-            type={showCurrentPassword ? "text" : "password"}
-            name="currentPassword"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Enter your current password"
-            className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-              px-3 py-2 text-white/90 placeholder-white/50
-              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-              backdrop-blur-md transition-all duration-200 pr-12
-            `}
-            required
-          />
-          <button
-            type="button"
-            onClick={toggleCurrentPasswordVisibility}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-          >
-            {showCurrentPassword ? "HIDE" : "SHOW"}
-          </button>
-        </div>
-        <p className="text-amber-400 text-xs mt-1">
-          Required to confirm changes to sensitive information
-        </p>
-      </div>
-    );
   };
 
   // Render logout prompt modal
@@ -763,8 +416,51 @@ const PersonalInfoSection = ({
     );
   };
 
+  // Render current password field when needed
+  const renderCurrentPasswordField = () => {
+    if (!editMode || !isCurrentUser || !needsAuthentication()) return null;
+    
+    return (
+      <div className="form-group md:col-span-2 mt-2">
+        <label htmlFor="currentPassword" className="block mb-2">
+          <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+            <Lock size={16} className="text-white/70" />
+            <span>Current Password</span>
+            <span className="text-red-400">*</span>
+          </span>
+        </label>
+        <div className="relative">
+          <input
+            id="currentPassword"
+            type={showCurrentPassword ? "text" : "password"}
+            value={currentPassword}
+            onChange={handleCurrentPasswordChange}
+            placeholder="Enter your current password"
+            className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+              px-3 py-2 text-white/90 placeholder-white/50
+              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+              backdrop-blur-md transition-all duration-200 pr-12
+            `}
+            required
+          />
+          <button
+            type="button"
+            onClick={() => togglePasswordVisibility('current')}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+          >
+            {showCurrentPassword ? "HIDE" : "SHOW"}
+          </button>
+        </div>
+        <p className="text-amber-400 text-xs mt-1">
+          Required to confirm changes to password or email
+        </p>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-[rgba(13,25,48,0.4)] backdrop-blur-xl rounded-lg border border-white/10 shadow-xl">
+      {/* Render logout prompt modal if credentials changed */}
       {renderLogoutPrompt()}
       
       <div className="p-6 border-b border-white/10">
@@ -787,101 +483,56 @@ const PersonalInfoSection = ({
         </div>
       )}
 
-      {/* Navigation tabs */}
-      <div className="flex space-x-2 m-6 overflow-x-auto pb-2 border-b border-white/10">
-        <button
-          onClick={() => setExpandedSection('personal')}
-          className={`px-4 py-2 text-sm rounded-lg ${
-            expandedSection === 'personal'
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'text-white/70 hover:bg-white/5'
-          }`}
-        >
-          Basic Info
-        </button>
-        <button
-          onClick={() => setExpandedSection('contact')}
-          className={`px-4 py-2 text-sm rounded-lg ${
-            expandedSection === 'contact'
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'text-white/70 hover:bg-white/5'
-          }`}
-        >
-          Contact
-        </button>
-        <button
-          onClick={() => setExpandedSection('padrino')}
-          className={`px-4 py-2 text-sm rounded-lg ${
-            expandedSection === 'padrino'
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'text-white/70 hover:bg-white/5'
-          }`}
-        >
-          Padrino
-        </button>
-      </div>
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Display Name / Username */}
+          <FormField
+            label="Display Name"
+            icon={<User size={16} className="text-white/70" />}
+            name="name"
+            type="text"
+            value={formData.name || ''}
+            onChange={handleInputChange}
+            disabled={!editMode}
+            error={errors.name}
+            required
+          />
 
-      <div className="p-6">
-        {expandedSection === 'personal' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              label="Full Name"
-              icon={<User size={16} className="text-white/70" />}
-              name="name"
-              value={formData.name || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.name}
-              required
-            />
+          {/* Email */}
+          <FormField
+            label="Email"
+            icon={<Mail size={16} className="text-white/70" />}
+            name="email"
+            type="email"
+            value={formData.email || ''}
+            onChange={handleInputChange}
+            disabled={!editMode}
+            error={errors.email}
+            required
+          />
 
-            <FormField
-              label="Position"
-              icon={<Award size={16} className="text-white/70" />}
-              name="position"
-              value={formData.position || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.position}
-            />
+          {/* Phone */}
+          <FormField
+            label="Phone"
+            icon={<Phone size={16} className="text-white/70" />}
+            name="phone"
+            type="tel"
+            value={formData.phone || ''}
+            onChange={handleInputChange}
+            disabled={!editMode}
+            error={errors.phone}
+            required
+          />
 
-            <FormField
-              label="Department"
-              icon={<Users size={16} className="text-white/70" />}
-              name="department"
-              disabled={!editMode}
-              error={errors.department}
-            >
-              <select
-                id="department"
-                name="department"
-                value={formData.department || ''}
-                onChange={handleInputChange}
-                disabled={!editMode}
-                className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-                  px-3 py-2 text-white/90
-                  focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-                  disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-                  backdrop-blur-md transition-all duration-200
-                  ${errors.department ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-                `}
-              >
-                <option value="">Select Department</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField
-              label="Location"
-              icon={<MapPin size={16} className="text-white/70" />}
-              name="location"
-              disabled={!editMode}
-              error={errors.location}
-            >
+          {/* Location */}
+          <FormField
+            label="Location"
+            icon={<MapPin size={16} className="text-white/70" />}
+            name="location"
+            disabled={!editMode}
+            error={errors.location}
+          >
+            {editMode && locations.length > 0 ? (
               <select
                 id="location"
                 name="location"
@@ -903,125 +554,158 @@ const PersonalInfoSection = ({
                   </option>
                 ))}
               </select>
-            </FormField>
-
-            <FormField
-              label="Join Date"
-              icon={<Calendar size={16} className="text-white/70" />}
-              name="joinDate"
-              type="date"
-              value={formData.joinDate || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.joinDate}
-            />
-
-            <FormField
-              label="Service Type"
-              icon={<Users size={16} className="text-white/70" />}
-              name="service"
-              disabled={!editMode}
-              error={errors.service}
-            >
-              <select
-                id="service"
-                name="service"
-                value={formData.service || ''}
+            ) : (
+              <input
+                id="location"
+                name="location"
+                value={formData.location || ''}
                 onChange={handleInputChange}
-                disabled={!editMode}
+                disabled={true}
                 className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-                  px-3 py-2 text-white/90
+                  px-3 py-2 text-white/90 placeholder-white/50
                   focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
                   disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
                   backdrop-blur-md transition-all duration-200
-                  ${errors.service ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
                 `}
-              >
-                <option value="">Select Service Type</option>
-                <option value="RSG">Orejas</option>
-                <option value="COM">Apoyos</option>
-                <option value="LIDER">Lider</option>
-                <option value="TESORERO DE GRUPO">Tesorero de Grupo</option>
-                <option value="PPI">PPI</option>
-                <option value="MANAGER DE HACIENDA">Manager de Hacienda</option>
-                <option value="COORDINADOR DE HACIENDA">Coordinador de Hacienda</option>
-                <option value="ATRACCION INTERNA">Atraccion Interna</option>
-                <option value="ATRACCION EXTERNA">Atraccion Externa</option>
-                <option value="SECRETARY">Secretary</option>
-                <option value="LITERATURA">Literatura</option>
-                <option value="SERVIDOR DE CORO">Servidor de Coro</option>
-                <option value="SERVIDOR DE JAV EN MESA">Servidor de JAV en Mesa</option>
-                <option value="SERVIDOR DE SEGUIMIENTOS">Servidor de Seguimientos</option>
-              </select>
-            </FormField>
-          </div>
-        )}
+              />
+            )}
+          </FormField>
 
-        {expandedSection === 'contact' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              label="Email"
-              icon={<Mail size={16} className="text-white/70" />}
-              name="email"
-              type="email"
-              value={formData.email || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.email}
-              required
-            />
-            
-            {renderEmailHelpText()}
-
-            <FormField
-              label="Phone"
-              icon={<Phone size={16} className="text-white/70" />}
-              name="phone"
-              type="tel"
-              value={formData.phone || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.phone}
-            />
-
-            <FormField
-              label="Emergency Contact"
-              icon={<User size={16} className="text-white/70" />}
-              name="emergencyContact"
-              value={formData.emergencyContact || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.emergencyContact}
-            />
-
-            <FormField
-              label="Emergency Phone"
-              icon={<Phone size={16} className="text-white/70" />}
-              name="emergencyPhone"
-              type="tel"
-              value={formData.emergencyPhone || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.emergencyPhone}
-            />
-
-            {/* Enhanced Password Field with Reset Option */}
-            {renderPasswordField()}
-
-            {/* Current password field for verification when changing own password */}
-            {renderCurrentPasswordField()}
-          </div>
-        )}
-
-        {expandedSection === 'padrino' && (
-          <PadrinoStatusSection 
-            userData={userData}
-            formData={formData}
-            onPadrinoChange={onPadrinoChange}
-            onPadrinoColorChange={onPadrinoColorChange}
-            editMode={editMode}
+          {/* Join Date */}
+          <FormField
+            label="Join Date"
+            icon={<Calendar size={16} className="text-white/70" />}
+            name="joinDate"
+            type="date"
+            value={formData.joinDate || ''}
+            disabled={true}
           />
-        )}
+
+          {/* Service Type */}
+          <FormField
+            label="Service Type"
+            icon={<Users size={16} className="text-white/70" />}
+            name="service"
+            disabled={!editMode}
+            error={errors.service}
+          >
+            <select
+              id="service"
+              name="service"
+              value={formData.service || ''}
+              onChange={handleInputChange}
+              disabled={!editMode}
+              className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+                px-3 py-2 text-white/90
+                focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+                disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+                backdrop-blur-md transition-all duration-200
+                ${errors.service ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+              `}
+            >
+              <option value="">Select Service Type</option>
+              <option value="RSG">Orejas</option>
+              <option value="COM">Apoyos</option>
+              <option value="LIDER">Lider</option>
+              <option value="TESORERO DE GRUPO">Tesorero de Grupo</option>
+              <option value="PPI">PPI</option>
+              <option value="MANAGER DE HACIENDA">Manager de Hacienda</option>
+              <option value="COORDINADOR DE HACIENDA">Coordinador de Hacienda</option>
+              <option value="ATRACCION INTERNA">Atraccion Interna</option>
+              <option value="ATRACCION EXTERNA">Atraccion Externa</option>
+              <option value="SECRETARY">Secretary</option>
+              <option value="LITERATURA">Literatura</option>
+              <option value="SERVIDOR DE CORO">Servidor de Coro</option>
+              <option value="SERVIDOR DE JAV EN MESA">Servidor de JAV en Mesa</option>
+              <option value="SERVIDOR DE SEGUIMIENTOS">Servidor de Seguimientos</option>
+            </select>
+          </FormField>
+          
+          {/* Password Field */}
+          <div className="form-group">
+            <label htmlFor="password" className="block mb-2">
+              <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+                <Lock size={16} className="text-white/70" />
+                <span>Password</span>
+              </span>
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={formData.password || ''}
+                onChange={handlePasswordChange}
+                disabled={!editMode}
+                placeholder="Enter new password"
+                className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+                  px-3 py-2 text-white/90 placeholder-white/50
+                  focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+                  disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+                  backdrop-blur-md transition-all duration-200 pr-12
+                  ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+                `}
+              />
+              {editMode && (
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('new')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                >
+                  {showPassword ? "HIDE" : "SHOW"}
+                </button>
+              )}
+            </div>
+            {errors.password && (
+              <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
+                <AlertCircle size={14} />
+                <span>{errors.password}</span>
+              </div>
+            )}
+            
+            {/* Add password reset option for admins editing other users */}
+            {editMode && !isCurrentUser && onSendPasswordReset && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={onSendPasswordReset}
+                  className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+                >
+                  <Mail size={14} />
+                  <span className="underline">Send password reset email instead</span>
+                </button>
+              </div>
+            )}
+            
+            {/* Help text for password field */}
+            {editMode && (
+              <div className="text-blue-400 text-sm mt-2 flex items-start">
+                <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                <span>
+                  {isCurrentUser 
+                    ? 'Changing your password will require you to log in again.'
+                    : 'As an admin, you can update this user\'s password.'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Add Current Password Field when needed */}
+          {renderCurrentPasswordField()}
+
+          {/* Help text for email changes */}
+          {editMode && isCurrentUser && formData.email !== originalValues.email && (
+            <div className="form-group md:col-span-2">
+              <div className="text-blue-400 text-sm mb-2 flex items-start">
+                <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                <span>
+                  Changing your email will require you to log in again with the new email address.
+                  You must provide your current password below.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {editMode && (
@@ -1057,14 +741,6 @@ const PersonalInfoSection = ({
   );
 };
 
-PadrinoStatusSection.propTypes = {
-  userData: PropTypes.object,
-  formData: PropTypes.object.isRequired,
-  onPadrinoChange: PropTypes.func.isRequired,
-  onPadrinoColorChange: PropTypes.func.isRequired,
-  editMode: PropTypes.bool.isRequired
-};
-
 PersonalInfoSection.propTypes = {
   formData: PropTypes.object.isRequired,
   editMode: PropTypes.bool.isRequired,
@@ -1073,15 +749,11 @@ PersonalInfoSection.propTypes = {
   onSave: PropTypes.func,
   onCancel: PropTypes.func,
   userId: PropTypes.string,
-  onRoleToggle: PropTypes.func,
-  locations: PropTypes.array,
-  departments: PropTypes.array,
-  onPadrinoChange: PropTypes.func,
-  onPadrinoColorChange: PropTypes.func,
+  onSendPasswordReset: PropTypes.func,
   userData: PropTypes.object,
   isCurrentUser: PropTypes.bool,
-  onSendPasswordReset: PropTypes.func,
-  fetchUserData: PropTypes.func
+  fetchUserData: PropTypes.func,
+  locations: PropTypes.array
 };
 
 export default PersonalInfoSection;

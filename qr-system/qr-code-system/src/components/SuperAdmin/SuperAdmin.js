@@ -4,7 +4,7 @@ import { ref, onValue } from "firebase/database";
 import { format } from 'date-fns';
 import { database } from '../../services/firebaseConfig';
 import { useAuth } from '../../services/authContext';
-import './SuperAdmin.css'; // Consider renaming to SuperAdmin.css
+import './SuperAdmin.css';
 import Dashboard from './SuperAdminDashboard';
 import logo from '../logo.png';
 import {
@@ -13,7 +13,7 @@ import {
   Shield, User
 } from 'lucide-react';
 
-const SuperAdmin = () => {
+const SuperAdmin = ({ parentPath = '/super-admin' }) => {
   const [locationAnalytics, setLocationAnalytics] = useState({});
   const [topEmployees, setTopEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +41,7 @@ const SuperAdmin = () => {
     { path: '/super-admin/settings', icon: <Settings size={24} />, text: 'Settings' },
     { path: '/super-admin/qr-scanner', icon: <QrCode size={24} />, text: 'QR Code Scanner' },
   ];
+
   useEffect(() => {
     const locationRefs = []; // Track refs
     const unsubscribes = []; // Track cleanup functions
@@ -130,11 +131,23 @@ const SuperAdmin = () => {
       '/super-admin/locations': 'Manage Locations',
       '/super-admin/manage-admins': 'Manage Administrators',
       '/super-admin/manage-employees': 'Manage Employees',
+      '/super-admin/employees': 'Location Employees',
       '/super-admin/reports': 'Attendance Reports',
       '/super-admin/settings': 'Settings',
       '/super-admin/qr-scanner': 'QR Code Scanner',
       '/super-admin/scheduler': 'Schedule Manager',
     };
+    
+    // Check if we're on the location employees page
+    if (location.pathname.includes('/super-admin/employees/')) {
+      return 'Location Employees';
+    }
+    
+    // Check if we're on a user profile page
+    if (location.pathname.includes('/super-admin/users/')) {
+      return 'Employee Profile';
+    }
+    
     return titles[location.pathname] || 'Super Admin Dashboard';
   };
 
@@ -143,7 +156,7 @@ const SuperAdmin = () => {
     if (loading) return <div className="loading-message">Loading data...</div>;
     return location.pathname === '/super-admin' 
       ? <Dashboard locationAnalytics={locationAnalytics} topEmployees={topEmployees} locations={locations} />
-      : <Outlet />;
+      : <Outlet context={{ parentPath }} />;
   };
 
   // Format role for display

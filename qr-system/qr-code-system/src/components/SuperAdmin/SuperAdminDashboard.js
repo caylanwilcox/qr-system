@@ -17,12 +17,14 @@ const SuperAdminDashboard = () => {
   const [filteredData, setFilteredData] = useState({});
   const [activeTab, setActiveTab] = useState('All');
   const [activeFilter, setActiveFilter] = useState(null);
+  const [debug, setDebug] = useState({});
 
   const dataSnapshot = useRef(null);
   const isUpdatingColors = useRef(false);
 
   const getCurrentDateISO = () => new Date().toISOString().split('T')[0];
 
+  // Map from display name to internal location key
   const locationMap = {
     All: 'All',
     Aurora: 'aurora',
@@ -33,6 +35,13 @@ const SuperAdminDashboard = () => {
     Wheeling: 'wheeling',
   };
 
+  // Normalize location keys to handle case and formatting variations
+  const normalizeLocationKey = useCallback((locationKey) => {
+    if (!locationKey) return null;
+    return locationKey.toLowerCase().replace(/\s+/g, '');
+  }, []);
+
+  // Calculate user color based on attendance stats
   const calculateUserColor = useCallback((profile, stats) => {
     const attendanceRate = stats?.attendanceRate || 0;
     const daysPresent = stats?.daysPresent || 0;
@@ -44,23 +53,57 @@ const SuperAdminDashboard = () => {
     return 'red';
   }, []);
 
+  // Apply location and color filters to the user data
   const applyFilters = useCallback((data, locationKey, colorFilter) => {
+    // Normalize location key for comparison
+    const normalizedLocationKey = normalizeLocationKey(locationKey);
+    
+    // Log for debugging
+    const sampleLocations = Object.values(data).slice(0, 5).map(user => {
+      const userLoc = user.location || user.profile?.locationKey || user.profile?.primaryLocation;
+      return {
+        original: userLoc,
+        normalized: normalizeLocationKey(userLoc)
+      };
+    });
+    
+    setDebug(prev => ({
+      ...prev,
+      activeLocationKey: locationKey,
+      normalizedLocationKey,
+      sampleLocations
+    }));
+
     return Object.fromEntries(
       Object.entries(data).filter(([_, user]) => {
+        // Get user location from various possible fields
         const userLoc = user.location || user.profile?.locationKey || user.profile?.primaryLocation;
-        const locationMatch = locationKey === 'All' || userLoc === locationKey;
-        const colorMatch = !colorFilter || (user.profile?.padrinoColor?.toLowerCase() === colorFilter && user.profile?.padrino);
+        const normalizedUserLoc = normalizeLocationKey(userLoc);
+        
+        // Match based on normalized location keys unless it's 'All'
+        const locationMatch = 
+          locationKey === 'All' || 
+          normalizedLocationKey === 'all' ||
+          normalizedUserLoc === normalizedLocationKey;
+        
+        // Match color filter if one is active
+        const colorMatch = 
+          !colorFilter || 
+          (user.profile?.padrinoColor?.toLowerCase() === colorFilter && user.profile?.padrino);
+        
         return locationMatch && colorMatch;
       })
     );
-  }, []);
+  }, [normalizeLocationKey]);
 
+  // Update padrino colors based on attendance stats
   const updatePadrinoColors = useCallback(async (data) => {
     if (isUpdatingColors.current) return;
     isUpdatingColors.current = true;
     setColorUpdateStatus('updating');
 
     const updates = {};
+    let updateCount = 0;
 
     Object.entries(data).forEach(([id, user]) => {
       const { profile, stats } = user;
@@ -72,10 +115,20 @@ const SuperAdminDashboard = () => {
 
       if (newColor !== null && profile.padrinoColor !== newColor) {
         updates[`users/${id}/profile/padrinoColor`] = newColor;
+        updateCount++;
       } else if (!profile.padrino && profile.padrinoColor) {
         updates[`users/${id}/profile/padrinoColor`] = null;
+        updateCount++;
       }
     });
+
+    setDebug(prev => ({
+      ...prev,
+      colorUpdates: {
+        count: updateCount,
+        updates: Object.keys(updates).length > 0 ? Object.keys(updates).slice(0, 3) : []
+      }
+    }));
 
     if (Object.keys(updates).length > 0) {
       try {
@@ -93,6 +146,7 @@ const SuperAdminDashboard = () => {
     isUpdatingColors.current = false;
   }, [calculateUserColor]);
 
+  // Process user data to calculate metrics
   const processMetrics = useCallback((data, locationKey) => {
     const today = getCurrentDateISO();
     const metrics = {
@@ -118,18 +172,29 @@ const SuperAdminDashboard = () => {
     let totalDaysAll = 0;
     let activeUsersCount = 0;
 
-    Object.entries(data).forEach(([_, user]) => {
+    // Set debug info for processed data
+    setDebug(prev => ({
+      ...prev,
+      processedDataSize: Object.keys(data).length,
+      locationKey,
+      date: today
+    }));
+
+    Object.entries(data).forEach(([userId, user]) => {
       const { profile, stats, attendance } = user;
       if (!profile) return;
 
-      const loc = user.location || profile?.locationKey || 'Unknown';
+      // Get location from various possible fields
+      const loc = user.location || profile?.locationKey || profile?.primaryLocation || 'Unknown';
       const color = profile?.padrinoColor?.toLowerCase?.();
       const isPadrino = profile?.padrino;
 
+      // Initialize location in metrics if not exists
       if (!metrics.perLocation[loc]) {
         metrics.perLocation[loc] = { clockedIn: 0, notClockedIn: 0, onTime: 0, late: 0 };
       }
 
+      // Count padrinos by color
       if (isPadrino) {
         metrics.overview.totalPadrinos++;
         if (color === 'blue') metrics.overview.padrinosBlue++;
@@ -138,10 +203,12 @@ const SuperAdminDashboard = () => {
         if (color === 'red') metrics.overview.padrinosRed++;
       }
 
+      // Count service types
       const service = profile?.service?.toUpperCase?.();
       if (service === 'RSG') metrics.overview.totalOrejas++;
       if (service === 'COM') metrics.overview.totalApoyos++;
 
+      // Check attendance for today
       const attend = attendance?.[today];
 
       if (attend?.clockedIn) {
@@ -155,16 +222,19 @@ const SuperAdminDashboard = () => {
         metrics.perLocation[loc].notClockedIn++;
       }
 
+      // Calculate attendance statistics
       const daysPresent = stats?.daysPresent || 0;
       const daysAbsent = stats?.daysAbsent || 0;
       totalPresentAll += daysPresent;
       totalDaysAll += daysPresent + daysAbsent;
     });
 
+    // Calculate monthly attendance percentage
     metrics.overview.monthlyAttendance = totalDaysAll > 0
-      ? (totalPresentAll / totalDaysAll) * 100
+      ? Math.round((totalPresentAll / totalDaysAll) * 100)
       : 0;
 
+    // Set active user counts
     metrics.activeUsersCount = activeUsersCount;
     metrics.activeUsers.count = activeUsersCount;
     metrics.activeUsers.byLocation = Object.fromEntries(
@@ -174,11 +244,21 @@ const SuperAdminDashboard = () => {
     return metrics;
   }, []);
 
+  // Load and process data when tab or filter changes
   useEffect(() => {
     setLoading(true);
     setError(null);
 
     const usersRef = ref(database, 'users');
+    
+    // Log for debugging
+    setDebug(prev => ({
+      ...prev,
+      loadingStarted: new Date().toISOString(),
+      activeTab,
+      activeFilter
+    }));
+
     const unsubscribe = onValue(usersRef, async (snapshot) => {
       try {
         const data = snapshot.val();
@@ -188,17 +268,43 @@ const SuperAdminDashboard = () => {
           return;
         }
 
+        // Store raw data for reference
         dataSnapshot.current = data;
+        
+        // Get location key from active tab
         const activeLocationKey = locationMap[activeTab];
+        
+        // Apply filters and process metrics
         const filtered = applyFilters(data, activeLocationKey, activeFilter);
         setFilteredData(filtered);
-        setMetrics(processMetrics(filtered, activeLocationKey));
+        
+        // Process metrics using filtered data
+        const calculatedMetrics = processMetrics(filtered, activeLocationKey);
+        setMetrics(calculatedMetrics);
+        
         setLoading(false);
+        
+        // Update padrino colors as needed (using original data)
         await updatePadrinoColors(data);
+        
+        // Log success for debugging
+        setDebug(prev => ({
+          ...prev,
+          loadingCompleted: new Date().toISOString(),
+          filteredDataSize: Object.keys(filtered).length,
+          metricsCalculated: !!calculatedMetrics
+        }));
       } catch (err) {
         console.error('Error processing data:', err);
         setError('Error processing dashboard data');
         setLoading(false);
+        
+        // Log error for debugging
+        setDebug(prev => ({
+          ...prev,
+          error: err.message,
+          errorStack: err.stack
+        }));
       }
     }, (err) => {
       console.error('Firebase error:', err);
@@ -209,15 +315,18 @@ const SuperAdminDashboard = () => {
     return () => unsubscribe();
   }, [activeTab, activeFilter, processMetrics, updatePadrinoColors, applyFilters]);
 
+  // Handle location tab click
   const handleTabClick = (tab) => {
     setActiveTab(tab);
-    setActiveFilter(null);
+    setActiveFilter(null); // Reset color filter when changing location
   };
 
+  // Handle color filter click
   const handleColorClick = (color) => {
     setActiveFilter(prev => (prev === color ? null : color));
   };
 
+  // Show loading state
   if (loading) return (
     <div className="loading-overlay">
       <Loader2 className="animate-spin" />
@@ -225,6 +334,7 @@ const SuperAdminDashboard = () => {
     </div>
   );
 
+  // Show error state
   if (error) return (
     <div className="error-banner">
       <AlertCircle />
@@ -234,6 +344,7 @@ const SuperAdminDashboard = () => {
 
   return (
     <div className="dashboard-container">
+      {/* Status notifications */}
       {colorUpdateStatus === 'success' && (
         <div className="bg-green-100 text-green-800 px-4 py-2 rounded mb-4">
           Padrino colors updated successfully
@@ -244,6 +355,8 @@ const SuperAdminDashboard = () => {
           Error updating padrino colors
         </div>
       )}
+      
+      {/* Main dashboard layout */}
       <div className="dashboard-grid">
         <div className="quadrant quadrant-1">
           <LocationNav
@@ -256,12 +369,25 @@ const SuperAdminDashboard = () => {
             activeFilter={activeFilter}
             onColorClick={handleColorClick}
             activeTab={activeTab}
+            locationMap={locationMap} // Pass locationMap to help with location handling
           />
         </div>
         <div className="quadrant quadrant-2 flex gap-4">
           <ClockedInList data={filteredData} date={metrics?.date} />
           <NotClockedInList data={filteredData} date={metrics?.date} />
         </div>
+        
+        {/* Debug information (remove in production) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="debug-info mt-8 text-xs text-gray-500 p-2 border border-gray-200 rounded">
+            <h4 className="font-bold">Debug Info:</h4>
+            <p>Active Tab: {activeTab}</p>
+            <p>Location Key: {locationMap[activeTab]}</p>
+            <p>Active Filter: {activeFilter || 'None'}</p>
+            <p>Filtered Users: {Object.keys(filteredData).length}</p>
+            <p>Total Metrics: {metrics ? JSON.stringify(metrics.total) : 'N/A'}</p>
+          </div>
+        )}
       </div>
     </div>
   );

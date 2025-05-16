@@ -1,7 +1,25 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
+import { format } from 'date-fns';
 import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import DateUtils from './dateUtils';
+
+// Helper function to get user's full name from various possible fields
+const getUserFullName = (user) => {
+  const profile = user.profile || {};
+  
+  // Priority order for name fields
+  if (profile.firstName && profile.lastName) {
+    return `${profile.firstName} ${profile.lastName}`;
+  }
+  
+  if (profile.name) return profile.name;
+  if (profile.displayName) return profile.displayName;
+  if (profile.fullName) return profile.fullName;
+  
+  if (profile.firstName) return profile.firstName;
+  if (profile.lastName) return profile.lastName;
+  
+  return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
+};
 
 // Status badge component with consistent styling
 const StatusBadge = ({ clockInTime }) => {
@@ -60,55 +78,56 @@ const StatusBadge = ({ clockInTime }) => {
   }
 };
 
-// Helper function to get user's full name from various possible fields
-const getUserFullName = (user) => {
-  const profile = user.profile || {};
-  
-  // Priority order for name fields
-  if (profile.firstName && profile.lastName) {
-    return `${profile.firstName} ${profile.lastName}`;
+// Helper to format date in different formats - simplified and more robust
+const formatDateAlt = (isoDate, formatStr) => {
+  try {
+    if (!isoDate) return null;
+    
+    // Parse the ISO date (YYYY-MM-DD)
+    const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    const day = parseInt(match[3]);
+    
+    // MM/DD/YYYY format (with leading zeroes)
+    if (formatStr === 'MM/DD/YYYY') {
+      return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`;
+    }
+    
+    // M/D/YYYY format (without leading zeroes)
+    if (formatStr === 'M/D/YYYY') {
+      return `${month}/${day}/${year}`;
+    }
+    
+    return isoDate;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return null;
   }
-  
-  if (profile.name) return profile.name;
-  if (profile.displayName) return profile.displayName;
-  if (profile.fullName) return profile.fullName;
-  
-  if (profile.firstName) return profile.firstName;
-  if (profile.lastName) return profile.lastName;
-  
-  return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
 };
 
 const ClockedInList = ({ data, date }) => {
   const [clockedInUsers, setClockedInUsers] = useState([]);
   const [debug, setDebug] = useState({ checked: 0, found: 0 });
-  const navigate = useNavigate();
 
   // Get today's date if date is not provided
-  // Use useState and useEffect to avoid recreating this value on every render
-  const [effectiveDate, setEffectiveDate] = useState('');
-  const [formattedDate, setFormattedDate] = useState('');
+  const effectiveDate = date || format(new Date(), 'yyyy-MM-dd');
+  const formattedDate = effectiveDate ? format(new Date(effectiveDate), 'MMMM d, yyyy') : 'Today';
 
-  // Set up date only when props change
+  // Move the complex filtering logic to useEffect for better debugging
   useEffect(() => {
-    const newDate = date || DateUtils.getCurrentDateISO();
-    setEffectiveDate(newDate);
-    setFormattedDate(newDate ? DateUtils.formatDisplayDate(newDate) : 'Today');
-  }, [date]);
-
-  // Memoize the processing function to prevent recreating it on every render
-  const processUserData = useCallback((data, targetDate) => {
-    if (!data || !targetDate) {
-      return { users: [], stats: { checked: 0, found: 0 } };
+    if (!data) {
+      console.log("ClockedInList: No data provided");
+      setClockedInUsers([]);
+      return;
     }
 
     // Track how many users we're checking and finding for debugging
     let checkedCount = 0;
     let foundCount = 0;
     const results = [];
-
-    // Get all possible date formats for the target date once
-    const dateFormats = DateUtils.getAllDateFormats(targetDate);
 
     // Process each user to find who's clocked in
     Object.entries(data).forEach(([id, user]) => {
@@ -125,11 +144,16 @@ const ClockedInList = ({ data, date }) => {
       let onTime = false;
       let timestamp = null;
       
+      // Get all possible date formats
+      const possibleDateFormats = [
+        effectiveDate,                      // YYYY-MM-DD
+        formatDateAlt(effectiveDate, 'MM/DD/YYYY'), // MM/DD/YYYY
+        formatDateAlt(effectiveDate, 'M/D/YYYY')    // M/D/YYYY
+      ].filter(Boolean);
+      
       // 1. First check attendance object with various date formats
       if (user.attendance) {
-        for (const dateFormat of dateFormats) {
-          if (!dateFormat) continue;
-          
+        for (const dateFormat of possibleDateFormats) {
           const entry = user.attendance[dateFormat];
           if (!entry) continue;
           
@@ -140,18 +164,6 @@ const ClockedInList = ({ data, date }) => {
             clockInTime = entry.time || entry.clockInTime || '';
             clockOutTime = entry.clockOutTime || null;
             onTime = entry.onTime === true;
-            
-            // If onTime is not explicitly set, determine based on time
-            if (onTime === undefined && clockInTime) {
-              try {
-                const clockInTimeObj = new Date(`2000-01-01 ${clockInTime}`);
-                const expectedTime = new Date(`2000-01-01 09:00`);
-                onTime = clockInTimeObj <= expectedTime;
-              } catch (e) {
-                // If parsing fails, default to false
-              }
-            }
-            
             break;
           }
         }
@@ -160,44 +172,34 @@ const ClockedInList = ({ data, date }) => {
       // 2. Then check clockInTimes object if not already found
       if (!isClocked && user.clockInTimes) {
         // Parse target date to compare with timestamps
-        try {
-          const targetDate = new Date(targetDate);
-          const targetDateStr = targetDate.toISOString().split('T')[0];
-          
-          // Check each timestamp
-          for (const ts in user.clockInTimes) {
-            try {
-              const timestampDate = new Date(parseInt(ts));
-              const timestampDateStr = timestampDate.toISOString().split('T')[0];
+        const targetDate = new Date(effectiveDate);
+        const targetDateStr = targetDate.toISOString().split('T')[0];
+        
+        // Check each timestamp
+        for (const ts in user.clockInTimes) {
+          try {
+            const timestampDate = new Date(parseInt(ts));
+            const timestampDateStr = timestampDate.toISOString().split('T')[0];
+            
+            if (timestampDateStr === targetDateStr) {
+              isClocked = true;
+              clockInTime = user.clockInTimes[ts];
+              clockOutTime = user.clockOutTimes?.[ts] || null;
+              timestamp = ts;
               
-              if (timestampDateStr === targetDateStr) {
-                isClocked = true;
-                clockInTime = user.clockInTimes[ts];
-                clockOutTime = user.clockOutTimes?.[ts] || null;
-                timestamp = ts;
-                
-                // Determine if on time
-                try {
-                  const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-                  const expectedTime = new Date(`2000-01-01 09:00`);
-                  onTime = clockInTime9AM <= expectedTime;
-                } catch (e) {
-                  // If parsing fails, default to false
-                }
-                
-                break;
-              }
-            } catch (e) {
-              // Skip invalid timestamps
+              // Determine if on time
+              const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
+              const expectedTime = new Date(`2000-01-01 09:00`);
+              onTime = clockInTime9AM <= expectedTime;
+              break;
             }
+          } catch (e) {
+            console.error('Error parsing timestamp:', e);
           }
-        } catch (e) {
-          // Skip if target date parsing fails
         }
       }
       
       // 3. Also check for specific fields in the user object directly
-      // (some implementations might set these at the user root level)
       if (!isClocked && (
           user.clockedIn === true || 
           user.isClocked === true || 
@@ -229,6 +231,13 @@ const ClockedInList = ({ data, date }) => {
           }
         }
         
+        // Get location from multiple possible fields for consistent display
+        const location = user.location || 
+                         user.profile?.locationKey || 
+                         user.profile?.primaryLocation || 
+                         user.profile?.location || 
+                         'Unknown';
+                         
         results.push({
           id,
           name: getUserFullName(user),
@@ -238,8 +247,8 @@ const ClockedInList = ({ data, date }) => {
           isOnTime: onTime,
           status: onTime ? 'On Time' : 'Late',
           colorClass: statusColor,
-          padrinoColor: user.profile?.padrinoColor || 'blue',
-          location: user.profile?.primaryLocation || 'Unknown'
+          padrinoColor: user.profile?.padrinoColor || 'gray',
+          location: location
         });
       }
     });
@@ -247,30 +256,13 @@ const ClockedInList = ({ data, date }) => {
     // Sort results by name
     results.sort((a, b) => a.name.localeCompare(b.name));
     
-    return {
-      users: results,
-      stats: { checked: checkedCount, found: foundCount }
-    };
-  }, []);
-
-  // Process data when data or effectiveDate changes
-  useEffect(() => {
-    if (!data || !effectiveDate) {
-      setClockedInUsers([]);
-      setDebug({ checked: 0, found: 0 });
-      return;
-    }
-
-    // Process data to find clocked in users
-    const result = processUserData(data, effectiveDate);
-    
     // Update state with results and debug info
-    setClockedInUsers(result.users);
-    setDebug(result.stats);
+    setClockedInUsers(results);
+    setDebug({ checked: checkedCount, found: foundCount });
     
-    // Log debug info - only once per data/date change
-    console.log(`ClockedInList: Checked ${result.stats.checked} users, found ${result.stats.found} clocked in for date ${effectiveDate}`);
-  }, [data, effectiveDate, processUserData]);
+    // Log debug info
+    console.log(`ClockedInList: Checked ${checkedCount} users, found ${foundCount} clocked in`);
+  }, [data, effectiveDate]);
 
   return (
     <div className="clocked-in-list card">
@@ -288,15 +280,11 @@ const ClockedInList = ({ data, date }) => {
       ) : (
         <div className="user-list">
           {clockedInUsers.map(user => (
-            <div 
-              key={user.id} 
-              className="user-item" 
-              onClick={() => navigate(`/super-admin/users/${user.id}`)}
-              style={{ cursor: 'pointer' }}
-            >
+            <div key={user.id} className="user-item">
               <div className="user-info">
                 <div className="user-name">
-                  <span className={`status-dot bg-${user.padrinoColor}`}></span>
+                  {/* Use lowercase color to ensure CSS class naming consistency */}
+                  <span className={`status-dot bg-${user.padrinoColor.toLowerCase()}`}></span>
                   {user.name}
                 </div>
                 <div className="user-location">{user.location}</div>

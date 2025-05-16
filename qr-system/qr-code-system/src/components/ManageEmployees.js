@@ -486,7 +486,7 @@ const ManageEmployees = ({ locationFiltered = false }) => {
       >
         <div className="location-card-header">
           <h3 className="location-name">{location}</h3>
-          {isSelected && <ChevronRight size={18} className="text-blue-400" />}
+          <ChevronRight size={18} className="text-blue-400" />
         </div>
         <div className="location-stats">
           <p><Users size={16} /> Total Members: {locationEmployees.length}</p>
@@ -602,6 +602,87 @@ const ManageEmployees = ({ locationFiltered = false }) => {
     </div>
   );
 
+  const LocationDetails = ({ location }) => {
+    const locationKey = normalizeLocationKey(location);
+    
+    // Get all employees where location matches the selected location
+    const locationEmployees = employees.filter(emp => {
+      return emp.location === location || 
+             emp.locationKey === locationKey ||
+             normalizeLocationKey(emp.location) === locationKey;
+    });
+    
+    const filteredEmployees = filterEmployees(locationEmployees);
+    
+    const activeCount = locationEmployees.filter(
+      (emp) => emp.status === 'active'
+    ).length;
+
+    return (
+      <div className="location-details">
+        <div className="location-header">
+          <div className="location-title-area">
+            <h3 className="location-title">
+              <MapPin size={20} className="text-blue-400" />
+              {location} - Member Details
+            </h3>
+            <div className="location-summary">
+              <div className="summary-item">
+                <Users size={16} />
+                Total Members: {getUserCountByLocation(location)}
+              </div>
+              <div className="summary-item active-count">
+                <Activity size={16} />
+                Active Members: {activeCount}
+              </div>
+            </div>
+          </div>
+          <button 
+            onClick={() => setSelectedLocation(null)} 
+            className="back-button"
+          >
+            <ChevronLeft size={20} />
+            Back to Locations
+          </button>
+        </div>
+        
+        <div className="header-controls">
+          <div className="search-container">
+            <Search size={20} />
+            <input
+              type="text"
+              placeholder="Search members..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+          </div>
+          
+          <div className="filter-container">
+            <Filter size={16} className="text-gray-400" />
+            <select 
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Members</option>
+              <option value="active">Active Members</option>
+              <option value="inactive">Inactive Members</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredEmployees.length > 0 ? (
+          <EmployeeTable employees={filteredEmployees} />
+        ) : (
+          <div className="empty-state">
+            <p>No members found matching your criteria.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="loading-overlay">
@@ -665,108 +746,26 @@ const ManageEmployees = ({ locationFiltered = false }) => {
       {/* Main Content */}
       <div className="dashboard-content">
         <div className="locations-section">
-          {/* Display location grid if locations are loaded, otherwise show loading */}
-          <div className="location-grid">
-            {filteredLocations.length > 0 ? (
-              filteredLocations
-                .map((location) => (
-                  <LocationCard key={location} location={location} />
-                ))
-            ) : locations.length > 0 ? (
-              <div className="empty-state">
-                <p>No locations found matching your search.</p>
-              </div>
-            ) : (
-              <div className="loading-locations">
-                <div className="loading-spinner-small"></div>
-                <p>Loading locations...</p>
-              </div>
-            )}
-          </div>
-
-          {/* Show employee details when a location is selected */}
-          {selectedLocation && (
-            <div className="location-details">
-              <div className="location-header">
-                <div className="location-title-area">
-                  <h3 className="location-title">
-                    <MapPin size={20} className="text-blue-400" />
-                    {selectedLocation} - Member Details
-                  </h3>
-                  <div className="location-summary">
-                    <div className="summary-item">
-                      <Users size={16} />
-                      Total Members: {getUserCountByLocation(selectedLocation)}
-                    </div>
-                    <div className="summary-item active-count">
-                      <Activity size={16} />
-                      Active Members: {
-                        employees.filter(emp => {
-                          const locationKey = normalizeLocationKey(selectedLocation);
-                          return (emp.location === selectedLocation || 
-                                 emp.locationKey === locationKey ||
-                                 normalizeLocationKey(emp.location) === locationKey) && 
-                                 emp.status === 'active';
-                        }).length
-                      }
-                    </div>
-                  </div>
+          {/* Show either location grid or selected location details */}
+          {selectedLocation ? (
+            <LocationDetails location={selectedLocation} />
+          ) : (
+            <div className="location-grid">
+              {filteredLocations.length > 0 ? (
+                filteredLocations
+                  .map((location) => (
+                    <LocationCard key={location} location={location} />
+                  ))
+              ) : locations.length > 0 ? (
+                <div className="empty-state">
+                  <p>No locations found matching your search.</p>
                 </div>
-                <button 
-                  onClick={() => setSelectedLocation(null)} 
-                  className="back-button"
-                >
-                  <ChevronLeft size={20} />
-                  Hide Member Details
-                </button>
-              </div>
-              
-              <div className="header-controls">
-                <div className="search-container">
-                  <Search size={20} />
-                  <input
-                    type="text"
-                    placeholder="Search members..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="search-input"
-                  />
+              ) : (
+                <div className="loading-locations">
+                  <div className="loading-spinner-small"></div>
+                  <p>Loading locations...</p>
                 </div>
-                
-                <div className="filter-container">
-                  <Filter size={16} className="text-gray-400" />
-                  <select 
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    className="filter-select"
-                  >
-                    <option value="all">All Members</option>
-                    <option value="active">Active Members</option>
-                    <option value="inactive">Inactive Members</option>
-                  </select>
-                </div>
-              </div>
-
-              {(() => {
-                const locationKey = normalizeLocationKey(selectedLocation);
-                
-                // Get all employees where location matches the selected location
-                const locationEmployees = employees.filter(emp => {
-                  return emp.location === selectedLocation || 
-                         emp.locationKey === locationKey ||
-                         normalizeLocationKey(emp.location) === locationKey;
-                });
-                
-                const filteredEmployees = filterEmployees(locationEmployees);
-
-                return filteredEmployees.length > 0 ? (
-                  <EmployeeTable employees={filteredEmployees} />
-                ) : (
-                  <div className="empty-state">
-                    <p>No members found matching your criteria.</p>
-                  </div>
-                );
-              })()}
+              )}
             </div>
           )}
         </div>

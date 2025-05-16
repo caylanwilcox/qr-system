@@ -9,7 +9,7 @@ import {
   LogOut, ChevronLeft, ChevronRight, User, Shield
 } from 'lucide-react';
 
-const LocationAdmin = () => {
+const LocationAdmin = ({ parentPath = '/location-admin' }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showUserInfo, setShowUserInfo] = useState(false);
   const navigate = useNavigate();
@@ -50,6 +50,7 @@ const LocationAdmin = () => {
   const getPageTitle = () => {
     const titles = {
       '/location-admin/manage-employees': 'Manage Employees',
+      '/location-admin/employees': 'Location Employees',
       '/location-admin/reports': 'Attendance Reports',
       '/location-admin/settings': 'Settings',
       '/location-admin/qr-scanner': 'QR Code Scanner',
@@ -58,6 +59,11 @@ const LocationAdmin = () => {
       '/location-admin/users': 'Employee Profile',
       '/location-admin/stats': 'Attendance Statistics',
     };
+    
+    // Check if we're on a location employees page
+    if (location.pathname.includes('/location-admin/employees/')) {
+      return 'Location Employees';
+    }
     
     // Check if we're on a user profile page
     if (location.pathname.includes('/location-admin/users/')) {
@@ -216,9 +222,9 @@ const LocationAdmin = () => {
           {location.pathname === '/location-admin' ? (
             // Render dashboard directly instead of importing it to avoid circular dependencies
             // Pass props required by the dashboard component
-            <Outlet context={{ adminLocations, hasAllLocations }} />
+            <Outlet context={{ adminLocations, hasAllLocations, parentPath }} />
           ) : (
-            <Outlet context={{ adminLocations, hasAllLocations }} />
+            <Outlet context={{ adminLocations, hasAllLocations, parentPath }} />
           )}
         </div>
       </main>

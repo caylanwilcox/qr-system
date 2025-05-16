@@ -1,43 +1,78 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import './MetricsGrid.css'; // optional if you need custom classes
+import './MetricsGrid.css';
 
-const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab }) => {
+const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab, locationMap }) => {
   const navigate = useNavigate();
   
-  // Handlers for different metric types that respects current location filter
+  // Get the location key to pass to navigation
+  const getLocationParam = () => {
+    if (!activeTab || activeTab === 'All') return null;
+    
+    // Use the locationMap to get the correct key format
+    const locationKey = locationMap?.[activeTab] || activeTab.toLowerCase().replace(/\s+/g, '');
+    
+    // Debug what's being passed
+    console.log("MetricsGrid sending location:", locationKey);
+    
+    return locationKey;
+  };
+  
+  // Handle click on Total Members box
   const handleTotalMembersClick = () => {
-    // Navigate to employee list with current location as filter
-    // If we have a color filter active, pass that too
+    const locationParam = getLocationParam();
+    
+    // Match the exact format that EmployeeList expects
     navigate('/employee-list', { 
       state: { 
         filter: activeFilter ? `padrinos${activeFilter}` : 'all',
-        location: activeTab !== 'All' ? activeTab : null
+        location: locationParam
       } 
+    });
+    
+    console.log("Navigating to employee list with:", {
+      filter: activeFilter ? `padrinos${activeFilter}` : 'all',
+      location: locationParam
     });
   };
   
+  // Handle click on Orejas box
   const handleOrejasClick = () => {
-    // Navigate to employee list with Orejas filter and current location
-    // If there's a color filter active, include it as well
+    const locationParam = getLocationParam();
+    
+    // Match the exact format that EmployeeList expects
     navigate('/employee-list', { 
       state: { 
         filter: 'RSG',
-        location: activeTab !== 'All' ? activeTab : null,
-        color: activeFilter || null  // Pass color filter separately
+        location: locationParam,
+        color: activeFilter || null
       } 
+    });
+    
+    console.log("Navigating to RSG employee list with:", {
+      filter: 'RSG',
+      location: locationParam,
+      color: activeFilter || null
     });
   };
   
+  // Handle click on Apoyos box
   const handleApoyosClick = () => {
-    // Navigate to employee list with Apoyos filter and current location
-    // If there's a color filter active, include it as well
+    const locationParam = getLocationParam();
+    
+    // Match the exact format that EmployeeList expects
     navigate('/employee-list', { 
       state: { 
         filter: 'COM',
-        location: activeTab !== 'All' ? activeTab : null,
-        color: activeFilter || null  // Pass color filter separately
+        location: locationParam,
+        color: activeFilter || null
       } 
+    });
+    
+    console.log("Navigating to COM employee list with:", {
+      filter: 'COM',
+      location: locationParam,
+      color: activeFilter || null
     });
   };
   
@@ -66,6 +101,7 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab }) => {
           <div
             className={`padrino-item blue ${activeFilter === 'blue' ? 'active' : ''}`}
             onClick={() => onColorClick('blue')}
+            style={{ cursor: 'pointer' }}
           >
             <span>Blue</span>
             <span>{metrics.overview.padrinosBlue}</span>
@@ -73,6 +109,7 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab }) => {
           <div
             className={`padrino-item green ${activeFilter === 'green' ? 'active' : ''}`}
             onClick={() => onColorClick('green')}
+            style={{ cursor: 'pointer' }}
           >
             <span>Green</span>
             <span>{metrics.overview.padrinosGreen}</span>
@@ -80,6 +117,7 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab }) => {
           <div
             className={`padrino-item orange ${activeFilter === 'orange' ? 'active' : ''}`}
             onClick={() => onColorClick('orange')}
+            style={{ cursor: 'pointer' }}
           >
             <span>Orange</span>
             <span>{metrics.overview.padrinosOrange}</span>
@@ -87,6 +125,7 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab }) => {
           <div
             className={`padrino-item red ${activeFilter === 'red' ? 'active' : ''}`}
             onClick={() => onColorClick('red')}
+            style={{ cursor: 'pointer' }}
           >
             <span>Red</span>
             <span>{metrics.overview.padrinosRed}</span>
