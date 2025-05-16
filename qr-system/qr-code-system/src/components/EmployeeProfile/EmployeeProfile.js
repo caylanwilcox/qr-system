@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// Updated EmployeeProfile.jsx with fixed carousel implementation
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ref,
@@ -23,7 +24,18 @@ import {
 import { calculatePadrinoColor } from '../utils/padrinoColorCalculator';
 
 import './styles/EmployeeProfile.css';
-import { User, BarChart2, Calendar } from 'lucide-react';
+// Import the new carousel CSS
+import './styles/EmployeeProfileCarousel.css';
+
+import { 
+  User, 
+  BarChart2, 
+  Calendar, 
+  ChevronLeft, 
+  ChevronRight, 
+  CreditCard, 
+  Clock 
+} from 'lucide-react';
 
 // Import your subcomponents:
 import ProfileHeader from './ProfileHeader';
@@ -32,6 +44,8 @@ import StatsSection from './StatsSection';
 import AttendanceSection from './AttendanceSection';
 import ScheduleSection from './ScheduleSection';
 import IdCardSection from './IdCardSection';
+// Import the new carousel component
+import EmployeeProfileCarousel from './EmployeeProfileCarousel';
 
 const LOCATIONS = [
   'Aurora',
@@ -111,6 +125,7 @@ const EmployeeProfile = () => {
   const [stats, setStats] = useState(INITIAL_STATS);
   const [newScheduleDate, setNewScheduleDate] = useState('');
   const [newScheduleTime, setNewScheduleTime] = useState('');
+  const [activeSlide, setActiveSlide] = useState(0);
 
   // Dialog for re-auth (when a current user changes their own password)
   const [passwordDialog, setPasswordDialog] = useState({
@@ -120,6 +135,9 @@ const EmployeeProfile = () => {
   });
 
   const [isCurrentUser, setIsCurrentUser] = useState(false);
+  
+  // Total number of slides in personal tab carousel
+  const totalPersonalSlides = 3;
 
   const showNotification = useCallback((message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -464,47 +482,72 @@ const EmployeeProfile = () => {
     { id: 'calendar', label: 'Calendar', icon: Calendar },
   ];
 
+  // Render slide content based on index
+  const renderSlideContent = (index, data) => {
+    switch (index) {
+      case 0:
+        return (
+          <PersonalInfoSection
+            formData={formData}
+            editMode={editMode}
+            handleInputChange={handleInputChange}
+            userId={employeeId}
+            onRoleToggle={handleRoleToggle}
+            locations={LOCATIONS}
+            departments={DEPARTMENTS}
+            onPadrinoChange={handlePadrinoChange}
+            onPadrinoColorChange={handlePadrinoColorChange}
+            onSave={handleSave}
+            onCancel={() => setEditMode(false)}
+            errors={{}} // You can pass form validation errors here
+            userData={employeeDetails}
+            isCurrentUser={isCurrentUser}
+            onSendPasswordReset={handleSendPasswordReset}
+            fetchUserData={fetchEmployeeDetails}
+          />
+        );
+      case 1:
+        return (
+          <IdCardSection
+            employeeDetails={employeeDetails}
+            employeeId={employeeId}
+          />
+        );
+      case 2:
+        return (
+          <AttendanceSection
+            attendanceRecords={attendanceRecords}
+            deleteConfirm={deleteConfirm}
+            onDeleteRecord={handleDeleteRecord}
+            employeeId={employeeId}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Prepare slide data for the carousel
+  const slideData = {
+    formData,
+    editMode,
+    employeeDetails,
+    attendanceRecords,
+    deleteConfirm,
+    employeeId,
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'personal':
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="glass-panel p-6">
-              <PersonalInfoSection
-                formData={formData}
-                editMode={editMode}
-                handleInputChange={handleInputChange}
-                userId={employeeId}
-                onRoleToggle={handleRoleToggle}
-                locations={LOCATIONS}
-                departments={DEPARTMENTS}
-                onPadrinoChange={handlePadrinoChange}
-                onPadrinoColorChange={handlePadrinoColorChange}
-                onSave={handleSave}
-                onCancel={() => setEditMode(false)}
-                errors={{}} // You can pass form validation errors here
-                userData={employeeDetails}
-                isCurrentUser={isCurrentUser}
-                onSendPasswordReset={handleSendPasswordReset}
-              />
-            </div>
-
-            <div className="glass-panel p-6">
-              <IdCardSection
-                employeeDetails={employeeDetails}
-                employeeId={employeeId}
-              />
-            </div>
-
-            <div className="glass-panel p-6">
-              <AttendanceSection
-                attendanceRecords={attendanceRecords}
-                deleteConfirm={deleteConfirm}
-                onDeleteRecord={handleDeleteRecord}
-                employeeId={employeeId}
-              />
-            </div>
-          </div>
+          <EmployeeProfileCarousel
+            activeSlide={activeSlide}
+            setActiveSlide={setActiveSlide}
+            totalSlides={totalPersonalSlides}
+            renderSlideContent={renderSlideContent}
+            slideData={slideData}
+          />
         );
       case 'stats':
         return (
@@ -630,7 +673,7 @@ const EmployeeProfile = () => {
       </div>
 
       {/* Main Tab Content */}
-      <div className="tab-content">{renderTabContent()}</div>
+      <div className="tab-content glass-panel">{renderTabContent()}</div>
     </div>
   );
 };

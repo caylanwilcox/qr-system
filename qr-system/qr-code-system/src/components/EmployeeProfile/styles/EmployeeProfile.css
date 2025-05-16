@@ -505,4 +505,97 @@
     padding: 2rem;
     text-align: center;
     color: var(--accent-red);
-  }
+  }/* Improved carousel styles to display full content properly */
+.carousel-outer {
+  position: relative;
+  padding: 1rem;
+  width: 100%;
+}
+
+.carousel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+}
+
+.carousel-title {
+  display: flex;
+  align-items: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #60a5fa; /* Blue color */
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.carousel-arrow-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.carousel-arrow-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.carousel-wrapper {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* Hide all slides by default */
+.carousel-slide {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  width: 100%; 
+}
+
+/* Show only the active slide */
+.carousel-slide.active {
+  display: block;
+  opacity: 1;
+}
+
+/* Ensure form inputs display properly */
+.carousel-slide .form-group {
+  margin-bottom: 1.25rem;
+}
+
+.carousel-slide input,
+.carousel-slide select,
+.carousel-slide textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.375rem;
+  color: rgba(255, 255, 255, 0.9);
+  min-height: 2.75rem;
+  font-size: 0.95rem;
+}
+
+.carousel-slide input:focus,
+.carousel-slide select:focus,
+.carousel-slide textarea:focus {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
+  outline: none;
+}
+
+.carousel-slide input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
