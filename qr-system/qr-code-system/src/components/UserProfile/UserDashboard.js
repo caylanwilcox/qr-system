@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signOut } from 'firebase/auth';
 import { ref, get, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { 
   User, BarChart2, Calendar, Award, Shield, Clock, 
-  ChevronUp, ChevronDown, Mail, MapPin, Phone 
+  ChevronUp, ChevronDown, MapPin, LogOut, Edit,
+  CheckCircle
 } from 'lucide-react';
 
 // Import utility functions
@@ -44,41 +45,6 @@ const TabButton = ({ active, onClick, icon: Icon, label }) => (
   </button>
 );
 
-const StatCard = ({ icon: Icon, title, value, trend, color, progressValue }) => {
-  const progressClass = `progress-${color}`;
-  const iconColor = {
-    blue: '#60A5FA',
-    green: '#34D399',
-    yellow: '#FBBF24',
-    red: '#F87171',
-    purple: '#A78BFA'
-  }[color] || '#60A5FA';
-
-  return (
-    <div className="stat-card">
-      <div className="stat-card-header">
-        <Icon className="stat-card-icon" size={20} color={iconColor} />
-        <h4 className="stat-card-title">{title}</h4>
-      </div>
-      <div className="stat-card-value">{value}</div>
-      {progressValue !== undefined && (
-        <div className="progress-container">
-          <div 
-            className={`progress-bar ${progressClass}`} 
-            style={{ width: `${Math.min(progressValue, 100)}%` }}
-          ></div>
-        </div>
-      )}
-      {trend && (
-        <div className={`stat-card-trend ${trend.direction === 'up' ? 'trend-up' : 'trend-down'}`}>
-          {trend.direction === 'up' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          <span>{trend.value}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const UserDashboard = ({ initialTab = 'personal' }) => {
   const auth = getAuth();
   const navigate = useNavigate();
@@ -89,6 +55,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [activeSlide, setActiveSlide] = useState(0);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [editMode, setEditMode] = useState(false);
   
   // User data state
   const [employeeDetails, setEmployeeDetails] = useState(null);
@@ -243,6 +210,46 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
     }
   };
 
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      showNotification('Failed to log out', 'error');
+    }
+  };
+
+  // Toggle edit mode
+  const toggleEditMode = () => {
+    setEditMode(prev => !prev);
+  };
+
+  // Handle save after editing
+  const handleSave = async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      const userId = currentUser.uid;
+      await update(ref(database, `users/${userId}/profile`), {
+        phone: formData.phone,
+        emergencyContact: formData.emergencyContact,
+        emergencyPhone: formData.emergencyPhone,
+      });
+      
+      setEditMode(false);
+      showNotification('Profile updated successfully');
+      await fetchUserDetails(); // Refresh data
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      showNotification('Failed to save profile', 'error');
+    }
+  };
+
   // Render slide content based on index
   const renderSlideContent = (index, data) => {
     const currentUser = auth.currentUser;
@@ -253,15 +260,20 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
         return (
           <PersonalInfoSection
             formData={data.formData}
-            editMode={false} // Employee can't edit most fields
-            handleInputChange={() => {}}
+            editMode={editMode}
+            handleInputChange={(e) => {
+              const { name, value } = e.target;
+              setFormData(prev => ({ ...prev, [name]: value }));
+            }}
             userId={userId}
             userData={data.employeeDetails}
             isCurrentUser={true}
-            viewOnly={true} // Mostly view only for employees
+            viewOnly={!editMode} // Only editable in edit mode
             isEmployeeView={true}
             onUpdatePhone={handleUpdatePhone}
             onUpdateEmergencyContact={handleUpdateEmergencyContact}
+            onSave={handleSave}
+            onCancel={() => setEditMode(false)}
           />
         );
       case 1:
@@ -564,6 +576,18 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
         </div>
       )}
 
+      {/* Top action bar with logout */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={handleLogout}
+          className="btn danger flex items-center"
+          aria-label="Log out"
+        >
+          <LogOut size={16} className="mr-2" />
+          Logout
+        </button>
+      </div>
+
       {/* Welcome Header */}
       <div className="glass-panel profile-header mb-6">
         <div className="profile-info">
@@ -589,6 +613,28 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
           </div>
         </div>
         <div className="flex flex-wrap items-center mt-2 sm:mt-0">
+          {/* Edit button */}
+          {activeTab === 'personal' && (
+            <button
+              onClick={toggleEditMode}
+              className={`btn ${editMode ? 'warning' : 'primary'} mr-2`}
+            >
+              <Edit size={16} className="mr-1" />
+              {editMode ? 'Cancel Edit' : 'Edit Profile'}
+            </button>
+          )}
+          
+          {/* Save button when in edit mode */}
+          {activeTab === 'personal' && editMode && (
+            <button
+              onClick={handleSave}
+              className="btn success mr-2"
+            >
+              <CheckCircle size={16} className="mr-1" />
+              Save Changes
+            </button>
+          )}
+          
           <div className="stats-summary px-3 py-2 flex items-center mr-3 text-white/70">
             <div className="text-sm flex flex-col">
               <span className="text-xs opacity-80">Next Shift</span>
