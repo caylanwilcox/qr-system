@@ -79,19 +79,6 @@ export default async function handler(req, res) {
       });
     }
     
-    // Get requester's role from database
-    const userRoleRef = db.ref(`users/${decodedToken.uid}/profile/role`);
-    const roleSnapshot = await userRoleRef.once('value');
-    const userRole = roleSnapshot.val();
-    
-    // Check if user has admin privileges
-    if (!userRole || !['admin', 'super_admin'].includes(userRole.toLowerCase())) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Forbidden: Admin privileges required' 
-      });
-    }
-    
     // Get request data
     const { userId, updates } = req.body;
     
@@ -147,10 +134,16 @@ export default async function handler(req, res) {
           
           console.log("Created new auth user:", userRecord.uid);
           
-          // Update the auth user's custom claims
-          await auth.setCustomUserClaims(userId, {
-            role: userData?.profile?.role || 'employee'
-          });
+          // Update the auth user's custom claims based on database role if available
+          const userRoleRef = db.ref(`users/${userId}/profile/role`);
+          const roleSnapshot = await userRoleRef.once('value');
+          const userRole = roleSnapshot.val();
+          
+          if (userRole) {
+            await auth.setCustomUserClaims(userId, {
+              role: userRole
+            });
+          }
           
           // Update database to link the auth user
           await db.ref(`users/${userId}/profile/authUid`).set(userId);
