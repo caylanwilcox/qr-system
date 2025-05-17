@@ -181,7 +181,7 @@ const CodesEditor = () => {
   const syncLocationsToList = async () => {
     try {
       if (!isSuperAdmin) {
-        showNotification('Only super admins can sync locations', 'error');
+        showNotification('Only IT can sync locations', 'error');
         return;
       }
       
@@ -306,7 +306,7 @@ const CodesEditor = () => {
 
     // Check permissions for protected categories
     if (isProtectedCategory && !isSuperAdmin) {
-      showNotification(`Only super admins can edit ${getSingularName(activeCategory).toLowerCase()}s`, 'error');
+      showNotification(`Only IT can edit ${getSingularName(activeCategory).toLowerCase()}s`, 'error');
       setEditMode({...editMode, [codeId]: false});
       setEditingItem({});
       return;
@@ -755,7 +755,7 @@ const CodesEditor = () => {
             {isProtectedCategory && !isSuperAdmin && (
               <span className="ml-2 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded-full flex items-center gap-1">
                 <Lock size={12} />
-                Super admin only
+                IT only
               </span>
             )}
           </h3>
@@ -1065,7 +1065,7 @@ const CodesEditor = () => {
                       {/* For protected categories, show lock icon for non-super-admins */}
                       {isProtectedCategory && !isSuperAdmin && (
                         <div className="p-1.5 text-gray-500">
-                          <Lock size={16} title="Super admin access required" />
+                          <Lock size={16} title="IT access required" />
                         </div>
                       )}
                     </div>
@@ -1088,7 +1088,7 @@ const CodesEditor = () => {
           Manage system codes used throughout the application.
           {!isSuperAdmin && (
             <span className="ml-2 text-yellow-400">
-              Some actions require super admin access.
+              Some actions require IT access.
             </span>
           )}
         </p>

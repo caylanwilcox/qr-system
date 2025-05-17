@@ -15,7 +15,7 @@ import LocationAdmin from './components/LocationAdmin';
 import LocationAdminDashboard from './components/LocationAdminDashboard';
 import ManageEmployees from './components/ManageEmployees';
 import ManageAdmins from './components/ManageAdmins';
-import Reports from './components/Reports';
+import Reports from './components/Reports/index';
 import Settings from './components/Settings';
 import AddUser from './components/AddUser';
 import AccountSettings from './components/AccountSettings';
