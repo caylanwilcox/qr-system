@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
 import { 
@@ -9,77 +9,81 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import './LocationAdminDashboard.css';
+import LocationMetricsGrid from './LocationMetricsGrid';
+import { useAuth } from '../services/authContext'; // Import auth context to get current user
 
-// Add these styles to your CSS file
-const cssStyles = `
-  /* Location-specific metrics styles */
-  .location-specific-metrics {
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: rgba(30, 41, 59, 0.5);
-    border-radius: 0.5rem;
-    border: 1px solid rgba(148, 163, 184, 0.1);
-    backdrop-filter: blur(8px);
+// Extract pure functions outside component to prevent recreation on render
+const normalizeLocationKey = (text) => {
+  if (!text) return '';
+  return text.trim().toLowerCase().replace(/\s+/g, '');
+};
+
+// Format dates for comparison - pure function
+const formatDateAlternative = (isoDate, formatStr) => {
+  try {
+    if (!isoDate) return null;
+    
+    // Parse the ISO date (YYYY-MM-DD)
+    const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    const day = parseInt(match[3]);
+    
+    // MM/DD/YYYY format (with leading zeroes)
+    if (formatStr === 'MM/DD/YYYY') {
+      return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`;
+    }
+    
+    // M/D/YYYY format (without leading zeroes)
+    if (formatStr === 'M/D/YYYY') {
+      return `${month}/${day}/${year}`;
+    }
+    
+    return isoDate;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return null;
   }
+};
 
-  .metrics-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #94a3b8;
-    margin-bottom: 1rem;
+// Helper function to extract initials - pure function
+const getInitials = (user) => {
+  if (!user) return 'U';
+  
+  // Try to get name from different possible fields
+  const profile = user.profile || {};
+  
+  if (profile.firstName && profile.lastName) {
+    return `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase();
   }
-
-  .metrics-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
+  
+  if (profile.name) {
+    return profile.name.split(' ')
+      .map(n => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
   }
-
-  .metric-card {
-    display: flex;
-    align-items: center;
-    padding: 0.75rem;
-    background: rgba(51, 65, 85, 0.4);
-    border-radius: 0.375rem;
-    border: 1px solid rgba(148, 163, 184, 0.1);
+  
+  if (profile.displayName) {
+    return profile.displayName.split(' ')
+      .map(n => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
   }
-
-  .metric-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: rgba(59, 130, 246, 0.1);
-    border-radius: 0.25rem;
-    margin-right: 0.75rem;
-    color: #60a5fa;
+  
+  // If no name found, use first letter of email
+  if (user.email) {
+    return user.email[0].toUpperCase();
   }
+  
+  return 'U';
+};
 
-  .metric-content {
-    flex: 1;
-  }
-
-  .metric-label {
-    font-size: 0.813rem;
-    color: #94a3b8;
-    margin-bottom: 0.25rem;
-  }
-
-  .metric-value {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #f8fafc;
-  }
-
-  .metric-subtitle {
-    font-size: 0.75rem;
-    color: #64748b;
-    margin-top: 0.25rem;
-  }
-`;
-
-// Status badge component
+// Status badge component - extracted for better reuse
 const StatusBadge = ({ clockInTime }) => {
   if (!clockInTime) {
     return (
@@ -131,68 +135,104 @@ const StatusBadge = ({ clockInTime }) => {
   }
 };
 
-const LocationAdminDashboard = () => {
-  const { adminLocations, hasAllLocations } = useOutletContext();
-  const [loading, setLoading] = useState(true);
-  const [allUserData, setAllUserData] = useState({}); // Store all accessible user data
-  const [filteredUserData, setFilteredUserData] = useState({});
-  const [activeLocation, setActiveLocation] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+// Optional Debug component - disabled by default in production
+const DebugInfo = ({ enabled, allUserData, filteredUserData, activeLocation, adminLocations, hasAllLocations, context, currentUser }) => {
+  if (!enabled) return null;
   
-  // State for UI elements
+  const stats = {
+    allUsers: Object.keys(allUserData || {}).length,
+    filteredUsers: Object.keys(filteredUserData || {}).length,
+    activeLocation,
+    adminLocations,
+    hasAllLocations,
+    contextAvailable: !!context,
+    contextKeys: context ? Object.keys(context) : [],
+    currentUser: currentUser ? {
+      id: currentUser.uid,
+      email: currentUser.email,
+      location: currentUser.profile?.primaryLocation || currentUser.profile?.locationKey || currentUser.location
+    } : 'Not logged in'
+  };
+  
+  return (
+    <div style={{
+      position: 'fixed', 
+      bottom: '10px', 
+      right: '10px', 
+      background: 'rgba(0,0,0,0.8)', 
+      color: 'lime',
+      padding: '10px',
+      fontSize: '12px',
+      zIndex: 9999,
+      maxWidth: '400px',
+      fontFamily: 'monospace',
+      overflowY: 'auto',
+      maxHeight: '500px'
+    }}>
+      <div>Debug Info:</div>
+      <pre>{JSON.stringify(stats, null, 2)}</pre>
+    </div>
+  );
+};
+
+const LocationAdminDashboard = () => {
+  const navigate = useNavigate();
+  
+  // Get current user from auth context
+  const { user: currentUser } = useAuth();
+  
+  // Get admin's location from user profile - extract as const to avoid recalculation
+  const userLocation = useMemo(() => {
+    return currentUser?.profile?.primaryLocation || 
+           currentUser?.profile?.locationKey || 
+           currentUser?.profile?.location ||
+           currentUser?.location;
+  }, [currentUser]);
+  
+  // Get context with fallback values
+  const context = useOutletContext() || {};
+  const adminLocations = context.adminLocations || [];
+  const hasAllLocations = context.hasAllLocations || false;
+  
+  // Memoize admin locations to avoid recreating on each render
+  const effectiveAdminLocations = useMemo(() => {
+    const locations = adminLocations.length > 0 ? 
+      [...adminLocations] : 
+      ['Aurora', 'Elgin', 'Joliet', 'Wheeling']; // Default to some locations for testing
+    
+    // Add user's own location if it exists and isn't already in the list
+    if (userLocation && !locations.includes(userLocation)) {
+      locations.push(userLocation);
+    }
+    
+    return locations;
+  }, [adminLocations, userLocation]);
+  
+  // State declarations
+  const [loading, setLoading] = useState(true);
+  const [allUserData, setAllUserData] = useState({});
+  const [filteredUserData, setFilteredUserData] = useState({});
+  const [activeLocation, setActiveLocation] = useState('all'); // Default to all, will update based on userLocation
+  const [searchQuery, setSearchQuery] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [refreshing, setRefreshing] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  
-  // Store location information
   const [locationInfo, setLocationInfo] = useState({
     availableLocations: [],
     locationUserCount: {},
-    userLocationMap: {} // Maps user IDs to their location
+    userLocationMap: {}
   });
 
-  // Function to normalize location keys for comparison
-  const normalizeLocationKey = (text) => {
-    if (!text) return '';
-    return text.trim().toLowerCase().replace(/\s+/g, '');
-  };
-
-  // Get current date in ISO format (YYYY-MM-DD)
-  const getCurrentDateISO = () => new Date().toISOString().split('T')[0];
-
-  // Helper function to format dates for comparison
-  const formatDateAlternative = (isoDate, formatStr) => {
-    try {
-      if (!isoDate) return null;
-      
-      // Parse the ISO date (YYYY-MM-DD)
-      const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!match) return null;
-      
-      const year = parseInt(match[1]);
-      const month = parseInt(match[2]);
-      const day = parseInt(match[3]);
-      
-      // MM/DD/YYYY format (with leading zeroes)
-      if (formatStr === 'MM/DD/YYYY') {
-        return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`;
-      }
-      
-      // M/D/YYYY format (without leading zeroes)
-      if (formatStr === 'M/D/YYYY') {
-        return `${month}/${day}/${year}`;
-      }
-      
-      return isoDate;
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return null;
+  // Set active location based on user location on mount
+  useEffect(() => {
+    if (userLocation) {
+      setActiveLocation(userLocation);
     }
-  };
+  }, [userLocation]);
 
-  // Helper to extract a user's location from various fields
-  const extractUserLocation = (user) => {
+  // Helper to extract a user's location - extracted as useCallback with no dependencies
+  const extractUserLocation = useCallback((user) => {
     if (!user) return null;
     
     // Check all possible location fields
@@ -212,22 +252,38 @@ const LocationAdminDashboard = () => {
     }
     
     return null;
-  };
+  }, []);
 
-  // Check if user belongs to a specific location
-  const userBelongsToLocation = (user, location) => {
-    if (location === 'all') return true;
+  // Check if user belongs to a specific location - dependencies properly declared
+  const userBelongsToLocation = useCallback((user, location) => {
+    // If viewing all locations, check if admin has access to user's location
+    if (location === 'all') {
+      const userLocation = extractUserLocation(user);
+      if (!userLocation && !hasAllLocations) return false;
+      
+      return hasAllLocations || effectiveAdminLocations.some(adminLoc => 
+        adminLoc === userLocation || 
+        normalizeLocationKey(adminLoc) === normalizeLocationKey(userLocation)
+      );
+    }
     
+    // If filtering by specific location, check if it matches and admin has access
     const userLocation = extractUserLocation(user);
     if (!userLocation) return false;
     
-    return (
-      userLocation === location || 
-      normalizeLocationKey(userLocation) === normalizeLocationKey(location)
+    const locationMatch = userLocation === location || 
+                         normalizeLocationKey(userLocation) === normalizeLocationKey(location);
+    
+    // Check if admin has access to this location
+    const hasAccess = hasAllLocations || effectiveAdminLocations.some(adminLoc => 
+      adminLoc === location || 
+      normalizeLocationKey(adminLoc) === normalizeLocationKey(location)
     );
-  };
+    
+    return locationMatch && hasAccess;
+  }, [effectiveAdminLocations, hasAllLocations, extractUserLocation]);
 
-  // Check if user is clocked in and get their status for the selected date
+  // Check if user is clocked in - dependencies properly declared
   const getUserAttendanceStatus = useCallback((user) => {
     if (!user) return { present: false };
     
@@ -412,14 +468,55 @@ const LocationAdminDashboard = () => {
     return { present: false };
   }, [selectedDate]);
 
-  // Calculate attendance metrics for the current view
+  // Apply search filter - memoize this function
+  const applySearchFilter = useCallback((users, searchTerm) => {
+    if (!searchTerm || !searchTerm.trim()) return users;
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    // Filter by search term
+    return Object.fromEntries(
+      Object.entries(users).filter(([_, user]) => {
+        const name = user.profile?.name || '';
+        const firstName = user.profile?.firstName || '';
+        const lastName = user.profile?.lastName || '';
+        const fullName = firstName && lastName ? `${firstName} ${lastName}` : '';
+        const email = user.email || '';
+        const department = user.profile?.department || '';
+        const service = user.profile?.service || '';
+        
+        return name.toLowerCase().includes(searchLower) || 
+               fullName.toLowerCase().includes(searchLower) ||
+               email.toLowerCase().includes(searchLower) ||
+               department.toLowerCase().includes(searchLower) ||
+               service.toLowerCase().includes(searchLower);
+      })
+    );
+  }, []);
+
+  // Check if admin can access this specific location
+  const canAccessLocation = useCallback((location) => {
+    if (hasAllLocations) return true;
+    if (location === 'all') return true;
+    
+    // Check if it's the user's own location
+    if (userLocation && (location === userLocation || 
+        normalizeLocationKey(location) === normalizeLocationKey(userLocation))) {
+      return true;
+    }
+    
+    return effectiveAdminLocations.some(adminLoc => 
+      adminLoc === location || 
+      normalizeLocationKey(adminLoc) === normalizeLocationKey(location)
+    );
+  }, [effectiveAdminLocations, hasAllLocations, userLocation]);
+
+  // Calculate attendance metrics - memoized to avoid recalculation
   const calculateAttendanceMetrics = useCallback(() => {
     // Filter users based on active location
-    const relevantUsers = activeLocation === 'all' 
-      ? Object.values(allUserData)
-      : Object.values(allUserData).filter(user => 
-          userBelongsToLocation(user, activeLocation)
-        );
+    const relevantUsers = Object.values(filteredUserData).filter(user => 
+      activeLocation === 'all' || userBelongsToLocation(user, activeLocation)
+    );
     
     if (relevantUsers.length === 0) {
       return {
@@ -467,22 +564,24 @@ const LocationAdminDashboard = () => {
       attendance,
       onTimeRate
     };
-  }, [allUserData, activeLocation, getUserAttendanceStatus]);
+  }, [filteredUserData, activeLocation, getUserAttendanceStatus, userBelongsToLocation]);
 
-  // Calculate service metrics (padrinos, orejas, apoyos)
+  // Calculate service metrics - memoized to avoid recalculation
   const calculateServiceMetrics = useCallback(() => {
     // Filter users based on active location
-    const relevantUsers = activeLocation === 'all' 
-      ? Object.values(allUserData)
-      : Object.values(allUserData).filter(user => 
-          userBelongsToLocation(user, activeLocation)
-        );
+    const relevantUsers = Object.values(filteredUserData).filter(user => 
+      activeLocation === 'all' || userBelongsToLocation(user, activeLocation)
+    );
     
     if (relevantUsers.length === 0) {
       return {
         totalCount: 0,
         activeCount: 0,
         padrinoCount: 0,
+        padrinosBlue: 0,
+        padrinosGreen: 0,
+        padrinosOrange: 0,
+        padrinosRed: 0,
         orejaCount: 0,
         apoyoCount: 0
       };
@@ -491,6 +590,10 @@ const LocationAdminDashboard = () => {
     let totalCount = relevantUsers.length;
     let activeCount = 0;
     let padrinoCount = 0;
+    let padrinosBlue = 0;
+    let padrinosGreen = 0;
+    let padrinosOrange = 0;
+    let padrinosRed = 0;
     let orejaCount = 0;
     let apoyoCount = 0;
     
@@ -506,6 +609,13 @@ const LocationAdminDashboard = () => {
       // Check if padrino
       if (profile.padrino) {
         padrinoCount++;
+        
+        // Count by color
+        const color = profile.padrinoColor?.toLowerCase?.();
+        if (color === 'blue') padrinosBlue++;
+        else if (color === 'green') padrinosGreen++;
+        else if (color === 'orange') padrinosOrange++;
+        else if (color === 'red') padrinosRed++;
       }
       
       // Check service
@@ -521,185 +631,28 @@ const LocationAdminDashboard = () => {
       totalCount,
       activeCount,
       padrinoCount,
+      padrinosBlue,
+      padrinosGreen,
+      padrinosOrange,
+      padrinosRed,
       orejaCount,
       apoyoCount
     };
-  }, [allUserData, activeLocation]);
+  }, [filteredUserData, activeLocation, userBelongsToLocation]);
 
-  // Apply search filter
-  const applySearchFilter = useCallback((users, searchTerm) => {
-    if (!searchTerm.trim()) return users;
-    
-    const searchLower = searchTerm.toLowerCase().trim();
-    
-    // Filter by search term
-    return Object.fromEntries(
-      Object.entries(users).filter(([_, user]) => {
-        const name = user.profile?.name || '';
-        const firstName = user.profile?.firstName || '';
-        const lastName = user.profile?.lastName || '';
-        const fullName = firstName && lastName ? `${firstName} ${lastName}` : '';
-        const email = user.email || '';
-        const department = user.profile?.department || '';
-        const service = user.profile?.service || '';
-        
-        return name.toLowerCase().includes(searchLower) || 
-               fullName.toLowerCase().includes(searchLower) ||
-               email.toLowerCase().includes(searchLower) ||
-               department.toLowerCase().includes(searchLower) ||
-               service.toLowerCase().includes(searchLower);
-      })
-    );
-  }, []);
-
-  // Fetch user data from Firebase
-  useEffect(() => {
-    setLoading(true);
-    const usersRef = ref(database, 'users');
-    
-    const unsubscribe = onValue(usersRef, (snapshot) => {
-      try {
-        const data = snapshot.val();
-        if (!data) {
-          setAllUserData({});
-          setFilteredUserData({});
-          setLocationInfo({
-            availableLocations: [],
-            locationUserCount: {},
-            userLocationMap: {}
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Process all users to determine which ones the admin has access to
-        const accessibleData = {};
-        const locationMap = {};
-        const userLocationMap = {};
-        
-        Object.entries(data).forEach(([userId, user]) => {
-          const userLocation = extractUserLocation(user);
-          
-          // Skip if no location found and not a super admin
-          if (!userLocation && !hasAllLocations) return;
-          
-          // Check if admin has access to this user's location
-          const hasAccess = hasAllLocations || 
-                           adminLocations.some(adminLoc => 
-                             adminLoc === userLocation || 
-                             normalizeLocationKey(adminLoc) === normalizeLocationKey(userLocation)
-                           );
-          
-          if (hasAccess) {
-            // Add user to accessible data
-            accessibleData[userId] = user;
-            
-            // Track location information
-            if (userLocation) {
-              if (!locationMap[userLocation]) {
-                locationMap[userLocation] = 0;
-              }
-              locationMap[userLocation]++;
-              userLocationMap[userId] = userLocation;
-            }
-          }
-        });
-        
-        // Update state
-        setAllUserData(accessibleData);
-        
-        // Filter by search if needed
-        const searchFiltered = applySearchFilter(accessibleData, searchQuery);
-        setFilteredUserData(searchFiltered);
-        
-        // Update location information
-        setLocationInfo({
-          availableLocations: Object.keys(locationMap).sort(),
-          locationUserCount: locationMap,
-          userLocationMap: userLocationMap
-        });
-        
-        setLoading(false);
-      } catch (error) {
-        console.error("Error loading user data:", error);
-        setLoading(false);
-      }
-    });
-    
-    return () => unsubscribe();
-  }, [adminLocations, hasAllLocations, applySearchFilter, searchQuery]);
-
-  // Handle location change
-  const handleLocationChange = (location) => {
-    setActiveLocation(location);
-    setShowLocationDropdown(false);
-  };
-
-  // Handle date change
-  const handleDateChange = (e) => {
-    setSelectedDate(e.target.value);
-    setShowDatePicker(false);
-  };
-
-  // Handle refresh
-  const handleRefresh = () => {
-    setRefreshing(true);
-    // Re-apply search filter
-    const searchFiltered = applySearchFilter(allUserData, searchQuery);
-    setFilteredUserData(searchFiltered);
-    setTimeout(() => setRefreshing(false), 500);
-  };
-
-  // Get initials for avatar
-  const getInitials = (user) => {
-    if (!user) return 'U';
-    
-    // Try to get name from different possible fields
-    const profile = user.profile || {};
-    
-    if (profile.firstName && profile.lastName) {
-      return `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase();
-    }
-    
-    if (profile.name) {
-      return profile.name.split(' ')
-        .map(n => n[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
-    }
-    
-    if (profile.displayName) {
-      return profile.displayName.split(' ')
-        .map(n => n[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
-    }
-    
-    // If no name found, use first letter of email
-    if (user.email) {
-      return user.email[0].toUpperCase();
-    }
-    
-    return 'U';
-  };
-
-  // Get all available locations
-  const getAvailableLocations = () => {
-    return ['all', ...locationInfo.availableLocations];
-  };
-
-  // Get lists of users categorized by attendance status
-  const getClockedInUsers = useCallback(() => {
+  // Get lists of users categorized by attendance status - memoized for performance
+  const clockedInUsers = useMemo(() => {
     // Get relevant users for current location
-    const locationUsers = activeLocation === 'all'
-      ? filteredUserData
-      : Object.fromEntries(
-          Object.entries(filteredUserData).filter(([_, user]) => 
-            userBelongsToLocation(user, activeLocation)
-          )
-        );
+    const locationUsers = Object.entries(filteredUserData)
+      .filter(([_, user]) => 
+        activeLocation === 'all' ? 
+          userBelongsToLocation(user, 'all') :
+          userBelongsToLocation(user, activeLocation)
+      )
+      .reduce((acc, [id, user]) => {
+        acc[id] = user;
+        return acc;
+      }, {});
     
     return Object.entries(locationUsers)
       .map(([id, user]) => {
@@ -727,17 +680,20 @@ const LocationAdminDashboard = () => {
         const nameB = b.profile?.name || b.email || '';
         return nameA.localeCompare(nameB);
       });
-  }, [filteredUserData, activeLocation, getUserAttendanceStatus]);
+  }, [filteredUserData, activeLocation, getUserAttendanceStatus, userBelongsToLocation]);
 
-  const getNotClockedInUsers = useCallback(() => {
+  const notClockedInUsers = useMemo(() => {
     // Get relevant users for current location
-    const locationUsers = activeLocation === 'all'
-      ? filteredUserData
-      : Object.fromEntries(
-          Object.entries(filteredUserData).filter(([_, user]) => 
-            userBelongsToLocation(user, activeLocation)
-          )
-        );
+    const locationUsers = Object.entries(filteredUserData)
+      .filter(([_, user]) => 
+        activeLocation === 'all' ? 
+          userBelongsToLocation(user, 'all') :
+          userBelongsToLocation(user, activeLocation)
+      )
+      .reduce((acc, [id, user]) => {
+        acc[id] = user;
+        return acc;
+      }, {});
     
     return Object.entries(locationUsers)
       .map(([id, user]) => {
@@ -751,91 +707,135 @@ const LocationAdminDashboard = () => {
         const nameB = b.profile?.name || b.email || '';
         return nameA.localeCompare(nameB);
       });
-  }, [filteredUserData, activeLocation, getUserAttendanceStatus]);
+  }, [filteredUserData, activeLocation, getUserAttendanceStatus, userBelongsToLocation]);
 
-  // Location-specific metrics component
-  const LocationSpecificMetrics = () => {
-    const serviceMetrics = calculateServiceMetrics();
-    const { totalCount, activeCount, padrinoCount, orejaCount, apoyoCount } = serviceMetrics;
+  // Get all available locations - memoize this calculation
+  const availableLocations = useMemo(() => {
+    // Start with 'all' option
+    const result = ['all'];
     
-    // Only show this component if we have any data
-    if (totalCount === 0) {
-      return null;
+    // Add user's own location if it exists
+    if (userLocation && !result.includes(userLocation)) {
+      result.push(userLocation);
     }
     
-    return (
-      <div className="location-specific-metrics">
-        <div className="metrics-title">
-          {activeLocation === 'all' 
-            ? 'All Locations Members Summary' 
-            : `${activeLocation} Members Summary`}
-        </div>
-        <div className="metrics-cards-grid">
-          <div className="metric-card">
-            <div className="metric-icon">
-              <Users size={18} />
-            </div>
-            <div className="metric-content">
-              <div className="metric-label">Total Members</div>
-              <div className="metric-value">{totalCount}</div>
-              {activeCount > 0 && (
-                <div className="metric-subtitle">
-                  {activeCount} Active ({Math.round((activeCount/totalCount) * 100)}%)
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {padrinoCount > 0 && (
-            <div className="metric-card">
-              <div className="metric-icon">
-                <Shield size={18} />
-              </div>
-              <div className="metric-content">
-                <div className="metric-label">Padrinos</div>
-                <div className="metric-value">{padrinoCount}</div>
-                <div className="metric-subtitle">
-                  {Math.round((padrinoCount/totalCount) * 100)}% of members
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {orejaCount > 0 && (
-            <div className="metric-card">
-              <div className="metric-icon">
-                <User size={18} />
-              </div>
-              <div className="metric-content">
-                <div className="metric-label">Orejas (RSG)</div>
-                <div className="metric-value">{orejaCount}</div>
-                <div className="metric-subtitle">
-                  {Math.round((orejaCount/totalCount) * 100)}% of members
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {apoyoCount > 0 && (
-            <div className="metric-card">
-              <div className="metric-icon">
-                <User size={18} />
-              </div>
-              <div className="metric-content">
-                <div className="metric-label">Apoyos (COM)</div>
-                <div className="metric-value">{apoyoCount}</div>
-                <div className="metric-subtitle">
-                  {Math.round((apoyoCount/totalCount) * 100)}% of members
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+    // Filter available locations to only those admin has access to
+    const accessibleLocations = locationInfo.availableLocations.filter(loc => 
+      hasAllLocations || loc === userLocation || effectiveAdminLocations.some(adminLoc => 
+        adminLoc === loc || normalizeLocationKey(adminLoc) === normalizeLocationKey(loc)
+      )
     );
-  };
+    
+    // Combine all unique locations
+    return [...new Set([...result, ...accessibleLocations])];
+  }, [locationInfo, userLocation, hasAllLocations, effectiveAdminLocations]);
 
-  // Close dropdowns when clicking outside
+  // Memoized attendance metrics
+  const attendanceMetrics = useMemo(() => 
+    calculateAttendanceMetrics(), 
+    [calculateAttendanceMetrics]
+  );
+  
+  // Memoized service metrics
+  const serviceMetrics = useMemo(() => 
+    calculateServiceMetrics(), 
+    [calculateServiceMetrics]
+  );
+
+  // Fetch user data from Firebase - fixed with proper dependencies
+  useEffect(() => {
+    console.log("Data loading effect running");
+    setLoading(true);
+    const usersRef = ref(database, 'users');
+    
+    const unsubscribe = onValue(usersRef, (snapshot) => {
+      try {
+        const data = snapshot.val();
+        if (!data) {
+          setAllUserData({});
+          setFilteredUserData({});
+          setLocationInfo({
+            availableLocations: [],
+            locationUserCount: {},
+            userLocationMap: {}
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Process all users to determine which ones the admin has access to
+        const accessibleData = {};
+        const locationMap = {};
+        const userLocationMap = {};
+        
+        Object.entries(data).forEach(([userId, user]) => {
+          const extractedUserLocation = extractUserLocation(user);
+          
+          // Skip if no location found and not a super admin
+          if (!extractedUserLocation && !hasAllLocations) {
+            return;
+          }
+          
+          // Check if user belongs to our location
+          const isOurLocation = userLocation && (
+            extractedUserLocation === userLocation || 
+            normalizeLocationKey(extractedUserLocation) === normalizeLocationKey(userLocation)
+          );
+          
+          // Check if admin has access to this user's location
+          const hasAccess = hasAllLocations || isOurLocation || 
+                           effectiveAdminLocations.some(adminLoc => 
+                             adminLoc === extractedUserLocation || 
+                             normalizeLocationKey(adminLoc) === normalizeLocationKey(extractedUserLocation)
+                           );
+          
+          if (hasAccess) {
+            // Add user to accessible data
+            accessibleData[userId] = user;
+            
+            // Track location information
+            if (extractedUserLocation) {
+              if (!locationMap[extractedUserLocation]) {
+                locationMap[extractedUserLocation] = 0;
+              }
+              locationMap[extractedUserLocation]++;
+              userLocationMap[userId] = extractedUserLocation;
+            }
+          }
+        });
+        
+        // Update state
+        setAllUserData(accessibleData);
+        
+        // Filter by search if needed
+        const searchFiltered = applySearchFilter(accessibleData, searchQuery);
+        setFilteredUserData(searchFiltered);
+        
+        // Update location information
+        setLocationInfo({
+          availableLocations: Object.keys(locationMap).sort(),
+          locationUserCount: locationMap,
+          userLocationMap: userLocationMap
+        });
+        
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading user data:", error);
+        setLoading(false);
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [
+    hasAllLocations, 
+    userLocation, 
+    effectiveAdminLocations, 
+    searchQuery, 
+    applySearchFilter, 
+    extractUserLocation 
+  ]);
+
+  // Effect to close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showDatePicker && !event.target.closest('.date-picker-container')) {
@@ -853,6 +853,37 @@ const LocationAdminDashboard = () => {
     };
   }, [showDatePicker, showLocationDropdown]);
 
+  // Handle location change
+  const handleLocationChange = (location) => {
+    // Only allow changing to locations the admin has access to
+    if (canAccessLocation(location)) {
+      setActiveLocation(location);
+    } else {
+      console.warn(`Cannot set location to ${location} - admin doesn't have access`);
+    }
+    setShowLocationDropdown(false);
+  };
+
+  // Handle date change
+  const handleDateChange = (e) => {
+    setSelectedDate(e.target.value);
+    setShowDatePicker(false);
+  };
+
+  // Handle refresh - using batch updates to avoid unnecessary renders
+  const handleRefresh = () => {
+    setRefreshing(true);
+    
+    // Only update if search is active
+    if (searchQuery.trim()) {
+      const searchFiltered = applySearchFilter(allUserData, searchQuery);
+      setFilteredUserData(searchFiltered);
+    }
+    
+    // Simulate refresh with timer
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -863,15 +894,20 @@ const LocationAdminDashboard = () => {
     );
   }
 
-  // Compute lists of users
-  const clockedInUsers = getClockedInUsers();
-  const notClockedInUsers = getNotClockedInUsers();
-  
-  // Get attendance metrics
-  const metrics = calculateAttendanceMetrics();
-
   return (
     <div className="dashboard-container">
+      {/* Debug Info - Setting enabled to false will disable debugging information */}
+      <DebugInfo 
+        enabled={false} 
+        allUserData={allUserData} 
+        filteredUserData={filteredUserData} 
+        activeLocation={activeLocation}
+        adminLocations={effectiveAdminLocations}
+        hasAllLocations={hasAllLocations}
+        context={context}
+        currentUser={currentUser}
+      />
+      
       {/* Dashboard Header */}
       <div className="dashboard-header">
         <div className="dashboard-header-content">
@@ -884,6 +920,14 @@ const LocationAdminDashboard = () => {
                   {activeLocation === 'all' ? 'all locations' : activeLocation}
                 </span>{' '}
                 on {format(new Date(selectedDate), 'MMMM d, yyyy')}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Your Location: {userLocation || 'Not Set'} • 
+                Access to: {hasAllLocations ? 'All Locations' : (
+                  effectiveAdminLocations.length > 0 ? 
+                  effectiveAdminLocations.join(', ') : 
+                  'Demo Mode - All Locations Enabled'
+                )}
               </p>
             </div>
             
@@ -959,15 +1003,16 @@ const LocationAdminDashboard = () => {
                   {showLocationDropdown && (
                     <div className="absolute right-0 mt-2 bg-gray-800/90 backdrop-blur-lg border border-gray-600/50 rounded-lg shadow-lg overflow-hidden z-30 w-64">
                       <div className="max-h-60 overflow-y-auto py-1">
-                        {getAvailableLocations().map(location => (
+                        {availableLocations.map(location => (
                           <button 
                             key={location} 
                             className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-600/50 transition-colors ${
                               activeLocation === location ? 'bg-blue-600/70 text-white' : 'text-gray-300'
-                            }`}
+                            } ${location === userLocation ? 'font-semibold' : ''}`}
                             onClick={() => handleLocationChange(location)}
                           >
                             {location === 'all' ? 'All Locations' : location}
+                            {location === userLocation && ' (Your Location)'}
                           </button>
                         ))}
                       </div>
@@ -988,8 +1033,12 @@ const LocationAdminDashboard = () => {
             </div>
           </div>
           
-          {/* Additional Location-specific Metrics */}
-          <LocationSpecificMetrics />
+          {/* Clickable Metrics Grid */}
+          <LocationMetricsGrid 
+            serviceMetrics={serviceMetrics} 
+            activeLocation={activeLocation}
+            searchQuery={searchQuery}
+          />
           
           {/* Stats cards - Fixed grid layout */}
           <div className="stats-grid">
@@ -999,13 +1048,10 @@ const LocationAdminDashboard = () => {
               </div>
               <div className="stat-content">
                 <h3 className="stat-title">Total Employees</h3>
-                <p className="stat-value">{metrics.total}</p>
-                {activeLocation !== 'all' && (
+                <p className="stat-value">{attendanceMetrics.total}</p>
+                {activeLocation !== 'all' && Object.keys(allUserData).length > 0 && (
                   <p className="stat-subtitle">
-                    {Object.keys(allUserData).length > 0 
-                      ? `${Math.round((metrics.total / Object.keys(allUserData).length) * 100)}% of all employees`
-                      : '0% of all employees'
-                    }
+                    {Math.round((attendanceMetrics.total / Object.keys(allUserData).length) * 100)}% of all employees
                   </p>
                 )}
               </div>
@@ -1017,8 +1063,8 @@ const LocationAdminDashboard = () => {
               </div>
               <div className="stat-content">
                 <h3 className="stat-title">Present Today</h3>
-                <p className="stat-value">{metrics.present}</p>
-                <p className="stat-subtitle">{metrics.attendance}% Attendance</p>
+                <p className="stat-value">{attendanceMetrics.present}</p>
+                <p className="stat-subtitle">{attendanceMetrics.attendance}% Attendance</p>
               </div>
             </div>
             
@@ -1028,10 +1074,10 @@ const LocationAdminDashboard = () => {
               </div>
               <div className="stat-content">
                 <h3 className="stat-title">Absent Today</h3>
-                <p className="stat-value">{metrics.absent}</p>
-                {metrics.total > 0 && (
+                <p className="stat-value">{attendanceMetrics.absent}</p>
+                {attendanceMetrics.total > 0 && (
                   <p className="stat-subtitle">
-                    {Math.round((metrics.absent / metrics.total) * 100)}% of {activeLocation === 'all' ? 'all' : activeLocation} employees
+                    {Math.round((attendanceMetrics.absent / attendanceMetrics.total) * 100)}% of {activeLocation === 'all' ? 'all' : activeLocation} employees
                   </p>
                 )}
               </div>
@@ -1043,8 +1089,8 @@ const LocationAdminDashboard = () => {
               </div>
               <div className="stat-content">
                 <h3 className="stat-title">On Time Rate</h3>
-                <p className="stat-value">{metrics.onTimeRate}%</p>
-                <p className="stat-subtitle">{metrics.late} late arrivals</p>
+                <p className="stat-value">{attendanceMetrics.onTimeRate}%</p>
+                <p className="stat-subtitle">{attendanceMetrics.late} late arrivals</p>
               </div>
             </div>
           </div>
