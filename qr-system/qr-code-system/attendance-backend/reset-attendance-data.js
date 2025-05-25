@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-=======
-// reset-attendance-data.js
-// Run this script to remove all attendance data from the database
-// This includes global attendance records and user profile attendance data
 
 // Import required modules
 const admin = require('firebase-admin');
@@ -228,10 +223,4 @@ async function main() {
     process.exit(0);
   } catch (error) {
     console.error('❌ Script failed:', error);
-    process.exit(1);
-  }
-}
 
-// Run the script
-main(); 
->>>>>>> be894cc (d)
