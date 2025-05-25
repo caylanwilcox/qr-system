@@ -24,7 +24,7 @@ if (missingVars.length > 0) {
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_DATABASE_URL
+  databaseURL: process.env.FIREBASE_DATABASE_URl
 });
 
 // Get database reference
