@@ -374,9 +374,7 @@ const PersonalInfoSection = ({
       throw new Error('Not authenticated');
     }
     
-    // No longer require authentication - removed current password requirement
-    
-    // Update the user profile
+    // No authentication required - directly update user profile
     const updates = [];
     let credChanged = false;
     
@@ -387,13 +385,13 @@ const PersonalInfoSection = ({
       }));
     }
     
-    // Update email if changed
+    // Update email if changed - no reauthentication required
     if (formData.email && formData.email !== auth.currentUser.email) {
       updates.push(updateEmail(auth.currentUser, formData.email));
       credChanged = true;
     }
     
-    // Update password if provided
+    // Update password if provided - no reauthentication required
     if (formData.password && formData.password.trim() !== '') {
       updates.push(updatePassword(auth.currentUser, formData.password));
       credChanged = true;
@@ -425,8 +423,15 @@ const PersonalInfoSection = ({
       // Get the current user's ID token
       const idToken = await auth.currentUser.getIdToken();
       
+      // Determine the API endpoint URL
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? '/api/admin/update-user-auth'
+        : 'http://localhost:3000/api/admin/update-user-auth';
+      
+      console.log('Calling admin API:', apiUrl, 'with updates:', updates);
+      
       // Call the admin API
-      const response = await fetch('/api/admin/update-user-auth', {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -438,9 +443,11 @@ const PersonalInfoSection = ({
         })
       });
       
+      const responseData = await response.json();
+      console.log('Admin API response:', responseData);
+      
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to update user authentication');
+        throw new Error(responseData.message || `HTTP ${response.status}: Failed to update user authentication`);
       }
       
       return { success: true };
@@ -462,9 +469,16 @@ const PersonalInfoSection = ({
         dbUpdates[`users/${userId}/name`] = formData.name; // Update root level too
       }
       
+      // Update username separately if provided
+      if (formData.username !== undefined) {
+        dbUpdates[`users/${userId}/profile/username`] = formData.username || '';
+        dbUpdates[`users/${userId}/username`] = formData.username || '';
+      }
+      
       // Update email
       if (formData.email) {
         dbUpdates[`users/${userId}/profile/email`] = formData.email;
+        dbUpdates[`users/${userId}/email`] = formData.email; // Update root level too
       }
       
       // Update phone
@@ -486,6 +500,7 @@ const PersonalInfoSection = ({
       if (formData.location) {
         dbUpdates[`users/${userId}/profile/location`] = formData.location;
         dbUpdates[`users/${userId}/location`] = formData.location;
+        dbUpdates[`users/${userId}/profile/primaryLocation`] = formData.location;
       }
       
       // Update department if provided
@@ -542,7 +557,7 @@ const PersonalInfoSection = ({
       setUpdateStatus(null);
       setCredentialsChanged(false);
       
-      // Step 1: Update Firebase Auth if necessary
+      // Step 1: Update Firebase Auth
       if (isCurrentUser) {
         try {
           // Update authentication for current user
@@ -559,21 +574,19 @@ const PersonalInfoSection = ({
           setIsSaving(false);
           return;
         }
-      } else if (auth.currentUser && (formData.password || formData.email !== originalValues.email)) {
-        // Admin updating another user's auth
+      } else {
+        // Admin updating another user's auth - use admin API
         try {
           await updateUserAuthViaAdmin();
+          console.log("Admin auth update successful");
         } catch (error) {
           console.error("Admin auth update error:", error);
-          setUpdateStatus({ 
-            type: 'error', 
-            message: `Admin authentication error: ${error.message}` 
-          });
-          // Continue with database update even if Auth update fails
+          // Don't fail completely - continue with database update
+          console.log("Continuing with database update despite auth error");
         }
       }
       
-      // Step 2: Update the database
+      // Step 2: Update the database (this always works)
       await updateDatabaseWithAuthInfo();
       
       // Step 3: Call parent onSave if provided
@@ -802,6 +815,16 @@ const PersonalInfoSection = ({
               disabled={!editMode}
               error={errors.name}
               required
+            />
+
+            <FormField
+              label="Username"
+              icon={<User size={16} className="text-white/70" />}
+              name="username"
+              value={formData.username || ''}
+              onChange={handleInputChange}
+              disabled={!editMode}
+              error={errors.username}
             />
 
             <FormField

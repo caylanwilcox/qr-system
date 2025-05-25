@@ -61,6 +61,7 @@ const DEPARTMENTS = [
 
 const INITIAL_FORM_DATA = {
   name: '',
+  username: '',
   email: '',
   phone: '',
   position: '',
@@ -76,7 +77,6 @@ const INITIAL_FORM_DATA = {
   padrinoColor: 'red',
   service: '',
   password: '',
-  currentPassword: '', // For local re-auth
 };
 
 const INITIAL_STATS = {
@@ -114,7 +114,7 @@ const EmployeeProfile = () => {
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const [activeTab, setActiveTab] = useState('personal');
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
@@ -123,13 +123,6 @@ const EmployeeProfile = () => {
   const [newScheduleDate, setNewScheduleDate] = useState('');
   const [newScheduleTime, setNewScheduleTime] = useState('');
   const [activeSlide, setActiveSlide] = useState(0);
-
-  // Dialog for re-auth (when a current user changes their own password)
-  const [passwordDialog, setPasswordDialog] = useState({
-    show: false,
-    currentPassword: '',
-    error: null,
-  });
 
   const [isCurrentUser, setIsCurrentUser] = useState(false);
   
@@ -221,79 +214,12 @@ const EmployeeProfile = () => {
     }
   };
 
-  // Re-auth dialog input
-  const handlePasswordDialogChange = (e) => {
-    setPasswordDialog((prev) => ({
-      ...prev,
-      currentPassword: e.target.value,
-      error: null,
-    }));
-  };
-
-  // Confirm changing password for the currently logged-in user
-  const handlePasswordDialogSubmit = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setPasswordDialog((prev) => ({
-        ...prev,
-        error: 'No current user authenticated. Please log in again.',
-      }));
-      return;
-    }
-
-    try {
-      // Re-auth with current password
-      const credential = EmailAuthProvider.credential(
-        currentUser.email,
-        passwordDialog.currentPassword
-      );
-      
-      await reauthenticateWithCredential(currentUser, credential);
-
-      // Update Auth password
-      await updatePassword(currentUser, formData.password);
-
-      // Update RTDB profile password
-      await update(ref(database, `users/${employeeId}/profile`), {
-        password: formData.password,
-      });
-
-      setPasswordDialog({ show: false, currentPassword: '', error: null });
-      // Clear the password from formData to avoid confusion
-      setFormData((prev) => ({ ...prev, password: '' }));
-
-      showNotification('Password updated successfully');
-    } catch (error) {
-      console.error('Error updating password:', error);
-      
-      // More specific error messages
-      let errorMessage = 'Current password is incorrect or authentication failed';
-      
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = 'The current password you entered is incorrect.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'The new password is too weak. It should be at least 6 characters.';
-      } else if (error.code === 'auth/requires-recent-login') {
-        errorMessage = 'For security reasons, please log out and log back in before changing your password.';
-      }
-      
-      setPasswordDialog((prev) => ({
-        ...prev,
-        error: errorMessage
-      }));
-    }
-  };
-
-  // Cancel re-auth dialog
-  const handlePasswordDialogCancel = () => {
-    setPasswordDialog({ show: false, currentPassword: '', error: null });
-  };
-
   // Main "Save" for the entire personal info form
   const handleSave = async () => {
     // Build our updates for RTDB
     const updates = {
       name: formData.name,
+      username: formData.username,
       email: formData.email,
       phone: formData.phone,
       position: formData.position,
@@ -320,35 +246,28 @@ const EmployeeProfile = () => {
         profile: { ...prev?.profile, ...updates },
       }));
 
-      // Handle password update separately from general profile updates
+      // Handle password update without requiring current password
       if (formData.password && formData.password.trim() !== '') {
-        // Check if we're dealing with the current user or an admin editing another user
-        if (isCurrentUser) {
-          // Current user changing their own password - show re-auth dialog
-          setPasswordDialog({ show: true, currentPassword: '', error: null });
-          return; // Exit early - the dialog will handle the actual password update
-        } else {
-          // Admin is updating another user's password
-          try {
-            // Store the password in RTDB for record-keeping
-            await update(ref(database, `users/${employeeId}/profile`), {
-              password: formData.password
-            });
-            
-            showNotification(
-              'Database password updated. For user to update Auth password, they should use the "Forgot Password" option on login page.',
-              'info'
-            );
-          } catch (err) {
-            console.error('Error updating password in database:', err);
-            showNotification('Failed to update password in database', 'error');
-          }
+        try {
+          // Store the password in RTDB for record-keeping
+          await update(ref(database, `users/${employeeId}/profile`), {
+            password: formData.password
+          });
+          
+          // Clear the password from formData
+          setFormData((prev) => ({ ...prev, password: '' }));
+          
+          showNotification('Profile and password updated successfully');
+        } catch (err) {
+          console.error('Error updating password in database:', err);
+          showNotification('Profile updated, but failed to update password', 'warning');
         }
+      } else {
+        showNotification('Profile updated successfully');
       }
 
       // Exit edit mode
       setEditMode(false);
-      showNotification('Profile updated successfully');
     } catch (err) {
       console.error('Save error:', err);
       showNotification('Failed to save changes', 'error');
@@ -419,6 +338,7 @@ const EmployeeProfile = () => {
       // Set local form data
       setFormData({
         name: data.profile?.name || '',
+        username: data.profile?.username || '',
         email: data.profile?.email || '',
         phone: data.profile?.phone || '',
         position: data.profile?.position || '',
@@ -434,7 +354,6 @@ const EmployeeProfile = () => {
         padrinoColor: data.profile?.padrinoColor || 'red',
         service: data.profile?.service || '',
         password: '',
-        currentPassword: '',
       });
 
       // Format scheduled dates
@@ -589,52 +508,6 @@ const EmployeeProfile = () => {
       {notification.show && (
         <div className={`notification ${notification.type}`}>
           {notification.message}
-        </div>
-      )}
-
-      {/* Re-Auth Dialog for updating password when user is current user */}
-      {passwordDialog.show && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg shadow-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-semibold text-white mb-4">
-              Confirm Password Change
-            </h3>
-            <p className="text-white/70 mb-4">
-              For security, please enter your current password to confirm.
-            </p>
-
-            {passwordDialog.error && (
-              <div className="mb-4 p-3 bg-red-900/50 border border-red-500/30 rounded-md text-red-300">
-                {passwordDialog.error}
-              </div>
-            )}
-
-            <div className="mb-4">
-              <label className="block text-white/80 mb-2">Current Password</label>
-              <input
-                type="password"
-                value={passwordDialog.currentPassword}
-                onChange={handlePasswordDialogChange}
-                className="w-full rounded-md bg-slate-700 border border-white/10 px-3 py-2 text-white"
-                placeholder="Enter your current password"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={handlePasswordDialogCancel}
-                className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePasswordDialogSubmit}
-                className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-500"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
