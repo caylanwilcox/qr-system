@@ -299,8 +299,15 @@ const LocationAdminDashboard = () => {
         if (!dateFormat) continue;
         
         const entry = user.attendance[dateFormat];
-        if (entry && (entry.clockedIn === true || entry.isClocked === true || 
-            entry.checkedIn === true || entry.present === true)) {
+        if (!entry) continue;
+        
+        // If clockedIn is explicitly false, user has clocked out - return not present
+        if (entry.clockedIn === false) {
+          return { present: false };
+        }
+        
+        if (entry.clockedIn === true || entry.isClocked === true || 
+            entry.checkedIn === true || entry.present === true) {
           
           // Check if they were late
           let status = 'on-time';
@@ -338,8 +345,15 @@ const LocationAdminDashboard = () => {
       if (!dateFormat || !user[dateFormat]) continue;
       
       const entry = user[dateFormat];
-      if (entry && (entry.clockedIn === true || entry.isClocked === true || 
-          entry.checkedIn === true || entry.present === true)) {
+      if (!entry) continue;
+      
+      // If clockedIn is explicitly false, user has clocked out - return not present
+      if (entry.clockedIn === false) {
+        return { present: false };
+      }
+      
+      if (entry.clockedIn === true || entry.isClocked === true || 
+          entry.checkedIn === true || entry.present === true) {
         
         let status = 'on-time';
         const clockInTime = entry.time || entry.clockInTime || '';
@@ -381,6 +395,11 @@ const LocationAdminDashboard = () => {
           const timestampDateStr = timestampDate.toISOString().split('T')[0];
           
           if (timestampDateStr === targetDateStr) {
+            // Check if there's a corresponding clock-out time
+            if (user.clockOutTimes && user.clockOutTimes[timestamp]) {
+              return { present: false }; // User has clocked out
+            }
+            
             const clockInTime = user.clockInTimes[timestamp];
             let status = 'on-time';
             
@@ -413,6 +432,11 @@ const LocationAdminDashboard = () => {
       }
     }
     
+    // Check if user is explicitly clocked out via direct flags
+    if (user.clockedIn === false) {
+      return { present: false }; // User is explicitly clocked out
+    }
+    
     // Finally, check dailyAttendance array if present
     if (user.dailyAttendance && Array.isArray(user.dailyAttendance)) {
       // Try to find attendance entry for selected date
@@ -432,6 +456,11 @@ const LocationAdminDashboard = () => {
         if (entryDateStr === targetDateStr || 
             entryDateStr === formatDateAlternative(selectedDate, 'MM/DD/YYYY') ||
             entryDateStr === formatDateAlternative(selectedDate, 'M/D/YYYY')) {
+          
+          // If clockedIn is explicitly false, user has clocked out
+          if (entry.clockedIn === false) {
+            return { present: false };
+          }
           
           if (entry.present || entry.clockedIn || entry.isClocked || entry.checkedIn) {
             const clockInTime = entry.time || entry.clockInTime || '';

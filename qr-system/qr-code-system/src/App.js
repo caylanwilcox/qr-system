@@ -1,3 +1,4 @@
+//src/App.js
 import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from './services/PrivateRoute';
@@ -19,7 +20,7 @@ import Reports from './components/Reports/index';
 import Settings from './components/Settings';
 import AddUser from './components/AddUser';
 import AccountSettings from './components/AccountSettings';
-import QRScannerPage from './components/QRScannerPage';
+import QRScannerPage from './components/QRSCANNER/index';
 import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
 import StatDetails from './components/SuperAdmin/StatDetails';
 import UserProfile from './components/UserProfile/UserDashboard';

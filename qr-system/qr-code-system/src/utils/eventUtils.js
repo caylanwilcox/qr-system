@@ -1,269 +1,239 @@
-// src/utils/eventUtils.js
+// src/utils/eventUtils.js - Complete with createEventObject function
+import { ref, get } from 'firebase/database';
+import { database } from '../services/firebaseConfig';
 import moment from 'moment-timezone';
 
-/**
- * Constants for event types that match StatsSection categories
- */
+// Set default timezone for consistency
+moment.tz.setDefault('America/Chicago');
+
+// Default event types
 export const EVENT_TYPES = {
-  WORKSHOPS: 'workshops',         // PO Workshops (Monthly)
-  MEETINGS: 'meetings',           // PO Group Meetings
-  HACIENDAS: 'haciendas',         // Haciendas (weekend retreats)
-  JUNTA_HACIENDA: 'juntaHacienda', // Junta de Hacienda
-  GESTION: 'gestion'              // Gestion
+  GESTION: 'GESTION',
+  HACIENDAS: 'HACIENDAS',
+  WORKSHOPS: 'WORKSHOPS',
+  MEETINGS: 'MEETINGS',
+  JUNTAHACIENDA: 'JUNTAHACIENDA'
 };
 
-/**
- * UI Display names for event types
- */
+// Display names for event types
 export const EVENT_TYPE_DISPLAY_NAMES = {
-  [EVENT_TYPES.WORKSHOPS]: 'PO Workshop (Monthly)',
-  [EVENT_TYPES.MEETINGS]: 'PO Group Meeting',
-  [EVENT_TYPES.HACIENDAS]: 'Hacienda',
-  [EVENT_TYPES.JUNTA_HACIENDA]: 'Junta de Hacienda',
-  [EVENT_TYPES.GESTION]: 'Gestion'
+  GESTION: 'Gestion',
+  HACIENDAS: 'Hacienda',
+  WORKSHOPS: 'Workshop',
+  MEETINGS: 'Meeting',
+  JUNTAHACIENDA: 'Junta de Hacienda'
 };
 
-/**
- * Constants for locations (cities without the "Agua Viva" prefix)
- */
+// Map event types to categories
+export const EVENT_TYPE_TO_CATEGORY_MAP = {
+  GESTION: 'gestion',
+  HACIENDAS: 'haciendas',
+  WORKSHOPS: 'workshops',
+  MEETINGS: 'meetings',
+  JUNTAHACIENDA: 'juntaHacienda'
+};
+
+// Default locations
 export const LOCATIONS = [
-  'West Chicago',
-  'Lyons',
   'Aurora',
-  'Elgin R7',
+  'Elgin',
   'Joliet',
-  'Wheeling',
+  'Lyons',
+  'West Chicago',
+  'Wheeling'
 ];
 
 /**
- * Comprehensive mapping from UI event types to database categories
+ * Create a new event object with default values
+ * @param {Object} eventData - Event data
+ * @returns {Object} - Event object with default values
  */
-export const EVENT_TYPE_TO_CATEGORY_MAP = {
-  // Workshop variations
-  'workshop': EVENT_TYPES.WORKSHOPS,
-  'workshops': EVENT_TYPES.WORKSHOPS,
-  'PO Workshop (Monthly)': EVENT_TYPES.WORKSHOPS,
-  'po workshop': EVENT_TYPES.WORKSHOPS,
-  'po workshop (monthly)': EVENT_TYPES.WORKSHOPS,
-  'po workshops': EVENT_TYPES.WORKSHOPS,
+export const createEventObject = (eventData = {}) => {
+  const now = moment().tz('America/Chicago');
+  const startHour = eventData.allDay ? 0 : 9; // Default to 9am if not all day
+  const endHour = eventData.allDay ? 23 : startHour + 1; // Default to 1 hour duration
   
-  // Meeting variations
-  'meeting': EVENT_TYPES.MEETINGS,
-  'meetings': EVENT_TYPES.MEETINGS,
-  'PO Group Meeting': EVENT_TYPES.MEETINGS,
-  'po group meeting': EVENT_TYPES.MEETINGS,
-  'po meeting': EVENT_TYPES.MEETINGS,
+  // Generate a default start/end time if not provided
+  const defaultStart = now.clone().startOf('day').add(startHour, 'hours').toISOString();
+  const defaultEnd = now.clone().startOf('day').add(endHour, 'hours').toISOString();
   
-  // Hacienda variations
-  'hacienda': EVENT_TYPES.HACIENDAS,
-  'haciendas': EVENT_TYPES.HACIENDAS,
-  'Hacienda': EVENT_TYPES.HACIENDAS,
-  
-  // Junta variations
-  'juntaHacienda': EVENT_TYPES.JUNTA_HACIENDA,
-  'Junta de Hacienda': EVENT_TYPES.JUNTA_HACIENDA,
-  'junta de hacienda': EVENT_TYPES.JUNTA_HACIENDA,
-  
-  // Gestion variations
-  'gestion': EVENT_TYPES.GESTION,
-  'Gestion': EVENT_TYPES.GESTION
+  return {
+    id: eventData.id || `event-${Date.now()}`,
+    title: eventData.title || 'New Event',
+    start: eventData.start || defaultStart,
+    end: eventData.end || defaultEnd,
+    description: eventData.description || '',
+    location: eventData.location || 'Aurora', // Default location
+    eventType: eventData.eventType || EVENT_TYPES.MEETINGS,
+    allDay: eventData.allDay || false,
+    isUrgent: eventData.isUrgent || false,
+    recurring: eventData.recurring || false,
+    recurringPattern: eventData.recurringPattern || null,
+    createdAt: eventData.createdAt || new Date().toISOString(),
+    createdBy: eventData.createdBy || 'system',
+    participants: eventData.participants || {},
+    category: eventData.category || 'meetings',
+    status: eventData.status || 'active',
+    // Include any other props from eventData
+    ...eventData
+  };
 };
 
 /**
- * Function to normalize any event type to standard category
- * @param {string} eventType - The event type to normalize
- * @returns {string} Standardized event type category
+ * Load system codes from the database
+ * This refreshes the default constants with the latest values from the database
+ * @returns {Promise<Object>} - Object containing system codes
+ */
+export const loadSystemCodes = async () => {
+  try {
+    // Get event types
+    const eventTypesRef = ref(database, 'eventTypes');
+    const eventTypesSnapshot = await get(eventTypesRef);
+    
+    let EVENT_TYPES_LOADED = { ...EVENT_TYPES };
+    let EVENT_TYPE_DISPLAY_NAMES_LOADED = { ...EVENT_TYPE_DISPLAY_NAMES };
+    let EVENT_TYPE_TO_CATEGORY_MAP_LOADED = { ...EVENT_TYPE_TO_CATEGORY_MAP };
+    
+    if (eventTypesSnapshot.exists()) {
+      const eventTypesData = eventTypesSnapshot.val();
+      
+      // Process event types
+      Object.entries(eventTypesData).forEach(([id, et]) => {
+        if (et.active !== false) { // Only include active event types
+          const name = et.name.toUpperCase();
+          EVENT_TYPES_LOADED[name] = name;
+          EVENT_TYPE_DISPLAY_NAMES_LOADED[name] = et.displayName || name;
+          EVENT_TYPE_TO_CATEGORY_MAP_LOADED[name] = et.name.toLowerCase();
+        }
+      });
+    }
+    
+    // Get locations
+    const locationsRef = ref(database, 'locations');
+    const locationsSnapshot = await get(locationsRef);
+    
+    let LOCATIONS_LOADED = [...LOCATIONS];
+    
+    if (locationsSnapshot.exists()) {
+      const locationsData = locationsSnapshot.val();
+      LOCATIONS_LOADED = Object.values(locationsData)
+        .filter(loc => loc.active !== false) // Only include active locations
+        .map(loc => loc.name)
+        .filter(Boolean); // Filter out undefined/null
+    }
+    
+    // If empty, try the locationsList
+    if (LOCATIONS_LOADED.length === 0) {
+      const locationsListRef = ref(database, 'locationsList');
+      const locationsListSnapshot = await get(locationsListRef);
+      
+      if (locationsListSnapshot.exists()) {
+        const locationsListData = locationsListSnapshot.val();
+        if (Array.isArray(locationsListData) && locationsListData.length > 0) {
+          LOCATIONS_LOADED = locationsListData;
+        }
+      }
+    }
+    
+    return {
+      EVENT_TYPES: EVENT_TYPES_LOADED,
+      EVENT_TYPE_DISPLAY_NAMES: EVENT_TYPE_DISPLAY_NAMES_LOADED,
+      EVENT_TYPE_TO_CATEGORY_MAP: EVENT_TYPE_TO_CATEGORY_MAP_LOADED,
+      LOCATIONS: LOCATIONS_LOADED
+    };
+  } catch (error) {
+    console.error('Error loading system codes:', error);
+    
+    // Return default values if there's an error
+    return {
+      EVENT_TYPES,
+      EVENT_TYPE_DISPLAY_NAMES,
+      EVENT_TYPE_TO_CATEGORY_MAP,
+      LOCATIONS
+    };
+  }
+};
+
+/**
+ * Normalize event type to a standard format
+ * @param {string} eventType - Event type string
+ * @returns {string} - Normalized event type
  */
 export const normalizeEventType = (eventType) => {
-  if (!eventType) return EVENT_TYPES.HACIENDAS; // Default if no event type
+  if (!eventType) return '';
   
-  // Convert to lowercase for case-insensitive matching
-  const lowerType = typeof eventType === 'string' ? eventType.toLowerCase().trim() : '';
+  // Convert to uppercase and remove spaces
+  const normalized = eventType.toUpperCase().replace(/\s+/g, '');
   
-  // Check exact match first
-  if (EVENT_TYPE_TO_CATEGORY_MAP[eventType]) {
-    return EVENT_TYPE_TO_CATEGORY_MAP[eventType];
+  // Handle special cases
+  if (normalized.includes('JUNTA') && normalized.includes('HACIENDA')) {
+    return 'JUNTAHACIENDA';
   }
   
-  // Try case-insensitive match
-  if (EVENT_TYPE_TO_CATEGORY_MAP[lowerType]) {
-    return EVENT_TYPE_TO_CATEGORY_MAP[lowerType];
-  }
-  
-  // Check for partial matches if no exact match
-  if (lowerType.includes('workshop')) return EVENT_TYPES.WORKSHOPS;
-  if (lowerType.includes('meeting')) return EVENT_TYPES.MEETINGS;
-  if (lowerType.includes('junta')) return EVENT_TYPES.JUNTA_HACIENDA;
-  if (lowerType.includes('hacienda') && !lowerType.includes('junta')) return EVENT_TYPES.HACIENDAS;
-  if (lowerType.includes('gestion')) return EVENT_TYPES.GESTION;
-  
-  // Default to haciendas if no match
-  return EVENT_TYPES.HACIENDAS;
+  return normalized;
 };
 
 /**
  * Get current time in Chicago timezone
- * @returns {moment.Moment} Current time in Chicago
+ * @returns {moment} - Moment object with Chicago timezone
  */
 export const getChicagoTime = () => {
   return moment().tz('America/Chicago');
 };
 
 /**
- * Format a date for display using Chicago timezone
- * @param {Date|string} date - The date to format
- * @param {string} format - The format string (default: 'MMMM D, YYYY h:mm A')
- * @returns {string} Formatted date string
+ * Format date in Chicago timezone
+ * @param {string|Date} date - Date to format
+ * @param {string} format - Moment format string
+ * @returns {string} - Formatted date string
  */
-export const formatChicagoDate = (date, format = 'MMMM D, YYYY h:mm A') => {
+export const formatChicagoDate = (date, format = 'YYYY-MM-DD') => {
   if (!date) return '';
   return moment(date).tz('America/Chicago').format(format);
 };
 
 /**
- * Check if an event is scheduled for today in Chicago timezone
- * @param {Object} eventData - The event data object
- * @returns {boolean} True if event is scheduled for today
+ * Check if an event is scheduled for today
+ * @param {Object} event - Event object
+ * @returns {boolean} - True if event is today
  */
-export const isEventToday = (eventData) => {
-  if (!eventData || !eventData.date) return false;
+export const isEventToday = (event) => {
+  if (!event) return false;
   
   const today = getChicagoTime().format('YYYY-MM-DD');
-  const eventDate = moment.tz(eventData.date, 'America/Chicago').format('YYYY-MM-DD');
   
-  return eventDate === today;
+  // Check start date if available
+  if (event.start) {
+    return moment(event.start).tz('America/Chicago').format('YYYY-MM-DD') === today;
+  }
+  
+  // Check date directly if available
+  if (event.date) {
+    return moment(event.date).tz('America/Chicago').format('YYYY-MM-DD') === today;
+  }
+  
+  return false;
 };
 
 /**
- * Check if today falls within a date range (for haciendas)
- * @param {string} startDate - Start date string
- * @param {string} endDate - End date string 
- * @returns {boolean} True if today is between start and end dates inclusive
+ * Check if today is within a date range
+ * @param {string|Date} startDate - Start date
+ * @param {string|Date} endDate - End date
+ * @returns {boolean} - True if today is in range
  */
 export const isTodayInDateRange = (startDate, endDate) => {
   if (!startDate) return false;
   
   const today = getChicagoTime();
-  const start = moment.tz(startDate, 'America/Chicago');
-  const end = endDate ? moment.tz(endDate, 'America/Chicago') : start;
+  const start = moment(startDate).tz('America/Chicago');
   
-  return today.isBetween(start, end, 'day', '[]'); // [] means inclusive
-};
-
-/**
- * Calculate attendance percentage for event type
- * @param {Array} events - Array of event objects
- * @returns {number} Attendance percentage (0-100)
- */
-export const calculateAttendancePercentage = (events = []) => {
-  // Only consider scheduled events
-  const scheduledEvents = events.filter(e => e.scheduled);
-  
-  if (scheduledEvents.length === 0) return 0;
-  
-  const attendedCount = scheduledEvents.filter(e => e.attended).length;
-  return (attendedCount / scheduledEvents.length * 100).toFixed(1);
-};
-
-/**
- * Create a valid event object with Chicago timezone dates
- * @param {Object} eventData - Raw event data
- * @returns {Object} Formatted event object
- */
-export const createEventObject = (eventData) => {
-  const now = getChicagoTime();
-  
-  // Ensure start and end dates are in Chicago timezone
-  const start = eventData.start ? 
-    (eventData.start instanceof Date ? 
-      moment(eventData.start).tz('America/Chicago').toISOString() : 
-      eventData.start) : 
-    now.toISOString();
-    
-  const end = eventData.end ? 
-    (eventData.end instanceof Date ? 
-      moment(eventData.end).tz('America/Chicago').toISOString() : 
-      eventData.end) : 
-    moment.tz(start, 'America/Chicago').add(1, 'hour').toISOString();
-  
-  // Normalize event type to standard category
-  const originalType = eventData.eventType || 'hacienda';
-  const normalizedType = normalizeEventType(originalType);
-  
-  return {
-    ...eventData,
-    title: eventData.title || 'Untitled Event',
-    start: start,
-    end: end,
-    eventType: normalizedType,            // Use the standardized category
-    originalEventType: originalType,      // Keep the original for reference
-    displayName: EVENT_TYPE_DISPLAY_NAMES[normalizedType] || 'Other',
-    createdAt: eventData.createdAt || now.toISOString()
-  };
-};
-
-/**
- * Process multiple scheduled events for a user (for batch operations)
- * @param {string} userId - User ID
- * @param {Object} userData - User data including events
- * @returns {Object} Object with updates to apply and list of updated events
- */
-export const processScheduledEvents = (userId, userData) => {
-  if (!userId || !userData || !userData.events) {
-    return { updates: {}, eventsUpdated: [] };
+  // If no end date, just check if start date is today
+  if (!endDate) {
+    return start.isSame(today, 'day');
   }
   
-  const updates = {};
-  const eventsUpdated = [];
-  const now = getChicagoTime();
-  const today = now.format('YYYY-MM-DD');
+  const end = moment(endDate).tz('America/Chicago');
   
-  // Process each event type
-  Object.entries(userData.events).forEach(([eventType, eventsOfType]) => {
-    // Skip if not a valid event type object
-    if (!eventsOfType || typeof eventsOfType !== 'object') return;
-    
-    // Process each event in this category
-    Object.entries(eventsOfType).forEach(([eventId, eventData]) => {
-      // Only process scheduled but not attended events
-      if (!eventData.scheduled || eventData.attended) return;
-      
-      // Check if hacienda with date range
-      if (eventType === EVENT_TYPES.HACIENDAS && eventData.endDate) {
-        // Check if today falls in the date range
-        if (isTodayInDateRange(eventData.date, eventData.endDate)) {
-          updates[`users/${userId}/events/${eventType}/${eventId}/attended`] = true;
-          updates[`users/${userId}/events/${eventType}/${eventId}/attendedAt`] = now.toISOString();
-          
-          eventsUpdated.push({
-            type: eventType,
-            id: eventId,
-            name: eventData.title || 'Hacienda'
-          });
-        }
-      } 
-      // Standard same-day check for other event types
-      else {
-        const eventDate = moment.tz(eventData.date, 'America/Chicago').format('YYYY-MM-DD');
-        
-        if (eventDate === today) {
-          updates[`users/${userId}/events/${eventType}/${eventId}/attended`] = true;
-          updates[`users/${userId}/events/${eventType}/${eventId}/attendedAt`] = now.toISOString();
-          
-          // Also update participants if event ID exists
-          if (eventData.eventId) {
-            updates[`events/${eventData.eventId}/participants/${userId}`] = true;
-          }
-          
-          eventsUpdated.push({
-            type: eventType,
-            id: eventId,
-            name: eventData.title || 'Untitled Event'
-          });
-        }
-      }
-    });
-  });
-  
-  return { updates, eventsUpdated };
+  // Check if today is between start and end
+  return today.isSameOrAfter(start, 'day') && today.isSameOrBefore(end, 'day');
 };

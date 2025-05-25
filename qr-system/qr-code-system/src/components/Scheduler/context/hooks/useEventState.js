@@ -23,7 +23,7 @@ export const useEventState = (authState) => {
   // Helper function to safely parse dates and handle errors
   const safeParseDates = (eventData, eventId) => {
     let startDate, endDate;
-    
+     
     try {
       // Convert start date
       if (eventData.start instanceof Date) {

@@ -12,7 +12,120 @@ const getScoreClass = (score) => {
   if (numScore >= 45) return 'text-red-400';
   return 'text-red-600';
 };
+// src/components/StatsSection.js
+// Add this at the top of the file
+const DEBUG_PREFIX = '🔍 [StatsSection]';
 
+// Replace the loadEmployeeData function with this enhanced version
+const loadEmployeeData = useCallback(async (forceRefresh = false) => {
+  console.log(`${DEBUG_PREFIX} loadEmployeeData called with forceRefresh=${forceRefresh}`);
+  console.log(`${DEBUG_PREFIX} employeeDetails=${!!employeeDetails}, employeeId=${employeeId}`);
+  
+  // If employeeDetails was provided directly, use it
+  if (employeeDetails && !forceRefresh) {
+    console.log(`${DEBUG_PREFIX} Using provided employeeDetails`, employeeDetails);
+    setEmployeeData(employeeDetails);
+    return;
+  }
+  
+  // If we have an ID but no details, or force refresh is requested
+  if (employeeId) {
+    setLoading(true);
+    try {
+      console.log(`${DEBUG_PREFIX} Fetching user data for ID=${employeeId} with forceRefresh=${forceRefresh}`);
+      const userData = await dataService.fetchUser(employeeId, forceRefresh);
+      console.log(`${DEBUG_PREFIX} Fetched user data:`, userData ? 'SUCCESS' : 'NULL');
+      
+      if (userData) {
+        console.log(`${DEBUG_PREFIX} User data details:`, {
+          hasStats: !!userData.stats,
+          hasEvents: !!userData.events,
+          eventTypes: userData.events ? Object.keys(userData.events) : []
+        });
+        setEmployeeData(userData);
+      } else {
+        console.error(`${DEBUG_PREFIX} No user data returned for ID=${employeeId}`);
+      }
+    } catch (error) {
+      console.error(`${DEBUG_PREFIX} Error loading employee data:`, error);
+    } finally {
+      setLoading(false);
+      setLastRefresh(new Date());
+    }
+  } else {
+    console.warn(`${DEBUG_PREFIX} No employeeId provided, cannot fetch data`);
+  }
+}, [employeeDetails, employeeId]);
+
+// Enhance the event subscription with better logging
+useEffect(() => {
+  if (!employeeId && !employeeDetails?.id) {
+    console.log(`${DEBUG_PREFIX} No user ID available, not setting up listener`);
+    return;
+  }
+  
+  const userId = employeeId || employeeDetails?.id;
+  console.log(`${DEBUG_PREFIX} Setting up USER_DATA_UPDATED listener for user ${userId}`);
+  
+  const unsubscribe = eventBus.subscribe(EVENTS.USER_DATA_UPDATED, (data) => {
+    console.log(`${DEBUG_PREFIX} Received USER_DATA_UPDATED event:`, data);
+    
+    // Only refresh if this event is for our user
+    if (data.userId === userId) {
+      console.log(`${DEBUG_PREFIX} Event matches our userId=${userId}, triggering refresh`);
+      loadEmployeeData(true);
+    } else {
+      console.log(`${DEBUG_PREFIX} Event for userId=${data.userId} doesn't match our userId=${userId}, ignoring`);
+    }
+  });
+  
+  // Also listen for ATTENDANCE_UPDATED events as they might be relevant
+  const unsubscribeAttendance = eventBus.subscribe(EVENTS.ATTENDANCE_UPDATED, (data) => {
+    console.log(`${DEBUG_PREFIX} Received ATTENDANCE_UPDATED event:`, data);
+    
+    if (data.userId === userId) {
+      console.log(`${DEBUG_PREFIX} Attendance event matches our userId=${userId}, triggering refresh`);
+      loadEmployeeData(true);
+    }
+  });
+  
+  return () => {
+    unsubscribe();
+    unsubscribeAttendance();
+    console.log(`${DEBUG_PREFIX} Unsubscribed from events for userId=${userId}`);
+  };
+}, [employeeId, employeeDetails?.id, loadEmployeeData]);
+
+// Add debug logging to the handleRefresh function
+const handleRefresh = () => {
+  console.log(`${DEBUG_PREFIX} Manual refresh triggered`);
+  loadEmployeeData(true);
+  if (onRefresh) {
+    console.log(`${DEBUG_PREFIX} Calling parent onRefresh callback`);
+    onRefresh();
+  }
+};
+
+// Add logging to the render section
+// Before rendering stats, add:
+console.log(`${DEBUG_PREFIX} Rendering with data:`, {
+  loading,
+  hasEmployeeData: !!employeeData,
+  statsAvailable: !!(employeeData?.stats),
+  eventsAvailable: !!(employeeData?.events)
+});
+
+// Add logging for each event category count
+if (employeeData?.events) {
+  Object.entries(employeeData.events).forEach(([category, events]) => {
+    console.log(`${DEBUG_PREFIX} Event category ${category}:`, {
+      total: Object.keys(events || {}).length,
+      scheduled: Object.values(events || {}).filter(e => e.scheduled).length,
+      attended: Object.values(events || {}).filter(e => e.attended).length,
+      pending: Object.values(events || {}).filter(e => e.scheduled && !e.attended && !e.markedAbsent).length
+    });
+  });
+}
 const TimelineBox = ({ isAttended, date, tooltipContent }) => (
   <div 
     className={`w-6 h-6 border relative group ${

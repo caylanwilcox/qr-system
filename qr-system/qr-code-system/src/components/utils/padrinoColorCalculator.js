@@ -108,7 +108,7 @@ export const calculatePadrinoColor = (userData) => {
   }
   
   // Outstanding performance - Blue (highest level)
-  if (haciendaAttendance >= 99 && workshopAttendance >= 90 && meetingAttendance === 100) {
+  if (haciendaAttendance >= 99 && workshopAttendance >= 10 && meetingAttendance === 10) {
     result.color = PADRINO_COLORS.BLUE;
   }
 

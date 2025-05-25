@@ -1,4 +1,4 @@
-// Load environment variables from .env file
+//attendance-backend/index.js// Load environment variables from .env file
 require('dotenv').config({ path: '/Users/it/code/qr-system/qr-system/qr-code-system/.env' });
 
 console.log("Database URL from env:", process.env.REACT_APP_FIREBASE_DATABASE_URL);

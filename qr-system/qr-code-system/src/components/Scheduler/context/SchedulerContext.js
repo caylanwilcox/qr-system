@@ -1,9 +1,10 @@
 // src/components/Scheduler/context/SchedulerContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ref, onValue, push, update, remove, get } from "firebase/database";
 import { database } from '../../../services/firebaseConfig';
 import { useAuth } from '../../../services/authContext';
 import moment from 'moment-timezone';
+import { eventBus, EVENTS } from '../../../services/eventBus';
 
 // Import the updated utility functions
 import { 
@@ -16,17 +17,31 @@ import {
   LOCATIONS
 } from '../../../utils/eventUtils';
 
-// Create the context
-const SchedulerContext = createContext(null);
+// Import individual functions from schedulerService
+import {
+  getUserEvents,
+  getManagedLocations,
+  createEvent as serviceCreateEvent,
+  updateEvent as serviceUpdateEvent,
+  deleteEvent as serviceDeleteEvent,
+  assignEventParticipants,
+  canManageUser
+} from '../../../services/schedulerService';
 
-// Custom hook to use the scheduler context
-export const useSchedulerContext = () => {
+// Create the context
+export const SchedulerContext = createContext();
+
+// Custom hook to use the scheduler context - export with BOTH names for compatibility
+export const useScheduler = () => {
   const context = useContext(SchedulerContext);
   if (!context) {
-    throw new Error('useSchedulerContext must be used within a SchedulerProvider');
+    throw new Error('useScheduler must be used within a SchedulerProvider');
   }
   return context;
 };
+
+// Export with the name expected by component imports
+export const useSchedulerContext = useScheduler;
 
 // Provider component
 export const SchedulerProvider = ({ children }) => {
@@ -47,12 +62,16 @@ export const SchedulerProvider = ({ children }) => {
   // Data State
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [includeManaged, setIncludeManaged] = useState(true);
+  const [viewType, setViewType] = useState('month'); // For compatibility with the other implementation
+  const [currentDate, setCurrentDate] = useState(getChicagoTime());
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   
   // Use standardized locations list with All Locations option
-  const [locations] = useState(['All Locations', ...LOCATIONS]);
+  const [locations, setLocations] = useState(['All Locations', ...LOCATIONS]);
 
   // Define canManageLocation as a regular function declaration that gets hoisted
-  // IMPORTANT: This must be defined before use in useEffect
   function canManageLocation(locationName) {
     if (!locationName || !userProfile) return false;
     
@@ -73,12 +92,79 @@ export const SchedulerProvider = ({ children }) => {
     return false;
   }
 
+  // Get all user events - using the same name as in the other implementation
+  const fetchEvents = useCallback(async () => {
+    if (!user) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('Fetching events for user:', user.uid, 'Include managed:', includeManaged);
+      const userEvents = await getUserEvents(user.uid, includeManaged);
+      
+      // Process events for calendar display
+      const processedEvents = userEvents.map(event => ({
+        ...event,
+        title: event.title || 'Untitled Event', 
+        color: getEventColor(event)
+      }));
+      
+      setEvents(processedEvents);
+    } catch (err) {
+      console.error('Error fetching events:', err);
+      setError('Failed to load events. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, includeManaged]);
+
+  // Get managed locations - using the same name as in the other implementation
+  const fetchLocations = useCallback(async () => {
+    if (!user) {
+      setLocations(['All Locations', ...LOCATIONS]);
+      return;
+    }
+
+    try {
+      const managedLocations = await getManagedLocations(user.uid);
+      setLocations(['All Locations', ...managedLocations]);
+    } catch (err) {
+      console.error('Error fetching managed locations:', err);
+      setLocations(['All Locations', ...LOCATIONS]);
+    }
+  }, [user]);
+
+  // Initialize data when user changes
+  useEffect(() => {
+    fetchEvents();
+    fetchLocations();
+  }, [fetchEvents, fetchLocations]);
+
+  // Subscribe to event updates
+  useEffect(() => {
+    if (!user) return;
+
+    // Subscribe to event updates
+    const unsubscribeEvent = eventBus.subscribe(EVENTS.EVENT_UPDATED, () => {
+      fetchEvents();
+    });
+
+    return () => {
+      unsubscribeEvent();
+    };
+  }, [user, fetchEvents]);
+
   // Firebase Event Handlers
   const handleCreateEvent = async (eventData) => {
     try {
-      console.log("Creating event with data:", eventData);
+      if (!user) return null;
       
-      const eventsRef = ref(database, 'events');
+      console.log("Creating event with data:", eventData);
       
       // Use utility to create standardized event object
       const newEvent = createEventObject({
@@ -88,12 +174,20 @@ export const SchedulerProvider = ({ children }) => {
       
       console.log("Saving event to Firebase:", newEvent);
       
-      const newEventRef = await push(eventsRef, newEvent);
-      const eventId = newEventRef.key;
+      // Use the service to create the event
+      const eventId = await serviceCreateEvent(newEvent, user.uid);
       console.log("Event created with ID:", eventId);
       
-      // Close the event creation dialog
+      // Emit event update
+      eventBus.emit(EVENTS.EVENT_UPDATED, {
+        eventId,
+        action: 'create',
+        userId: user.uid
+      });
+      
+      // Close dialogs
       setShowEventDialog(false);
+      setIsModalOpen(false);
       
       // Create event object in the same format as the events in your state
       const createdEvent = {
@@ -122,348 +216,192 @@ export const SchedulerProvider = ({ children }) => {
     }
   };
   
+  // Different name format for compatibility with both implementations
+  const createEvent = handleCreateEvent;
+  
   const handleUpdateEvent = async (eventId, eventData) => {
     try {
       console.log(`Starting update process for event ID: ${eventId}`);
-      const eventRef = ref(database, `events/${eventId}`);
       
-      // Get the current event to check for event type changes
-      const currentEventSnapshot = await get(eventRef);
+      await serviceUpdateEvent(eventId, eventData, user?.uid);
       
-      if (!currentEventSnapshot.exists()) {
-        throw new Error(`Event ${eventId} not found for update`);
-      }
-      
-      const currentEvent = currentEventSnapshot.val();
-      console.log(`Current event data:`, currentEvent);
-      
-      // Use standardized event object utility but preserve participants
-      const participants = currentEvent.participants || {};
-      const updatedEvent = createEventObject({
-        ...eventData,
-        updatedBy: user?.uid || null,
-        updatedAt: getChicagoTime().toISOString()
+      // Emit event update
+      eventBus.emit(EVENTS.EVENT_UPDATED, {
+        eventId,
+        action: 'update',
+        userId: user?.uid
       });
-      updatedEvent.participants = participants;
       
-      console.log(`Prepared updated event data`);
+      // Refresh events
+      await fetchEvents();
       
-      // Check if event type has changed
-      const previousType = currentEvent.eventType;
-      const newType = updatedEvent.eventType;
-      const typeChanged = previousType !== newType;
-      console.log(`Event type changed: ${typeChanged} (${previousType} → ${newType})`);
-      
-      // First, update the main event
-      await update(eventRef, updatedEvent);
-      console.log(`Main event record updated successfully`);
-      
-      // If type changed and there are participants, update them in separate operation
-      if (typeChanged && Object.keys(participants).length > 0) {
-        const participantIds = Object.keys(participants);
-        console.log(`Moving ${participantIds.length} participants to new event type category`);
-        
-        // Prepare updates for participants
-        const participantUpdates = {};
-        
-        for (const userId of participantIds) {
-          // Remove from old category
-          participantUpdates[`users/${userId}/events/${previousType}/${eventId}`] = null;
-          
-          // Add to new category
-          participantUpdates[`users/${userId}/events/${newType}/${eventId}`] = {
-            date: updatedEvent.start,
-            endDate: updatedEvent.end,
-            scheduled: true,
-            attended: participants[userId].attended || false,
-            markedAbsent: participants[userId].markedAbsent || false,
-            title: updatedEvent.title,
-            eventType: newType,
-            eventId: eventId,
-            assignedAt: participants[userId].assignedAt || getChicagoTime().toISOString()
-          };
-        }
-        
-        // Apply participant updates
-        if (Object.keys(participantUpdates).length > 0) {
-          await update(ref(database), participantUpdates);
-          console.log(`Participant records moved successfully`);
-        }
-      }
-      
-      // Update event in local state
-      setEvents(prev => prev.map(event => 
-        event.id === eventId 
-          ? { ...updatedEvent, id: eventId, start: new Date(updatedEvent.start), end: new Date(updatedEvent.end) } 
-          : event
-      ));
-      
-      console.log(`Event update completed successfully`);
+      // Close dialog
       setShowEventDialog(false);
+      setIsModalOpen(false);
       setSelectedEvent(null);
+      
+      return true;
     } catch (error) {
       console.error('Error updating event:', error);
-      // Log the specific error for debugging
-      console.error('Error details:', error.message, error.code);
       setError('Failed to update event. Please try again.');
       throw error;
     }
   };
 
-const handleDeleteEvent = async (eventId) => {
-  try {
-    console.log(`Starting deletion process for event ID: ${eventId}`);
-    const eventRef = ref(database, `events/${eventId}`);
-    
-    // Before deleting, get event data to handle cleanup
-    const eventSnapshot = await get(eventRef);
-    if (eventSnapshot.exists()) {
-      const eventData = eventSnapshot.val();
-      console.log(`Found event data:`, eventData);
+  // Different name format for compatibility with both implementations
+  const updateEvent = handleUpdateEvent;
+
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      await serviceDeleteEvent(eventId, user?.uid);
       
-      // Prepare batch updates
-      const updates = {};
+      // Emit event update
+      eventBus.emit(EVENTS.EVENT_UPDATED, {
+        eventId,
+        action: 'delete',
+        userId: user?.uid
+      });
       
-      // If there are participants, remove the event from their records
-      if (eventData.participants) {
-        const participantIds = Object.keys(eventData.participants);
-        console.log(`Event has ${participantIds.length} participants to clean up`);
-        
-        // Get the correct event type category for cleanup
-        const eventType = eventData.eventType || EVENT_TYPES.HACIENDAS;
-        console.log(`Event type for cleanup: ${eventType}`);
-        
-        // For each participant, remove from events and schedule
-        participantIds.forEach(userId => {
-          // Remove from user's category-specific events
-          updates[`users/${userId}/events/${eventType}/${eventId}`] = null;
-          
-          // Remove from user's schedule
-          updates[`users/${userId}/schedule/${eventId}`] = null;
-          
-          console.log(`Added removal for user ${userId} path: users/${userId}/events/${eventType}/${eventId}`);
-        });
-      }
+      // Update local state
+      setEvents(prev => prev.filter(event => event.id !== eventId));
+      setShowEventDialog(false);
+      setIsModalOpen(false);
+      setSelectedEvent(null);
       
-      // Remove the event itself
-      updates[`events/${eventId}`] = null;
-      
-      // Apply all removals in one batch
-      console.log(`Applying ${Object.keys(updates).length} database updates...`);
-      await update(ref(database), updates);
-      console.log(`Batch update completed successfully`);
-    } else {
-      console.log(`Event ${eventId} not found in database, nothing to clean up`);
-      // Still remove the event record itself
-      await remove(eventRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      setError('Failed to delete event. Please try again.');
+      throw error;
     }
+  };
+
+  // Different name format for compatibility with both implementations
+  const deleteEvent = handleDeleteEvent;
+
+  const handleAssignParticipants = async (eventId, participantIds) => {
+    try {
+      await assignEventParticipants(eventId, participantIds, user?.uid);
+      
+      // Emit event update
+      eventBus.emit(EVENTS.EVENT_UPDATED, {
+        eventId,
+        action: 'assign',
+        userId: user?.uid,
+        participants: participantIds
+      });
+      
+      // Refresh events
+      await fetchEvents();
+      
+      // Close dialog
+      setShowAssignmentDialog(false);
+      
+      return true;
+    } catch (error) {
+      console.error('Error assigning participants:', error);
+      setError('Failed to assign participants. Please try again.');
+      throw error;
+    }
+  };
+
+  // Different name format for compatibility with both implementations
+  const assignParticipants = handleAssignParticipants;
+
+  // Open modal for new event (for compatibility with the other implementation)
+  const openCreateModal = useCallback((dateObj) => {
+    // Create an empty event at the selected date and time
+    const selectedDate = dateObj || currentDate;
     
-    console.log(`Event deletion process for ${eventId} completed`);
+    // Create default event object
+    const newEvent = createEventObject({
+      start: selectedDate.toISOString(),
+      end: moment(selectedDate).add(1, 'hour').toISOString(),
+      createdBy: user?.uid || 'unknown',
+    });
     
-    // Update local state
-    setEvents(prev => prev.filter(event => event.id !== eventId));
+    setSelectedEvent(newEvent);
+    setIsCreating(true);
+    setIsModalOpen(true);
+    setShowEventDialog(true);
+  }, [currentDate, user]);
+
+  // Open modal for existing event (for compatibility with the other implementation)
+  const openEditModal = useCallback((event) => {
+    setSelectedEvent(event);
+    setIsCreating(false);
+    setIsModalOpen(true);
+    setShowEventDialog(true);
+  }, []);
+
+  // Close modal (for compatibility with the other implementation)
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
     setShowEventDialog(false);
     setSelectedEvent(null);
-  } catch (error) {
-    console.error('Error deleting event:', error);
-    setError('Failed to delete event. Please try again.');
-  }
-};
+    setIsCreating(false);
+  }, []);
 
-// Add this to your SchedulerContext.js
-const handleAssignParticipants = async (eventId, participantIds) => {
-  try {
-    if (!eventId || !participantIds.length) {
-      throw new Error('Event ID and participants are required');
+  // Toggle view type (for compatibility with the other implementation)
+  const toggleViewType = useCallback((type) => {
+    if (['month', 'week', 'day', 'agenda'].includes(type)) {
+      setViewType(type);
+      setView(type);
     }
-    
-    console.log(`Starting participant assignment for event ID: ${eventId} with ${participantIds.length} users`);
-    
-    // Get event details
-    const eventRef = ref(database, `events/${eventId}`);
-    const eventSnapshot = await get(eventRef);
-    
-    if (!eventSnapshot.exists()) {
-      throw new Error('Event not found');
-    }
-    
-    const eventData = eventSnapshot.val();
-    const eventType = eventData.eventType || 'other'; // Use default if not specified
-    
-    // Prepare database updates
-    const updates = {};
-    const now = new Date().toISOString();
-    
-    // Create participants object with additional properties for the event
-    const participantsObj = {};
-    participantIds.forEach(id => {
-      participantsObj[id] = {
-        assigned: true,
-        assignedAt: now,
-        attended: false
-      };
-    });
-    
-    // Add participants to event
-    updates[`events/${eventId}/participants`] = participantsObj;
-    
-    // Add event to each participant's records
-    participantIds.forEach(userId => {
-      // Add to user's schedule
-      updates[`users/${userId}/schedule/${eventId}`] = true;
-      
-      if (eventType) {
-        // Add to user's type-specific events
-        updates[`users/${userId}/events/${eventType}/${eventId}`] = {
-          date: eventData.start,
-          endDate: eventData.end,
-          scheduled: true,
-          attended: false,
-          markedAbsent: false,
-          title: eventData.title,
-          eventType: eventType,
-          location: eventData.location,
-          eventId: eventId,
-          assignedAt: now
-        };
+  }, []);
+
+  // Navigate to next/previous period (for compatibility with the other implementation)
+  const navigatePeriod = useCallback((direction) => {
+    const updateDate = (date) => {
+      if (direction === 'next') {
+        if (viewType === 'month') return moment(date).add(1, 'month').toDate();
+        if (viewType === 'week') return moment(date).add(1, 'week').toDate();
+        if (viewType === 'day') return moment(date).add(1, 'day').toDate();
+        return moment(date).add(1, 'month').toDate();
+      } else if (direction === 'prev') {
+        if (viewType === 'month') return moment(date).subtract(1, 'month').toDate();
+        if (viewType === 'week') return moment(date).subtract(1, 'week').toDate();
+        if (viewType === 'day') return moment(date).subtract(1, 'day').toDate();
+        return moment(date).subtract(1, 'month').toDate();
       }
-    });
-    
-    // Perform batch update
-    await update(ref(database), updates);
-    console.log(`Successfully assigned ${participantIds.length} participants to event ${eventId}`);
-    
-    // Update local state to reflect the changes immediately
-    setEvents(prev => prev.map(event => {
-      if (event.id === eventId) {
-        return {
-          ...event,
-          participants: participantsObj
-        };
-      }
-      return event;
-    }));
-    
-    setShowAssignmentDialog(false);
-  } catch (error) {
-    console.error('Error assigning participants:', error);
-    setError('Failed to assign participants. Please try again.');
-  }
-};
-
-  // Data Fetching
-  useEffect(() => {
-    console.log("Setting up events listener, user:", user?.uid);
-    
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const eventsRef = ref(database, 'events');
-    setLoading(true);
-
-    const unsubscribe = onValue(eventsRef, (snapshot) => {
-      try {
-        const data = snapshot.val();
-        console.log("Raw events data:", data);
-        
-        if (!data) {
-          console.log("No events data found");
-          setEvents([]);
-          setLoading(false);
-          return;
-        }
-        
-        const formattedEvents = Object.entries(data).map(([id, event]) => {
-          // Ensure valid date objects
-          let startDate, endDate;
-          
-          try {
-            startDate = new Date(event.start);
-            if (isNaN(startDate.getTime())) {
-              console.error(`Invalid start date for event ${id}:`, event.start);
-              startDate = new Date(); // Fallback to current date
-            }
-          } catch (e) {
-            console.error(`Error parsing start date for event ${id}:`, e);
-            startDate = new Date();
-          }
-          
-          try {
-            endDate = new Date(event.end);
-            if (isNaN(endDate.getTime())) {
-              console.error(`Invalid end date for event ${id}:`, event.end);
-              endDate = new Date(startDate.getTime() + (60 * 60 * 1000)); // Default to 1 hour after start
-            }
-          } catch (e) {
-            console.error(`Error parsing end date for event ${id}:`, e);
-            endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
-          }
-          
-          return {
-            ...event,
-            id,
-            title: event.title || "Untitled Event",
-            start: startDate,
-            end: endDate,
-          };
-        });
-        
-        // Filter events based on user permissions
-        let filteredEvents = formattedEvents;
-        
-        // For admin users, filter by managed locations
-        if (userProfile?.role === 'admin' && adminPermissions) {
-          filteredEvents = formattedEvents.filter(event => {
-            // Always include events created by this user
-            if (event.createdBy === user.uid) return true;
-            
-            // Always include "All Locations" events
-            if (event.location === "All Locations") return true;
-            
-            // Check if admin can manage this event's location
-            return canManageLocation(event.location);
-          });
-        }
-        // For super admins, show all events
-        else if (userProfile?.role !== 'super_admin') {
-          // Regular users only see events they're participants in or created
-          filteredEvents = formattedEvents.filter(event => {
-            // Events created by this user
-            if (event.createdBy === user.uid) return true;
-            
-            // Events where user is a participant
-            if (event.participants && event.participants[user.uid]) return true;
-            
-            // "All Locations" events should be visible to everyone
-            if (event.location === "All Locations") return true;
-            
-            // Events at user's primary location
-            return event.location === userProfile?.primaryLocation;
-          });
-        }
-        
-        console.log("Filtered events:", filteredEvents);
-        setEvents(filteredEvents);
-        setError(null);
-      } catch (error) {
-        console.error('Error processing events:', error);
-        setError('Failed to load events. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }, (error) => {
-      console.error('Database error:', error);
-      setError('Failed to connect to the database. Please try again.');
-      setLoading(false);
-    });
-
-    return () => {
-      console.log("Cleaning up events listener");
-      unsubscribe();
+      return date;
     };
-  }, [user, userProfile, adminPermissions]); // No need to include canManageLocation as dependency
+    
+    const newDate = updateDate(currentDate.toDate ? currentDate.toDate() : currentDate);
+    setCurrentDate(moment(newDate));
+    setDate(newDate);
+  }, [viewType, currentDate]);
+
+  // Navigate to today (for compatibility with the other implementation)
+  const goToToday = useCallback(() => {
+    const today = getChicagoTime();
+    setCurrentDate(today);
+    setDate(today.toDate());
+  }, []);
+
+  // Set date (for compatibility with the other implementation)
+  const setDateTime = useCallback((dateObj) => {
+    setCurrentDate(moment(dateObj));
+    setDate(moment(dateObj).toDate());
+  }, []);
+
+  // Toggle include managed events (for compatibility with the other implementation)
+  const toggleIncludeManaged = useCallback(() => {
+    setIncludeManaged(prev => !prev);
+  }, []);
+
+  // Data Fetching - no longer needed as we're using the service directly
+  // But keeping in case other components still use it
+  const getManageableUsers = async () => {
+    if (!user) return [];
+    
+    try {
+      return await getManagedLocations(user.uid);
+    } catch (error) {
+      console.error('Error fetching manageable users:', error);
+      return [];
+    }
+  };
 
   // Helper Functions
   const getEventsForDay = (selectedDate) => {
@@ -490,62 +428,55 @@ const handleAssignParticipants = async (eventId, participantIds) => {
     );
   };
 
-  // Function to get users that can be managed by this admin
-  const getManageableUsers = async () => {
-    if (!user) return [];
+  // Get event color based on event type or status (from the other implementation)
+  const getEventColor = (event) => {
+    // Basic color mapping for event types
+    const colors = {
+      'workshops': '#4285F4', // Blue
+      'meetings': '#34A853', // Green
+      'haciendas': '#FBBC05', // Yellow
+      'juntahacienda': '#EA4335', // Red
+      'gestion': '#673AB7', // Purple
+      'default': '#9E9E9E' // Gray
+    };
     
-    try {
-      const usersRef = ref(database, 'users');
-      const snapshot = await get(usersRef);
-      
-      if (!snapshot.exists()) {
-        return [];
-      }
-      
-      const allUsers = snapshot.val();
-      
-      // For super admins, return all users
-      if (userProfile?.role === 'super_admin') {
-        return Object.entries(allUsers)
-          .filter(([id, userData]) => userData.profile)
-          .map(([id, userData]) => ({
-            id,
-            name: userData.profile?.name,
-            ...userData.profile
-          }));
-      }
-      
-      // For regular admins, filter by their managed locations and departments
-      if (userProfile?.role === 'admin' && adminPermissions) {
-        return Object.entries(allUsers)
-          .filter(([id, userData]) => {
-            if (!userData.profile) return false;
-            
-            const userLocation = userData.profile.primaryLocation;
-            const userDepartment = userData.profile.department;
-            
-            const canManageUserLocation = adminPermissions.managedLocations?.[userLocation];
-            const canManageDepartment = !userDepartment || 
-                                        adminPermissions.managedDepartments?.[userDepartment];
-            
-            return canManageUserLocation && canManageDepartment;
-          })
-          .map(([id, userData]) => ({
-            id,
-            name: userData.profile?.name,
-            ...userData.profile
-          }));
-      }
-      
-      // Regular employees should only see themselves or their team
-      return [];
-    } catch (error) {
-      console.error('Error fetching manageable users:', error);
-      return [];
+    // First check if it's urgent
+    if (event.isUrgent) {
+      return '#EA4335'; // Red for urgent
     }
+    
+    // Check event type
+    if (event.eventType) {
+      const typeKey = event.eventType.toLowerCase();
+      
+      // Check for specific types
+      if (typeKey.includes('workshop')) return colors.workshops;
+      if (typeKey.includes('meeting')) return colors.meetings;
+      if (typeKey.includes('hacienda') && typeKey.includes('junta')) return colors.juntahacienda;
+      if (typeKey.includes('hacienda')) return colors.haciendas;
+      if (typeKey.includes('gestion')) return colors.gestion;
+      
+      // Try direct match
+      for (const [key, color] of Object.entries(colors)) {
+        if (typeKey.includes(key)) return color;
+      }
+    }
+    
+    // Check category
+    if (event.category) {
+      const categoryKey = event.category.toLowerCase();
+      
+      // Try direct match
+      for (const [key, color] of Object.entries(colors)) {
+        if (categoryKey.includes(key)) return color;
+      }
+    }
+    
+    // Default color
+    return colors.default;
   };
 
-  // Create the context value object
+  // Combine context values to be compatible with both implementations
   const contextValue = {
     // UI State
     loading,
@@ -564,6 +495,7 @@ const handleAssignParticipants = async (eventId, participantIds) => {
     selectedEvent,
     setSelectedEvent,
     locations,
+    includeManaged,
     
     // Auth and Permissions
     currentUser: user,
@@ -584,7 +516,27 @@ const handleAssignParticipants = async (eventId, participantIds) => {
     
     // Constants
     EVENT_TYPES,
-    EVENT_TYPE_TO_CATEGORY_MAP
+    EVENT_TYPE_TO_CATEGORY_MAP,
+    
+    // For compatibility with the other implementation
+    viewType,
+    currentDate,
+    isModalOpen,
+    isCreating,
+    fetchEvents,
+    openCreateModal,
+    openEditModal,
+    closeModal,
+    createEvent,
+    updateEvent,
+    deleteEvent,
+    assignParticipants,
+    toggleViewType,
+    navigatePeriod,
+    goToToday,
+    setDate: setDateTime,
+    toggleIncludeManaged,
+    getEventColor
   };
 
   return (
@@ -593,3 +545,5 @@ const handleAssignParticipants = async (eventId, participantIds) => {
     </SchedulerContext.Provider>
   );
 };
+
+export default SchedulerProvider;

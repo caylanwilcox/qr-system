@@ -57,16 +57,21 @@ const Scanner = ({ onScan, location, isProcessing }) => {
 
   // Handle scanner errors with improved filtering
   const handleScannerError = useCallback((error) => {
+    // List of errors to completely ignore (won't even log to console)
     const ignoredErrors = [
       'No QR code found',
+      'No barcode or QR code detected',
       'NotFoundException',
       'No MultiFormat Readers',
-      'ZXing did not provide an output'
+      'ZXing did not provide an output',
+      'QR code parse error'
     ];
     
-    // Don't show benign scanning errors
+    // Only process errors that aren't in the ignore list
     if (!ignoredErrors.some(msg => error.includes(msg))) {
+      // This is a real error that needs attention, log it
       console.error('Scanner error:', error);
+      
       // Only update the error state if it's a new error
       setError(prevError => {
         if (prevError !== error) {

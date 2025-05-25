@@ -17,8 +17,6 @@ import {
 import { database } from '../../services/firebaseConfig';
 
 import {
-  formatAttendanceRecords,
-  calculateStats,
   formatScheduledDates,
 } from '../utils/employeeUtils';
 import { calculatePadrinoColor } from '../utils/padrinoColorCalculator';
@@ -121,7 +119,6 @@ const EmployeeProfile = () => {
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [scheduledDates, setScheduledDates] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [stats, setStats] = useState(INITIAL_STATS);
   const [newScheduleDate, setNewScheduleDate] = useState('');
   const [newScheduleTime, setNewScheduleTime] = useState('');
@@ -394,9 +391,6 @@ const EmployeeProfile = () => {
       await remove(ref(database, `users/${employeeId}/clockInTimes/${timestamp}`));
       await remove(ref(database, `users/${employeeId}/clockOutTimes/${timestamp}`));
 
-      setAttendanceRecords((prev) =>
-        prev.filter((record) => record.timestamp !== timestamp)
-      );
       setDeleteConfirm(null);
       showNotification('Record deleted successfully');
     } catch (err) {
@@ -417,10 +411,10 @@ const EmployeeProfile = () => {
       const data = snapshot.val();
       setEmployeeDetails(data);
 
-      // Format attendance
-      const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
-      setAttendanceRecords(records);
-      setStats(calculateStats(records));
+      // Don't format attendance here - let AttendanceSection handle its own comprehensive data fetching
+      // const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
+      // setAttendanceRecords(records);
+      // setStats(calculateStats(records));
 
       // Set local form data
       setFormData({
@@ -516,7 +510,6 @@ const EmployeeProfile = () => {
       case 2:
         return (
           <AttendanceSection
-            attendanceRecords={attendanceRecords}
             deleteConfirm={deleteConfirm}
             onDeleteRecord={handleDeleteRecord}
             employeeId={employeeId}
@@ -532,7 +525,6 @@ const EmployeeProfile = () => {
     formData,
     editMode,
     employeeDetails,
-    attendanceRecords,
     deleteConfirm,
     employeeId,
   };
@@ -552,7 +544,7 @@ const EmployeeProfile = () => {
       case 'stats':
         return (
           <div className="glass-panel p-6">
-            <StatsSection employeeDetails={employeeDetails} />
+            <StatsSection employeeDetails={employeeDetails} employeeId={employeeId} />
           </div>
         );
       case 'calendar':

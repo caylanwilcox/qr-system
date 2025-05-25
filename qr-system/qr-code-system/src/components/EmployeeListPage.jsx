@@ -356,7 +356,7 @@ const EmployeeList = () => {
       'green': 'text-green-400',
       'orange': 'text-orange-400',
       'red': 'text-red-400'
-    }[employee.padrinoColor.toLowerCase()] || 'text-gray-400';
+    }[employee.padrinoColor?.toLowerCase()] || 'text-gray-400';
     
     return (
       <div className="flex items-center gap-1">

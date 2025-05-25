@@ -4,23 +4,22 @@ import moment from 'moment-timezone';
 
 // Consistent date formatting functions to use across the application
 const DateUtils = {
-  // Get the current date in ISO format (YYYY-MM-DD)
+  // Get the current date in ISO format (YYYY-MM-DD) - FIXED: Use Chicago timezone
   getCurrentDateISO: () => {
-    return new Date().toISOString().split('T')[0];
+    return moment().tz('America/Chicago').format('YYYY-MM-DD');
   },
 
-  // Get a date X days ago in ISO format
+  // Get a date X days ago in ISO format - FIXED: Use Chicago timezone
   getDateDaysAgoISO: (days) => {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return date.toISOString().split('T')[0];
+    return moment().tz('America/Chicago').subtract(days, 'days').format('YYYY-MM-DD');
   },
 
-  // Format a date for display (e.g., "May 7, 2025")
+  // Format a date for display (e.g., "May 7, 2025") - FIXED: Use Chicago timezone
   formatDisplayDate: (isoDate) => {
     if (!isoDate) return '';
     try {
-      return format(new Date(isoDate), 'MMMM d, yyyy');
+      // FIXED: Use Chicago timezone to prevent date shifting
+      return moment.tz(isoDate, 'America/Chicago').format('MMMM D, YYYY');
     } catch (error) {
       console.error('Error formatting date:', error);
       return isoDate;

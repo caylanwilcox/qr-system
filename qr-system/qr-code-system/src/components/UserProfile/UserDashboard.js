@@ -73,7 +73,6 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
     padrinoColor: 'red',
     service: '',
   });
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [scheduledDates, setScheduledDates] = useState([]);
   const [stats, setStats] = useState({
     attendanceRate: 0,
@@ -120,12 +119,9 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
       const data = snapshot.val();
       setEmployeeDetails(data);
 
-      // Format attendance data
-      const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
-      setAttendanceRecords(records);
-      
       // Calculate statistics if records exist
-      if (records.length > 0) {
+      if (data.clockInTimes && data.clockOutTimes) {
+        const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
         setStats(calculateStats(records));
       }
 
@@ -286,7 +282,6 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
       case 2:
         return (
           <AttendanceSection
-            attendanceRecords={data.attendanceRecords}
             employeeId={userId}
             viewOnly={true} // Employees can't delete their attendance records
           />
@@ -308,7 +303,6 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
   const slideData = {
     formData,
     employeeDetails,
-    attendanceRecords,
     employeeId: auth.currentUser?.uid,
   };
 

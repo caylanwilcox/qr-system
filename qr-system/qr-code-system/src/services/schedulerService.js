@@ -1,7 +1,8 @@
-// src/services/schedulerService.js
+// src/services/schedulerService.js - Updated with missing variables/exports
 import { ref, get, set, push, update, remove, query, orderByChild, equalTo } from 'firebase/database';
 import { database } from './firebaseConfig';
 import { cacheService, CACHE_CONFIG } from './cacheService';
+import { eventBus, EVENTS } from './eventBus';
 
 // Cache keys
 const EVENTS_CACHE_KEY = 'cached_events';
@@ -133,6 +134,13 @@ export const createEvent = async (eventData, userId) => {
     // Clear event cache
     await cacheService.remove(EVENTS_CACHE_KEY + '_' + userId);
     
+    // Emit event updated
+    eventBus.emit(EVENTS.EVENT_UPDATED, {
+      eventId: newEventRef.key,
+      userId: userId,
+      action: 'create'
+    });
+    
     return newEventRef.key;
   } catch (error) {
     console.error('Error creating event:', error);
@@ -164,6 +172,13 @@ export const updateEvent = async (eventId, eventData, userId) => {
     
     // Clear event cache
     await cacheService.remove(EVENTS_CACHE_KEY + '_' + userId);
+    
+    // Emit event updated
+    eventBus.emit(EVENTS.EVENT_UPDATED, {
+      eventId: eventId,
+      userId: userId,
+      action: 'update'
+    });
   } catch (error) {
     console.error('Error updating event:', error);
     throw error;
@@ -205,6 +220,13 @@ export const deleteEvent = async (eventId, userId) => {
     
     // Clear event cache
     await cacheService.remove(EVENTS_CACHE_KEY + '_' + userId);
+    
+    // Emit event updated
+    eventBus.emit(EVENTS.EVENT_UPDATED, {
+      eventId: eventId,
+      userId: userId,
+      action: 'delete'
+    });
   } catch (error) {
     console.error('Error deleting event:', error);
     throw error;
@@ -244,6 +266,14 @@ export const assignEventParticipants = async (eventId, participantIds, userId) =
     await cacheService.remove(EVENTS_CACHE_KEY + '_' + userId);
     participantIds.forEach(async id => {
       await cacheService.remove(EVENTS_CACHE_KEY + '_' + id);
+    });
+    
+    // Emit event updated
+    eventBus.emit(EVENTS.EVENT_UPDATED, {
+      eventId: eventId,
+      userId: userId,
+      action: 'assign',
+      participants: participantIds
     });
   } catch (error) {
     console.error('Error assigning participants:', error);
@@ -430,4 +460,16 @@ export const canManageUser = async (adminId, userId) => {
     console.error('Error checking management permissions:', error);
     return false;
   }
+};
+
+// Export a service object for compatibility with the other implementation
+export const schedulerService = {
+  getUserEvents,
+  getManagedLocations,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  assignEventParticipants,
+  canManageUser,
+  getManageableUsers
 };

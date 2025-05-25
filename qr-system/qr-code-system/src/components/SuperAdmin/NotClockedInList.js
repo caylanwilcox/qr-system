@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DateUtils from './dateUtils';
+import moment from 'moment-timezone';
 
 // Helper function to get user's full name from various possible fields
 const getUserFullName = (user) => {
@@ -38,6 +39,11 @@ const isUserClockedIn = (user, targetDate) => {
       const attendanceEntry = user.attendance[dateFormat];
       if (!attendanceEntry) continue;
       
+      // If clockedIn is explicitly false, user has clocked out - return not clocked in
+      if (attendanceEntry.clockedIn === false) {
+        return { isClocked: false, entry: null };
+      }
+      
       // Check various possible field names that could indicate "clocked in" status
       if (attendanceEntry.clockedIn === true || 
           attendanceEntry.isClocked === true || 
@@ -46,21 +52,47 @@ const isUserClockedIn = (user, targetDate) => {
         return { isClocked: true, entry: attendanceEntry };
       }
     }
+    
+    // FIXED: Check for new unique timestamp-based attendance keys
+    Object.entries(user.attendance).forEach(([attendanceKey, entry]) => {
+      if (!entry || typeof entry !== 'object') return;
+      
+      // Check if this key is for the target date (starts with target date)
+      if (attendanceKey.startsWith(targetDate) && attendanceKey.includes('_')) {
+        // If clockedIn is explicitly false, user has clocked out
+        if (entry.clockedIn === false) {
+          return { isClocked: false, entry: null };
+        }
+        
+        // Check if this is an active clock-in (status: 'clocked-in')
+        if ((entry.clockedIn === true || entry.isClocked === true || 
+             entry.checkedIn === true || entry.present === true) && 
+            entry.status === 'clocked-in') {
+          return { isClocked: true, entry: entry };
+        }
+      }
+    });
   }
   
   // Then check clockInTimes directly (new format from the AttendanceSection)
   if (user.clockInTimes) {
-    // Get target date as object and string
-    const targetDateObj = new Date(targetDate);
-    const targetDateStr = targetDateObj.toISOString().split('T')[0];
+    // FIXED: Use Chicago timezone for timestamp comparison
+    const targetDateChicago = moment.tz(targetDate, 'America/Chicago');
+    const targetDateStr = targetDateChicago.format('YYYY-MM-DD');
     
     // Check if any of the timestamps correspond to the target date
     for (const timestamp in user.clockInTimes) {
       try {
-        const timestampDate = new Date(parseInt(timestamp));
-        const timestampDateStr = timestampDate.toISOString().split('T')[0];
+        // FIXED: Convert timestamp to Chicago timezone for comparison
+        const timestampChicago = moment(parseInt(timestamp)).tz('America/Chicago');
+        const timestampDateStr = timestampChicago.format('YYYY-MM-DD');
         
         if (timestampDateStr === targetDateStr) {
+          // Check if there's a corresponding clock-out time
+          if (user.clockOutTimes && user.clockOutTimes[timestamp]) {
+            return { isClocked: false, entry: null }; // User has clocked out
+          }
+          
           return { 
             isClocked: true, 
             entry: {
@@ -88,6 +120,11 @@ const isUserClockedIn = (user, targetDate) => {
         timestamp: null
       }
     };
+  }
+  
+  // Check if user is explicitly clocked out via direct flags
+  if (user.clockedIn === false) {
+    return { isClocked: false, entry: null }; // User is explicitly clocked out
   }
   
   return { isClocked: false, entry: null };
@@ -204,7 +241,9 @@ const NotClockedInList = ({ data, date }) => {
             >
               <div className="user-info">
                 <div className="user-name">
-                  <span className={`status-dot bg-${user.padrinoColor}`}></span>
+                  {user.padrinoColor && (
+                    <span className={`status-dot bg-${user.padrinoColor.toLowerCase()}`}></span>
+                  )}
                   {user.name}
                 </div>
                 <div className="user-location">{user.location}</div>
