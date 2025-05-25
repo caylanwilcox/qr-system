@@ -16,6 +16,7 @@ const EmployeeTable = ({
             <th>Location</th>
             <th>Days Present</th>
             <th>Days Absent</th>
+            <th>Total Hours</th>
             <th>On Time (%)</th>
             <th>Late (%)</th>
             <th>Attendance (%)</th>
@@ -24,7 +25,7 @@ const EmployeeTable = ({
         <tbody>
           {filteredReports.length === 0 ? (
             <tr>
-              <td colSpan="8" className="text-center py-4">
+              <td colSpan="9" className="text-center py-4">
                 No employee data available for the selected criteria
               </td>
             </tr>
@@ -67,6 +68,11 @@ const EmployeeTable = ({
                 <td>{report.location}</td>
                 <td>{report.daysPresent}</td>
                 <td>{report.daysAbsent}</td>
+                <td>
+                  <span className="font-mono text-emerald-400">
+                    {report.totalHours || '0.00'}h
+                  </span>
+                </td>
                 <td>{report.onTimePercentage}%</td>
                 <td>{report.latePercentage}%</td>
                 <td>

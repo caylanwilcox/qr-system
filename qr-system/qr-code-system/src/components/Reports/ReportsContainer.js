@@ -3,6 +3,7 @@ import { ref, onValue, get } from 'firebase/database';
 import { useAuth } from '../../services/authContext';
 import { database } from '../../services/firebaseConfig';
 import { RefreshCw, X } from 'lucide-react';
+import moment from 'moment-timezone';
 
 // Components
 import FilterControls from './FilterControls';
@@ -40,6 +41,16 @@ const ReportsContainer = ({ locationFiltered = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
+  // Get Chicago time for date calculations
+  const getChicagoDate = () => {
+    return moment().tz('America/Chicago').format('YYYY-MM-DD');
+  };
+
+  // Convert timestamp to Chicago timezone date
+  const timestampToChicagoDate = (timestamp) => {
+    return moment(parseInt(timestamp)).tz('America/Chicago').format('YYYY-MM-DD');
+  };
+
   // Fetch employee data with location filtering
   const fetchEmployeeData = useCallback(async () => {
     setLoading(true);
@@ -51,7 +62,7 @@ const ReportsContainer = ({ locationFiltered = false }) => {
         (user.profile.locationKey || user.profile.primaryLocation) : null;
       
       const usersRef = ref(database, 'users');
-      const attendanceRef = ref(database, 'attendance');
+      const globalAttendanceRef = ref(database, 'attendance');
       const eventTypesRef = ref(database, 'eventTypes');
       const deletedUsersRef = ref(database, 'deleted_users');
 
@@ -69,15 +80,15 @@ const ReportsContainer = ({ locationFiltered = false }) => {
         })
       );
 
-      // Fetch attendance data
-      const attendance = await new Promise((resolve) =>
-        onValue(attendanceRef, (snapshot) => {
+      // Fetch global attendance data
+      const globalAttendance = await new Promise((resolve) =>
+        onValue(globalAttendanceRef, (snapshot) => {
           resolve(snapshot.val() || {});
         })
       );
       
       // Store raw attendance data
-      setRawAttendanceData(attendance);
+      setRawAttendanceData(globalAttendance);
       
       // Fetch event types
       const eventTypesData = await new Promise((resolve) =>
@@ -92,10 +103,9 @@ const ReportsContainer = ({ locationFiltered = false }) => {
         name: data.name,
         displayName: data.displayName || data.name
       }));
-      setEventTypes(eventTypesList);
       
-      console.log("Fetched attendance data:", attendance);
-      console.log("Fetched event types:", eventTypesList);
+      console.log("Fetched global attendance data:", globalAttendance);
+      console.log("Fetched event types from database:", eventTypesList);
 
       // Filter users by location if needed
       const filteredUsers = locationFiltered && userLocation 
@@ -108,13 +118,72 @@ const ReportsContainer = ({ locationFiltered = false }) => {
           )
         : users;
 
+      // Fetch individual user attendance records and combine with global data
+      const combinedAttendanceData = await fetchCombinedAttendanceData(filteredUsers, globalAttendance);
+
+      // Collect actual event types from attendance data
+      const actualEventTypes = new Set();
+      Object.values(combinedAttendanceData || {}).forEach(locationData => {
+        Object.values(locationData || {}).forEach(dateData => {
+          Object.values(dateData || {}).forEach(record => {
+            if (record.eventType) {
+              actualEventTypes.add(record.eventType);
+            }
+          });
+        });
+      });
+
+      // Create event types list from actual data + database event types
+      const allEventTypes = [...eventTypesList];
+      
+      // Helper function to normalize event type names for comparison
+      const normalizeEventType = (eventType) => {
+        return eventType.toLowerCase().replace(/[^a-z0-9]/g, '');
+      };
+      
+      // Add event types found in actual data that aren't in the database
+      Array.from(actualEventTypes).forEach(eventType => {
+        const normalizedEventType = normalizeEventType(eventType);
+        
+        // Check if this event type already exists (case-insensitive, ignoring spaces/special chars)
+        const existingType = allEventTypes.find(et => 
+          normalizeEventType(et.id) === normalizedEventType || 
+          normalizeEventType(et.name) === normalizedEventType ||
+          normalizeEventType(et.displayName || '') === normalizedEventType
+        );
+        
+        if (!existingType) {
+          // Create a display name by capitalizing and formatting
+          const displayName = eventType
+            .split(/(?=[A-Z])|_|-/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+          
+          allEventTypes.push({
+            id: eventType, // Use the original event type as the id/value
+            name: eventType,
+            displayName: displayName
+          });
+        } else {
+          // If it exists in database but we have actual data, prefer the actual data format for the id
+          // This ensures the dropdown value matches what's in the attendance records
+          if (existingType.id !== eventType) {
+            existingType.id = eventType;
+            existingType.name = eventType;
+          }
+        }
+      });
+      
+      setEventTypes(allEventTypes);
+      console.log("Final event types:", allEventTypes);
+
       // Process data
-      const reports = calculateEmployeeReports(filteredUsers, attendance);
+      const reports = calculateEmployeeReports(filteredUsers, combinedAttendanceData);
       setEmployeeReports(reports);
       
       // Calculate monthly attendance data for chart
       const { monthlyData, missingEmployees, totalClockIns } = 
-        calculateMonthlyAttendance(attendance, filteredUsers, deletedUsers, userLocation);
+        calculateMonthlyAttendance(combinedAttendanceData, filteredUsers, deletedUsers, userLocation);
       
       console.log("Calculated monthly data:", monthlyData);
       console.log("Missing employees:", missingEmployees);
@@ -142,6 +211,207 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     }
   }, [locationFiltered, user]);
 
+  // Fetch and combine user-specific attendance records with global attendance data
+  const fetchCombinedAttendanceData = async (users, globalAttendance) => {
+    const combinedData = { ...globalAttendance };
+    const allLocations = new Set();
+    
+    // Add locations from global attendance
+    Object.keys(globalAttendance || {}).forEach(location => {
+      if (location && location !== 'undefined' && location !== 'null') {
+        allLocations.add(location);
+      }
+    });
+
+    // Fetch all events to get scheduled times for late calculation
+    const eventsRef = ref(database, 'events');
+    const eventsSnapshot = await get(eventsRef);
+    const allEvents = eventsSnapshot.exists() ? eventsSnapshot.val() : {};
+    
+    console.log("Fetched events for late calculation:", Object.keys(allEvents).length);
+
+    // Process each user's individual attendance records
+    for (const [userId, userData] of Object.entries(users || {})) {
+      if (!userData || !userData.profile) continue;
+
+      try {
+        // Fetch user's individual attendance records
+        const userAttendanceRef = ref(database, `users/${userId}/attendance`);
+        const userAttendanceSnapshot = await get(userAttendanceRef);
+        const userAttendance = userAttendanceSnapshot.exists() ? userAttendanceSnapshot.val() : {};
+
+        // Fetch legacy clock times if no attendance records
+        let legacyClockIns = {};
+        let legacyClockOuts = {};
+        
+        if (Object.keys(userAttendance).length === 0) {
+          const clockInRef = ref(database, `users/${userId}/clockInTimes`);
+          const clockInSnapshot = await get(clockInRef);
+          legacyClockIns = clockInSnapshot.exists() ? clockInSnapshot.val() : {};
+          
+          const clockOutRef = ref(database, `users/${userId}/clockOutTimes`);
+          const clockOutSnapshot = await get(clockOutRef);
+          legacyClockOuts = clockOutSnapshot.exists() ? clockOutSnapshot.val() : {};
+        }
+
+        // Process user attendance records
+        Object.entries(userAttendance).forEach(([attendanceKey, record]) => {
+          if (!record || typeof record !== 'object') return;
+
+          // Extract date from the key or record
+          let formattedDate;
+          if (attendanceKey.includes('_')) {
+            formattedDate = attendanceKey.split('_')[0];
+          } else if (attendanceKey.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            formattedDate = attendanceKey;
+          } else if (record.date) {
+            formattedDate = record.date;
+          } else if (record.clockInTimestamp) {
+            formattedDate = timestampToChicagoDate(record.clockInTimestamp);
+          } else {
+            return;
+          }
+
+          // Validate date format
+          if (!formattedDate || !formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            return;
+          }
+
+          const location = record.locationName || record.location || userData.profile.locationKey || userData.profile.primaryLocation || 'unknown';
+          allLocations.add(location);
+
+          // Ensure location and date exist in combined data
+          if (!combinedData[location]) {
+            combinedData[location] = {};
+          }
+          if (!combinedData[location][formattedDate]) {
+            combinedData[location][formattedDate] = {};
+          }
+
+          // Calculate if late based on event schedule or default time
+          const isLate = calculateIsLate(record, formattedDate, allEvents);
+
+          // Add this record to combined data
+          const attendanceRecord = {
+            userId,
+            name: userData.profile.name || 'Unknown',
+            position: userData.profile.position || 'Unknown',
+            clockInTime: record.clockInTime,
+            clockOutTime: record.clockOutTime,
+            clockInTimestamp: record.clockInTimestamp,
+            clockOutTimestamp: record.clockOutTimestamp,
+            eventType: record.eventType || 'general',
+            isLate: isLate, // Use calculated late status
+            location,
+            locationName: location,
+            hoursWorked: record.hoursWorked,
+            status: record.status || 'completed'
+          };
+
+          combinedData[location][formattedDate][userId] = attendanceRecord;
+        });
+
+        // Process legacy clock times
+        Object.entries(legacyClockIns).forEach(([timestamp, clockInTime]) => {
+          const formattedDate = timestampToChicagoDate(timestamp);
+          const location = userData.profile.locationKey || userData.profile.primaryLocation || 'unknown';
+          allLocations.add(location);
+
+          if (!combinedData[location]) {
+            combinedData[location] = {};
+          }
+          if (!combinedData[location][formattedDate]) {
+            combinedData[location][formattedDate] = {};
+          }
+
+          // Check if we already have a record for this user on this date
+          if (!combinedData[location][formattedDate][userId]) {
+            // For legacy records, use the old logic as fallback
+            const isLate = isLateTime(clockInTime);
+            
+            combinedData[location][formattedDate][userId] = {
+              userId,
+              name: userData.profile.name || 'Unknown',
+              position: userData.profile.position || 'Unknown',
+              clockInTime,
+              clockOutTime: legacyClockOuts[timestamp] || null,
+              clockInTimestamp: parseInt(timestamp),
+              clockOutTimestamp: legacyClockOuts[timestamp] ? parseInt(timestamp) : null,
+              eventType: 'general',
+              isLate,
+              location,
+              locationName: location,
+              status: legacyClockOuts[timestamp] ? 'completed' : 'incomplete'
+            };
+          }
+        });
+
+      } catch (error) {
+        console.error(`Error fetching attendance for user ${userId}:`, error);
+      }
+    }
+
+    // Set the list of all locations
+    setLocations(Array.from(allLocations).sort());
+    
+    return combinedData;
+  };
+
+  // Calculate if a clock-in is late based on event schedule
+  const calculateIsLate = (record, date, allEvents) => {
+    try {
+      if (!record.clockInTime) return false;
+
+      // Find scheduled events for this date and event type
+      const scheduledEvents = Object.values(allEvents).filter(event => {
+        if (!event.start) return false;
+        
+        // Check if event is on the same date
+        const eventDate = moment(event.start).tz('America/Chicago').format('YYYY-MM-DD');
+        if (eventDate !== date) return false;
+        
+        // Check if event type matches (normalize for comparison)
+        const normalizeEventType = (eventType) => {
+          return eventType.toLowerCase().replace(/[^a-z0-9]/g, '');
+        };
+        
+        const recordEventType = normalizeEventType(record.eventType || 'general');
+        const eventEventType = normalizeEventType(event.eventType || event.category || 'general');
+        
+        return recordEventType === eventEventType;
+      });
+
+      if (scheduledEvents.length > 0) {
+        // Use the earliest scheduled event time for this event type
+        const earliestEvent = scheduledEvents.reduce((earliest, current) => {
+          return moment(current.start).isBefore(moment(earliest.start)) ? current : earliest;
+        });
+
+        const scheduledTime = moment(earliestEvent.start).tz('America/Chicago');
+        
+        // Parse the clock-in time
+        let clockInMoment;
+        if (record.clockInTime.includes('AM') || record.clockInTime.includes('PM')) {
+          // 12-hour format
+          clockInMoment = moment.tz(`${date} ${record.clockInTime}`, 'YYYY-MM-DD h:mm A', 'America/Chicago');
+        } else {
+          // 24-hour format
+          clockInMoment = moment.tz(`${date} ${record.clockInTime}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
+        }
+
+        // Consider late if clocked in after the scheduled start time
+        return clockInMoment.isAfter(scheduledTime);
+      } else {
+        // No scheduled event found, person is on time since they're not late for any specific event
+        return false;
+      }
+    } catch (error) {
+      console.error('Error calculating late status:', error);
+      // Fallback: if there's an error, consider them on time
+      return false;
+    }
+  };
+
   // Calculate monthly attendance data for chart and find missing employees
   const calculateMonthlyAttendance = (attendance, users, deletedUsers, userLocation = null) => {
     const monthlyData = {};
@@ -168,39 +438,30 @@ const ReportsContainer = ({ locationFiltered = false }) => {
       missingEmployees[monthName] = [];
     }
     
-    // Track all unique locations
-    const allLocations = new Set();
-    
-    // Process attendance data based on the complex data structure
+    // Process attendance data
     Object.entries(attendance || {}).forEach(([locationName, locationData]) => {
       // Skip if we're filtering by location and this isn't the user's location
       if (userLocation && locationName.toLowerCase() !== userLocation.toLowerCase()) {
         return;
       }
       
-      // Add location to set of all locations
-      if (locationName && locationName !== 'undefined' && locationName !== 'null') {
-        allLocations.add(locationName);
-      }
-      
       // Each locationData contains dates
       Object.entries(locationData || {}).forEach(([dateStr, dateData]) => {
         try {
-          const recordDate = new Date(dateStr);
+          // Use Chicago timezone for date parsing
+          const recordDate = moment.tz(dateStr, 'America/Chicago').toDate();
           
           // Only count current year
           if (!isNaN(recordDate.getTime()) && recordDate.getFullYear() === currentYear) {
             const month = recordDate.toLocaleString('default', { month: 'short' });
             
             // Count clock-in events for this date
-            // dateData could contain multiple user clock-ins or a single object
             if (typeof dateData === 'object' && dateData !== null) {
-              // Check if it's an array or object structure
-              const clockInEvents = Array.isArray(dateData) ? dateData : Object.values(dateData);
+              const clockInEvents = Object.values(dateData);
               
               // Each clock-in is counted
               clockInEvents.forEach(event => {
-                // Ensure it's a valid clock-in event with clockInTime or equivalent field
+                // Ensure it's a valid clock-in event
                 if (event && (event.clockInTime || event.clockInTimestamp)) {
                   // Increment the global clock-in counter
                   totalClockIns++;
@@ -233,7 +494,6 @@ const ReportsContainer = ({ locationFiltered = false }) => {
                     employeesByMonth[month].add(event.userId);
                     
                     // Check if this user exists in the users data
-                    // If not, they may be deleted or this is phantom data
                     const userExists = users[event.userId] !== undefined;
                     
                     if (!userExists) {
@@ -246,13 +506,11 @@ const ReportsContainer = ({ locationFiltered = false }) => {
                       };
                       
                       // Check if they're in deleted users
-                      let foundInDeletedUsers = false;
                       Object.values(deletedUsers || {}).forEach(deletedUser => {
                         if (deletedUser.profile && deletedUser.profile.id === event.userId) {
                           userData.name = deletedUser.profile.name || userData.name;
                           userData.reason = 'User was deleted';
                           userData.deletedUserData = { ...deletedUser.profile };
-                          foundInDeletedUsers = true;
                         }
                       });
                       
@@ -283,14 +541,9 @@ const ReportsContainer = ({ locationFiltered = false }) => {
       });
       
       monthlyData[month].location = mostFrequentLocation;
-      
-      // Add the missing employee count to the month data
       monthlyData[month].missingEmployeeCount = missingEmployees[month].length;
       monthlyData[month].employeeCount = employeesByMonth[month].size;
     });
-    
-    // Set the list of all locations
-    setLocations(Array.from(allLocations).sort());
     
     // Round counts to whole numbers
     Object.values(monthlyData).forEach(month => {
@@ -322,117 +575,68 @@ const ReportsContainer = ({ locationFiltered = false }) => {
   const calculateEmployeeReports = (users, attendance) => {
     const reports = [];
 
-    // First gather all locations from attendance data
-    const locationSet = new Set();
-    Object.keys(attendance || {}).forEach(location => {
-      if (location && location !== 'undefined' && location !== 'null') {
-        locationSet.add(location);
-      }
-    });
-
     // Process user data
     Object.entries(users || {}).forEach(([userId, userData]) => {
       if (userData && userData.profile) {
         const user = userData.profile;
         
-        // Start with zeroed stats
-        let daysPresent = 0;
-        let daysAbsent = 0;
-        let daysLate = 0;
-        let userLocation = user.primaryLocation || user.locationKey || 'unknown';
+        // Get stats from user profile for reference
+        const userStats = userData.stats || {};
+        let totalHours = userStats.totalHours || 0;
+        let userLocation = user.primaryLocation || user.locationKey || user.location || 'unknown';
         let eventTypeStats = {};
         
-        // Make sure we have a valid location
-        if (userLocation === 'unknown' || !userLocation) {
-          // Try to find location from attendance data
-          Array.from(locationSet).some(location => {
-            if (attendance[location]) {
-              // Check each date for this user
-              return Object.values(attendance[location]).some(dateData => {
-                const events = Array.isArray(dateData) ? dateData : Object.values(dateData);
-                return events.some(event => {
-                  if (event && event.userId === userId) {
-                    userLocation = location;
-                    return true;
-                  }
-                  return false;
-                });
-              });
-            }
-            return false;
-          });
-        }
+        // Count actual attendance from combined attendance data
+        const uniqueDates = new Set();
+        const lateDates = new Set();
         
-        // Calculate attendance
-        Array.from(locationSet).forEach(location => {
-          const locationAttendance = attendance[location];
-          if (!locationAttendance) return;
-          
-          // Process attendance records for this location
-          Object.entries(locationAttendance).forEach(([date, records]) => {
-            try {
-              const recordDate = new Date(date);
+        Object.entries(attendance || {}).forEach(([location, locationData]) => {
+          Object.entries(locationData || {}).forEach(([date, dateData]) => {
+            if (dateData[userId]) {
+              const record = dateData[userId];
               
-              // Count for the current year
-              if (!isNaN(recordDate.getTime())) {
-                const recordsArray = Array.isArray(records) ? records : Object.values(records);
-                
-                // Check if user was present on this day
-                const userRecords = recordsArray.filter(record => 
-                  record.userId === userId
-                );
-                
-                if (userRecords.length > 0) {
-                  // This is a confirmed clock-in for this user
-                  daysPresent++;
-                  
-                  // Track event type statistics
-                  userRecords.forEach(record => {
-                    const eventType = record.eventType || 'unknown';
-                    if (!eventTypeStats[eventType]) {
-                      eventTypeStats[eventType] = 0;
-                    }
-                    eventTypeStats[eventType]++;
-                    
-                    // Check if they were late
-                    if (record.late === true || 
-                        (record.clockInTime && isLateTime(record.clockInTime))) {
-                      daysLate++;
-                    }
-                  });
-                  
-                  // If location was discovered from attendance, update it
-                  if (userLocation === 'unknown') {
-                    userLocation = location;
-                  }
-                }
+              // Add unique date to set (this prevents counting multiple clock-ins on same day)
+              uniqueDates.add(date);
+              
+              // Track if this date had any late clock-ins
+              if (record.isLate) {
+                lateDates.add(date);
               }
-            } catch (error) {
-              console.error("Error processing date:", date, error);
+              
+              // Track event type statistics
+              const eventType = record.eventType || 'unknown';
+              if (!eventTypeStats[eventType]) {
+                eventTypeStats[eventType] = 0;
+              }
+              eventTypeStats[eventType]++;
+              
+              // Update user location if found in attendance
+              if (userLocation === 'unknown' && record.location) {
+                userLocation = record.location;
+              }
             }
           });
         });
         
-        // If no attendance data, use stats from profile if available
-        if (daysPresent === 0) {
-          const userStats = userData.stats || {};
-          if (userStats.daysPresent > 0) {
-            daysPresent = userStats.daysPresent || 0;
-            daysAbsent = userStats.daysAbsent || 0;
-            daysLate = userStats.daysLate || 0;
-          }
-        }
+        // Use actual attendance count (unique days present)
+        const daysPresent = uniqueDates.size;
+        const daysLate = lateDates.size;
+        
+        // For daysAbsent, we can use stored stats as a reference, but it's not very reliable
+        // since we don't have a definitive way to calculate expected days
+        const daysAbsent = userStats.daysAbsent || 0;
         
         const daysOnTime = daysPresent - daysLate;
 
         reports.push({
           id: userId,
           name: user.name || 'Unknown',
-          email: userData.email || '',
+          email: userData.email || user.email || '',
           daysPresent,
           daysAbsent,
           daysLate,
           daysOnTime,
+          totalHours: totalHours.toFixed(2),
           onTimePercentage: calculatePercentage(daysOnTime, daysPresent),
           latePercentage: calculatePercentage(daysLate, daysPresent),
           attendancePercentage: calculatePercentage(daysPresent, daysPresent + daysAbsent),
@@ -452,14 +656,22 @@ const ReportsContainer = ({ locationFiltered = false }) => {
   // Check if a time is considered late (after 9:00 AM)
   const isLateTime = (timeStr) => {
     try {
-      // Try to parse the time string 
-      const timeParts = timeStr.split(':');
-      if (timeParts.length >= 2) {
-        const hour = parseInt(timeParts[0]);
-        const minute = parseInt(timeParts[1]);
-        
-        // After 9:00 is considered late
-        return hour > 9 || (hour === 9 && minute > 0);
+      if (!timeStr) return false;
+      
+      // Handle different time formats
+      if (timeStr.includes('AM') || timeStr.includes('PM')) {
+        // 12-hour format
+        const time = moment(timeStr, 'h:mm A');
+        const lateTime = moment('9:00 AM', 'h:mm A');
+        return time.isAfter(lateTime);
+      } else {
+        // 24-hour format
+        const timeParts = timeStr.split(':');
+        if (timeParts.length >= 2) {
+          const hour = parseInt(timeParts[0]);
+          const minute = parseInt(timeParts[1]);
+          return hour > 9 || (hour === 9 && minute > 0);
+        }
       }
       return false;
     } catch (e) {
@@ -508,9 +720,14 @@ const ReportsContainer = ({ locationFiltered = false }) => {
   };
   
   // Filter reports based on current filters
-  const filterReports = () => {
+  const filterReports = useCallback(() => {
     // Start with all employee reports
     let filtered = employeeReports;
+    
+    // Helper function to normalize event type names for comparison (same as above)
+    const normalizeEventType = (eventType) => {
+      return eventType.toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
     
     // Apply search term filter
     if (searchTerm.trim()) {
@@ -532,23 +749,39 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     
     // Apply event type filter if active
     if (selectedEventType !== 'all') {
-      filtered = filtered.filter(report => 
-        report.eventTypeStats && report.eventTypeStats[selectedEventType]
-      );
+      const normalizedSelectedType = normalizeEventType(selectedEventType);
+      
+      filtered = filtered.filter(report => {
+        if (!report.eventTypeStats) return false;
+        
+        // Check if any of the user's event types match the selected one (normalized)
+        return Object.keys(report.eventTypeStats).some(eventType => 
+          normalizeEventType(eventType) === normalizedSelectedType
+        );
+      });
     }
     
     // Filter chart data for event type
     if (selectedEventType !== 'all') {
+      const normalizedSelectedType = normalizeEventType(selectedEventType);
+      
       // Filter monthly data to only show counts for the selected event type
-      const filtered = monthlyAttendance.map(month => {
-        const eventCount = month.eventTypes[selectedEventType] || 0;
+      const filteredMonthly = monthlyAttendance.map(month => {
+        // Sum all event types that match the normalized selected type
+        let eventCount = 0;
+        Object.entries(month.eventTypes || {}).forEach(([eventType, count]) => {
+          if (normalizeEventType(eventType) === normalizedSelectedType) {
+            eventCount += count;
+          }
+        });
+        
         return {
           ...month,
           count: eventCount,
           // Keep other properties
         };
       });
-      setFilteredMonthlyAttendance(filtered);
+      setFilteredMonthlyAttendance(filteredMonthly);
     } else {
       // Reset to show all event types
       setFilteredMonthlyAttendance(monthlyAttendance);
@@ -588,7 +821,7 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     }
     
     setFilteredReports(filtered);
-  };
+  }, [employeeReports, searchTerm, selectedLocation, selectedEventType, selectedMonth, monthlyAttendance, monthlyEmployeeData, missingEmployeeData]);
   
   // Create placeholder employees for missing IDs
   const createPlaceholderEmployees = (month) => {
@@ -625,7 +858,7 @@ const ReportsContainer = ({ locationFiltered = false }) => {
   // Apply filters when any filter changes
   useEffect(() => {
     filterReports();
-  }, [employeeReports, searchTerm, selectedLocation, selectedEventType, selectedMonth]);
+  }, [employeeReports, searchTerm, selectedLocation, selectedEventType, selectedMonth, monthlyAttendance, monthlyEmployeeData, missingEmployeeData]);
   
   // Handle clicking on a chart bar
   const handleBarClick = (data) => {

@@ -1,0 +1,147 @@
+{
+  "attendance": {
+    "2025-05-25_1748179909828": {
+      "clockInTime": "08:31 AM",
+      "clockInTimestamp": 1748179909828,
+      "clockOutTime": "10:45 AM",
+      "clockOutTimestamp": 1748187948377,
+      "clockedIn": false,
+      "clockedOut": true,
+      "date": "2025-05-25",
+      "eventType": "HACIENDAS",
+      "hoursWorked": "2.23",
+      "isLate": false,
+      "location": "aurora",
+      "locationName": "Aurora",
+      "onTime": true,
+      "status": "completed"
+    },
+    "2025-05-25_1748188326859": {
+      "clockInTime": "10:52 AM",
+      "clockInTimestamp": 1748188326859,
+      "clockOutTime": "10:52 AM",
+      "clockOutTimestamp": 1748188362841,
+      "clockedIn": false,
+      "clockedOut": true,
+      "date": "2025-05-25",
+      "eventType": "GENERAL MEETING",
+      "hoursWorked": "0.01",
+      "isLate": true,
+      "location": "aurora",
+      "locationName": "Aurora",
+      "onTime": false,
+      "status": "completed"
+    },
+    "2025-05-25_1748189859482": {
+      "clockInTime": "11:17 AM",
+      "clockInTimestamp": 1748189859482,
+      "clockOutTime": "11:18 AM",
+      "clockOutTimestamp": 1748189891353,
+      "clockedIn": false,
+      "clockedOut": true,
+      "date": "2025-05-25",
+      "eventType": "GENERAL MEETING",
+      "hoursWorked": "0.01",
+      "isLate": true,
+      "location": "aurora",
+      "locationName": "Aurora",
+      "onTime": false,
+      "status": "completed"
+    }
+  },
+  "clockInTimes": {
+    "1748178835109": "08:13 AM",
+    "1748179798508": "08:29 AM",
+    "1748179909828": "08:31 AM",
+    "1748188326859": "10:52 AM",
+    "1748189859482": "11:17 AM"
+  },
+  "clockOutTimes": {
+    "1748179132862": "08:18 AM",
+    "1748187948377": "10:45 AM",
+    "1748188362841": "10:52 AM",
+    "1748189891353": "11:18 AM"
+  },
+  "clockedIn": false,
+  "clockedInDate": "2025-05-25",
+  "clockedInTimestamp": 1748189859482,
+  "clockedOut": true,
+  "clockedOutDate": "2025-05-25",
+  "clockedOutTimestamp": 1748189891353,
+  "events": {
+    "generalmeeting": {
+      "2025-05-25-1748188326859": {
+        "attended": true,
+        "attendedAt": "2025-05-25T15:52:06.860Z",
+        "date": "2025-05-25",
+        "eventType": "generalmeeting",
+        "location": "aurora",
+        "scheduled": true,
+        "title": "GENERAL MEETING - Clock In"
+      },
+      "2025-05-25-1748189859482": {
+        "attended": true,
+        "attendedAt": "2025-05-25T16:17:39.482Z",
+        "date": "2025-05-25",
+        "eventType": "generalmeeting",
+        "location": "aurora",
+        "scheduled": true,
+        "title": "GENERAL MEETING - Clock In"
+      }
+    },
+    "haciendas": {
+      "2025-05-25-1748179909828": {
+        "attended": true,
+        "attendedAt": "2025-05-25T13:31:49.828Z",
+        "date": "2025-05-25",
+        "eventType": "haciendas",
+        "location": "aurora",
+        "scheduled": true,
+        "title": "Haciendas - Clock In"
+      }
+    }
+  },
+  "location": "aurora",
+  "name": "Santiago Hernandez",
+  "profile": {
+    "department": "",
+    "email": "santiago.hernandez@av.com",
+    "emergencyContact": {
+      "name": "",
+      "phone": ""
+    },
+    "emergencyPhone": "caylan45@yahoo.com",
+    "joinDate": "2025-02-02T03:28:05.105Z",
+    "location": "Aurora",
+    "locationKey": "aurora",
+    "name": "Santiago Hernandez",
+    "notes": "",
+    "padrino": true,
+    "padrinoColor": "red",
+    "password": "AV2025!",
+    "phone": "(630) 854 0992",
+    "position": "Coordinator",
+    "role": "employee",
+    "service": "RSG",
+    "status": "active"
+  },
+  "schedule": {
+    "-OQBuIJdgrIZAfuk5QD8": true,
+    "-OQXN-KeH7sScdBbpr7Z": true,
+    "-OQa8RqduckJMyJzm0hg": true,
+    "-OQa8jT_l75fGoZt3Sfk": true,
+    "-OQa9nqutrCKUnMv8k8Y": true,
+    "-OQaA19zZszrsMX9NChQ": true
+  },
+  "stats": {
+    "attendanceRate": 0,
+    "daysAbsent": 0,
+    "daysLate": 25,
+    "daysPresent": 29,
+    "lastClockIn": "2025-05-25T16:17:39.482Z",
+    "lastClockOut": "2025-05-25T16:18:11.354Z",
+    "onTimeRate": 0,
+    "totalHours": 2.9480174999999997
+  },
+  "status": "active"
+}

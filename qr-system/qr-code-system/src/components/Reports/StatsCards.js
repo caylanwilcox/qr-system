@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Users, Clock, TrendingUp } from 'lucide-react';
+import { User, Users, Clock, TrendingUp, Timer } from 'lucide-react';
 
 const StatsCards = ({ 
   overallStats,
@@ -33,8 +33,13 @@ const StatsCards = ({
     }
   };
 
+  // Calculate total hours from filtered reports
+  const totalHours = filteredReports.reduce((sum, report) => {
+    return sum + parseFloat(report.totalHours || '0');
+  }, 0).toFixed(2);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
       {/* Card 1: Total Members */}
       <div
         className="glass-card p-4 rounded-xl cursor-pointer hover:bg-slate-700/20 transition-colors"
@@ -77,7 +82,18 @@ const StatsCards = ({
         </p>
       </div>
 
-      {/* Card 4: Average Attendance */}
+      {/* Card 4: Total Hours */}
+      <div className="glass-card p-4 rounded-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-slate-300 text-sm">Total Hours</h3>
+          <Timer className="text-emerald-400 w-5 h-5" />
+        </div>
+        <p className="text-2xl font-bold text-emerald-400 mt-2">
+          {totalHours}h
+        </p>
+      </div>
+
+      {/* Card 5: Average Attendance */}
       <div className="glass-card p-4 rounded-xl">
         <div className="flex items-center justify-between">
           <h3 className="text-slate-300 text-sm">Average Attendance</h3>

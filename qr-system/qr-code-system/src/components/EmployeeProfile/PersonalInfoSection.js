@@ -346,10 +346,8 @@ const PersonalInfoSection = ({
 
   // Check if email or password has changed (requiring authentication)
   const needsAuthentication = () => {
-    return isCurrentUser && (
-      (formData.email && formData.email !== originalValues.email) ||
-      (formData.password && formData.password.trim() !== '')
-    );
+    // Remove authentication requirement - no longer need current password
+    return false;
   };
 
   // Handle user logout
@@ -376,26 +374,7 @@ const PersonalInfoSection = ({
       throw new Error('Not authenticated');
     }
     
-    // Authenticate user if required
-    if (needsAuthentication()) {
-      if (!currentPassword) {
-        throw new Error('Current password is required to update email or password');
-      }
-      
-      try {
-        const credential = EmailAuthProvider.credential(
-          auth.currentUser.email,
-          currentPassword
-        );
-        await reauthenticateWithCredential(auth.currentUser, credential);
-      } catch (error) {
-        if (error.code === 'auth/wrong-password') {
-          throw new Error('Current password is incorrect');
-        } else {
-          throw error;
-        }
-      }
-    }
+    // No longer require authentication - removed current password requirement
     
     // Update the user profile
     const updates = [];
@@ -666,44 +645,8 @@ const PersonalInfoSection = ({
 
   // Render current password field when needed
   const renderCurrentPasswordField = () => {
-    if (!editMode || !isCurrentUser || !needsAuthentication()) return null;
-    
-    return (
-      <div className="form-group md:col-span-2 mt-2">
-        <label htmlFor="currentPassword" className="block mb-2">
-          <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-            <Lock size={16} className="text-white/70" />
-            <span>Current Password</span>
-            <span className="text-red-400">*</span>
-          </span>
-        </label>
-        <div className="relative">
-          <input
-            id="currentPassword"
-            type={showCurrentPassword ? "text" : "password"}
-            value={currentPassword}
-            onChange={handleCurrentPasswordChange}
-            placeholder="Enter your current password"
-            className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-              px-3 py-2 text-white/90 placeholder-white/50
-              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-              backdrop-blur-md transition-all duration-200 pr-12
-            `}
-            required
-          />
-          <button
-            type="button"
-            onClick={() => togglePasswordVisibility('current')}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-          >
-            {showCurrentPassword ? "HIDE" : "SHOW"}
-          </button>
-        </div>
-        <p className="text-amber-400 text-xs mt-1">
-          Required to confirm changes to password or email
-        </p>
-      </div>
-    );
+    // No longer require current password verification
+    return null;
   };
 
   return (

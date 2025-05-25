@@ -1,0 +1,37 @@
+{
+  "aurora": {
+    "2025-05-25": {
+      "1JOAWnPnmgZMlJdx2jpoan0liUI3": {
+        "clockInTime": "2025-05-25T16:17:39.482Z",
+        "clockInTimestamp": 1748189859482,
+        "clockOutTime": "2025-05-25T16:18:11.354Z",
+        "clockOutTimestamp": 1748189891353,
+        "eventType": "generalmeeting",
+        "hoursWorked": "0.01",
+        "isLate": true,
+        "location": "aurora",
+        "locationName": "Aurora",
+        "name": "Santiago Hernandez",
+        "position": "Coordinator",
+        "status": "completed",
+        "userId": "1JOAWnPnmgZMlJdx2jpoan0liUI3"
+      }
+    }
+  },
+  "elgin": {
+    "2025-05-25": {
+      "1JOAWnPnmgZMlJdx2jpoan0liUI3": {
+        "clockInTime": "2025-05-25T13:07:16.875Z",
+        "clockInTimestamp": 1748178436875,
+        "eventType": "meetings",
+        "isLate": false,
+        "location": "elgin",
+        "locationName": "Elgin",
+        "name": "Santiago Hernandez",
+        "position": "Coordinator",
+        "status": "clocked-in",
+        "userId": "1JOAWnPnmgZMlJdx2jpoan0liUI3"
+      }
+    }
+  }
+}
