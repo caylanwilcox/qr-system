@@ -8,19 +8,30 @@ This directory contains utility scripts for managing the QR System database, spe
 2. **Firebase Admin SDK** credentials configured
 3. **Database access** to the QR System Firebase project
 
-## Installation
+## Setup
 
-1. Navigate to the attendance-backend directory:
-   ```bash
-   cd attendance-backend
-   ```
+### 1. Environment Variables
 
-2. Install dependencies:
-   ```bash
-   npm install
-   # or
-   npm run install-deps
-   ```
+Before running any scripts, you need to set up your Firebase credentials as environment variables.
+
+1. Create a `.env` file in the **project root directory** (not in this attendance-backend folder)
+2. Add your Firebase service account credentials to the `.env` file:
+
+```env
+# Firebase Service Account Configuration
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY_ID=your-private-key-id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour-private-key-here\n-----END PRIVATE KEY-----"
+FIREBASE_CLIENT_EMAIL=your-service-account-email@your-project.iam.gserviceaccount.com
+FIREBASE_CLIENT_ID=your-client-id
+FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
 
 ## Available Scripts
 
@@ -163,3 +174,26 @@ For issues or questions:
 2. Verify Firebase project configuration
 3. Ensure proper permissions are set
 4. Contact the development team for assistance 
+
+## Security Notes
+
+- **Never commit the `.env` file to version control**
+- The `.env` file should be added to your `.gitignore`
+- Keep your Firebase service account credentials secure
+- Only run these scripts in development/testing environments
+
+## What Gets Reset
+
+When running the attendance reset script:
+
+### ✅ Data that gets removed:
+- Global attendance records (`attendance` collection)
+- User clock-in times and attendance records
+- User attendance statistics
+- User location history
+
+### ✅ Data that remains intact:
+- User profiles and basic information
+- Event schedules and event data
+- System settings and configurations
+- Admin roles and permissions 

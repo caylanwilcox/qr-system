@@ -3,21 +3,43 @@
 
 // Import Firebase Admin SDK
 const admin = require('firebase-admin');
+require('dotenv').config({ path: '../.env' });
 
-// Initialize Firebase Admin using service account
-// You'll need to fill in your service account details here
+// Initialize Firebase Admin using environment variables
 const serviceAccount = {
-  "type": "service_account",
-  "project_id": "qr-system-1cea7",
-"private_key_id": "cccb9e75c7a15ffa6e4d9904967c99cf0f1b2a60",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCbK1xS5W949f6m\nc7lIDv5ygXX/HMYHLQ0VlaNxj/zlBILpDj4w/YvwcFgEAixvovd9jif5ddraSZf/\nXGEww1ap8XuQic1lWfFo/WAUzgCd9weCiHpFtx6L363uVUrekzGwdaHciUOQ3ulJ\nCsNB52GRIc3Z8eCTU+CpVWgq4/kNyamwuvmTOnRPveINnYbbd3OKwRHeoS1nUPX3\nMkmfJbeXIFkKZxMwG1Iocz9VKrVhvA/s6fBDS8FGPCDtkU4f9SaMsKLtSMq6ek3P\n1Z+iZ6gjzL/ZytT4jkLyG44Il7yHa9Zz6tUZ8kVcFpoJD0VCRvc4kKxapw6FF6EY\nF2rwv5UfAgMBAAECggEALPEWmOXd7u1kt4Yd/FpnZPfNGroVOv/X4dAI2jvndddk\nKScYaS0OanHHdEXC5ASR5PoW5uA1JnMZRHtXpP12rNsFvFvFMx0lWBDG0s/FivsA\n4FQyAd4jSUTcRgLLIAMG6cJwQoU5Hg0KCT9GRWDEN/pP+lddgZ5SHAliFcYYnN6/\nXT+LQZVaP3ba2EcgTldTYaR1rvi2aUjxnHSqtSfb5PCKiS94iIvjqDEhxp18qA7s\nCF5w7k0+qYe7A9K2a1Q3zamzHAdHC3v8imfT6vJW0QEstUGz8ppBo0KL0tIvFxBj\nAKHXSp98va2wlQRDGC/PvfwuaV2zZIw/49guQl3HgQKBgQDYtRJTPKCd/2x7jCjp\n6HQMpn4AfBOvxtlKy9s0DUtRvSVi++SkVJGp4skavXMiv28aCTrCC4f8TM2iKTrk\nQ+tlClEqb4W+va3nYjax3btxrbDdA2BeFc8gSrjQqzgQ9jC6mU+RIAhgz/026iNZ\navkvoDB/YncZxQ2K3wS+X41RgQKBgQC3TeArDbd6Chc6RGM6OelldmTOujEBp/Km\nSdY8Wn0kgPtP6Nc6ezWNAC04w/2iFSBWkNJX5v1kcFHBEUGsnKllxgeNnYLqgMDG\nLed03mU1NY3tf/P+Uq19ynE0BEzIeROJn3SX1nW0p0F8mfGT1WBhAq/BiiPgB/L9\n0Tk3z6j2nwKBgBu++0yq+4mfNX2QEYD5YTppasKXIFImLJYWCcfdV+JsTEgjJkAg\nD9JnlgYVcZNmXUxBGEPWBCA6mS2FB+RICfCS5JeBVed5E7YHbidR03kXmwiBMSp6\nsl1ZE9arxW7uhoitrnFPX6M9nhcU3VfKiYMeiHcW3VbwUu6P5WSWiVqBAoGAZTxi\nWQTbV1BpYanRb5/6UiogJLhaRoLeFY7j/jMvuFBv+8Mp00em3LfDQf2kf7bRRF35\nfci6G5WY4VtJfS6MtAO5ujHK0v7G+OzzTu1g0hFA0HGBbO12memLueHCElokOzbQ\nqucr3Nke5tUSwcXv08QrE2XayGk7f4jk4/kRZRsCgYEAwodRQYLPuGhhEV/EBD6W\nUHHOtEnv6pw3MmbZXNGMHkXXnBKwWuE0lNLJqlvru6yA2E9jMiEI1r9XNqiEKw2A\nT3QrFkAmtXZoUls/lXljcrXdTUfMmcp5SLAeu9297i9LLCmELZVOBf+oVKFCu+Ut\nSseQwsSZ+LvJKW3vXFTIijI=\n-----END PRIVATE KEY-----\n",  "client_email": "firebase-adminsdk-fqxwu@qr-system-1cea7.iam.gserviceaccount.com",
-  "client_email": "firebase-adminsdk-fqxwu@qr-system-1cea7.iam.gserviceaccount.com",
-
+  type: "service_account",
+  project_id: process.env.FIREBASE_PROJECT_ID,
+  private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  client_email: process.env.FIREBASE_CLIENT_EMAIL,
+  client_id: process.env.FIREBASE_CLIENT_ID,
+  auth_uri: "https://accounts.google.com/o/oauth2/auth",
+  token_uri: "https://oauth2.googleapis.com/token",
+  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+  client_x509_cert_url: `https://www.googleapis.com/oauth2/v1/certs/${encodeURIComponent(process.env.FIREBASE_CLIENT_EMAIL)}`
 };
+
+// Validate required environment variables
+const requiredEnvVars = [
+  'FIREBASE_PROJECT_ID',
+  'FIREBASE_PRIVATE_KEY_ID', 
+  'FIREBASE_PRIVATE_KEY',
+  'FIREBASE_CLIENT_EMAIL',
+  'FIREBASE_CLIENT_ID',
+  'FIREBASE_DATABASE_URL'
+];
+
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missingVars.forEach(varName => console.error(`   - ${varName}`));
+  console.error('\n📝 Please create a .env file in the project root with your Firebase credentials.');
+  process.exit(1);
+}
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://qr-system-1cea7-default-rtdb.firebaseio.com"
+  databaseURL: process.env.FIREBASE_DATABASE_URL
 });
 
 // Get database reference
