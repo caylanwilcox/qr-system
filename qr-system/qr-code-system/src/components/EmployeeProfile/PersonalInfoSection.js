@@ -378,34 +378,40 @@ const PersonalInfoSection = ({
     const updates = [];
     let credChanged = false;
     
-    // Update display name if changed
-    if (formData.name && formData.name !== auth.currentUser.displayName) {
-      updates.push(updateProfile(auth.currentUser, {
-        displayName: formData.name
-      }));
+    try {
+      // Update display name if changed
+      if (formData.name && formData.name !== auth.currentUser.displayName) {
+        updates.push(updateProfile(auth.currentUser, {
+          displayName: formData.name
+        }));
+      }
+      
+      // Update email if changed - no reauthentication required
+      if (formData.email && formData.email !== auth.currentUser.email) {
+        updates.push(updateEmail(auth.currentUser, formData.email));
+        credChanged = true;
+      }
+      
+      // Update password if provided - no reauthentication required
+      if (formData.password && formData.password.trim() !== '') {
+        updates.push(updatePassword(auth.currentUser, formData.password));
+        credChanged = true;
+      }
+      
+      // Execute all updates
+      if (updates.length > 0) {
+        await Promise.all(updates);
+      }
+      
+      return { success: true, credentialsChanged: credChanged };
+    } catch (error) {
+      console.error('Firebase Auth update error:', error);
+      // If Firebase Auth fails, we'll still update the database
+      return { success: true, credentialsChanged: false, authError: error.message };
     }
-    
-    // Update email if changed - no reauthentication required
-    if (formData.email && formData.email !== auth.currentUser.email) {
-      updates.push(updateEmail(auth.currentUser, formData.email));
-      credChanged = true;
-    }
-    
-    // Update password if provided - no reauthentication required
-    if (formData.password && formData.password.trim() !== '') {
-      updates.push(updatePassword(auth.currentUser, formData.password));
-      credChanged = true;
-    }
-    
-    // Execute all updates
-    if (updates.length > 0) {
-      await Promise.all(updates);
-    }
-    
-    return { success: true, credentialsChanged: credChanged };
   };
 
-  // Update Firebase Auth admin API for other users
+  // Simplified admin update that works directly with Firebase Admin SDK
   const updateUserAuthViaAdmin = async () => {
     try {
       // Create update object
@@ -424,11 +430,12 @@ const PersonalInfoSection = ({
       const idToken = await auth.currentUser.getIdToken();
       
       // Determine the API endpoint URL
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? '/api/admin/update-user-auth'
-        : 'http://localhost:3000/api/admin/update-user-auth';
+      const apiUrl = '/api/admin/update-user-auth'; // Always use Vercel API endpoint
       
-      console.log('Calling admin API:', apiUrl, 'with updates:', updates);
+      console.log('=== ADMIN API CALL ===');
+      console.log('API URL:', apiUrl);
+      console.log('User ID:', userId);
+      console.log('Updates to send:', updates);
       
       // Call the admin API
       const response = await fetch(apiUrl, {
@@ -444,15 +451,18 @@ const PersonalInfoSection = ({
       });
       
       const responseData = await response.json();
-      console.log('Admin API response:', responseData);
+      console.log('API Response:', responseData);
       
       if (!response.ok) {
         throw new Error(responseData.message || `HTTP ${response.status}: Failed to update user authentication`);
       }
       
+      console.log('=== ADMIN API SUCCESS ===');
       return { success: true };
+      
     } catch (error) {
-      console.error('Admin update failed:', error);
+      console.error('=== ADMIN API ERROR ===');
+      console.error('Error details:', error);
       throw error;
     }
   };
@@ -557,13 +567,18 @@ const PersonalInfoSection = ({
       setUpdateStatus(null);
       setCredentialsChanged(false);
       
+      let authUpdateResult = null;
+      
       // Step 1: Update Firebase Auth
       if (isCurrentUser) {
         try {
           // Update authentication for current user
-          const authResult = await updateAuthUser();
-          if (authResult.credentialsChanged) {
+          authUpdateResult = await updateAuthUser();
+          if (authUpdateResult.credentialsChanged) {
             setCredentialsChanged(true);
+          }
+          if (authUpdateResult.authError) {
+            console.warn('Firebase Auth update failed, but continuing with database update:', authUpdateResult.authError);
           }
         } catch (error) {
           console.error("Auth update error:", error);
@@ -575,14 +590,13 @@ const PersonalInfoSection = ({
           return;
         }
       } else {
-        // Admin updating another user's auth - use admin API
+        // Admin updating another user - simplified approach
         try {
-          await updateUserAuthViaAdmin();
-          console.log("Admin auth update successful");
+          authUpdateResult = await updateUserAuthViaAdmin();
+          console.log("Admin update result:", authUpdateResult);
         } catch (error) {
-          console.error("Admin auth update error:", error);
-          // Don't fail completely - continue with database update
-          console.log("Continuing with database update despite auth error");
+          console.error("Admin update error:", error);
+          // Continue with database update even if this fails
         }
       }
       
@@ -602,9 +616,19 @@ const PersonalInfoSection = ({
         });
         setShowLogoutPrompt(true);
       } else {
+        let message = 'Profile updated successfully!';
+        
+        if (!isCurrentUser) {
+          if (formData.email || formData.password) {
+            message = 'Profile updated in database! For login credentials to work, the user should use "Forgot Password" on the login page to sync with Firebase Auth.';
+          }
+        } else if (authUpdateResult?.authError) {
+          message = 'Profile updated in database! Firebase Auth update failed, but database changes were saved.';
+        }
+        
         setUpdateStatus({ 
           type: 'success', 
-          message: 'Profile updated successfully!' 
+          message: message
         });
         
         // If a fetchUserData function was provided, refresh the user data

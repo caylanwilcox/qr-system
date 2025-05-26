@@ -4,6 +4,7 @@
   "description": "Backend scripts for QR System attendance management",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "reset-attendance": "node reset-attendance-data.js",
     "remove-events": "node database-update.js",
     "install-deps": "npm install firebase-admin"
