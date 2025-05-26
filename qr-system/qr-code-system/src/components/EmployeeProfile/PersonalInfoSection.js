@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { ref, update, get } from 'firebase/database';
+import { ref, update } from 'firebase/database';
 import { 
   getAuth, 
   updateProfile, 
@@ -29,22 +29,13 @@ import {
   X,
   RefreshCw,
   Shield,
-  Key
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { calculatePadrinoColor, PADRINO_COLORS } from '../utils/padrinoColorCalculator';
 
-const FormField = ({
-  label,
-  icon,
-  name,
-  type = 'text',
-  value,
-  onChange,
-  disabled,
-  error,
-  required,
-  children,
-}) => (
+const FormField = ({ label, icon, name, type = 'text', value, onChange, disabled, error, required, children }) => (
   <div className="form-group">
     <label htmlFor={name} className="block mb-2">
       <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
@@ -96,25 +87,21 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
   
   const [autoCalculate, setAutoCalculate] = useState(false);
 
-  // Calculate padrino status when userData changes
   useEffect(() => {
     if (userData && userData.events) {
       const status = calculatePadrinoColor(userData);
       setPadrinoStatus(status);
       
-      // If in auto mode, update the color based on calculations
       if (autoCalculate && formData.padrino) {
         onPadrinoColorChange({ target: { value: status.color } });
       }
     }
   }, [userData, autoCalculate, onPadrinoColorChange, formData.padrino]);
 
-  // Get color display name
   const getColorDisplayName = (color) => {
     return color ? color.charAt(0).toUpperCase() + color.slice(1) : 'Blue';
   };
 
-  // Get CSS classes for color display
   const getColorClasses = (color) => {
     switch (color) {
       case PADRINO_COLORS.RED:
@@ -129,19 +116,16 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
     }
   };
 
-  // Get requirement status display
   const getRequirementStatus = (requirement) => {
     if (!requirement.actual) return 'Not enough data';
     if (requirement.met) return `${requirement.actual}% ✓`;
     return `${requirement.actual}% (${requirement.required}% required) ✗`;
   };
 
-  // Toggle auto-calculate mode
   const handleAutoCalculateToggle = () => {
     const newValue = !autoCalculate;
     setAutoCalculate(newValue);
     
-    // If turning on auto-calculate, immediately update color
     if (newValue && formData.padrino) {
       onPadrinoColorChange({ target: { value: padrinoStatus.color } });
     }
@@ -284,99 +268,110 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
   );
 };
 
-const PersonalInfoSection = ({
-  formData,
-  editMode,
-  handleInputChange,
-  errors = {},
-  onSave,
-  onCancel,
-  userId,
-  userData,
-  isCurrentUser = false,
-  fetchUserData,
-  locations = [],
-  departments = [],
-  onPadrinoChange,
-  onPadrinoColorChange,
-  isAdminUser = false // 🔥 CRITICAL: This prop must be passed correctly
+const PersonalInfoSection = ({ 
+  formData, 
+  editMode, 
+  handleInputChange, 
+  errors = {}, 
+  onSave, 
+  onCancel, 
+  userId, 
+  userData, 
+  isCurrentUser = false, 
+  fetchUserData, 
+  locations = [], 
+  departments = [], 
+  onPadrinoChange, 
+  onPadrinoColorChange, 
+  isAdminUser = false 
 }) => {
+  const auth = getAuth();
+  
+  // UI State
   const [showPassword, setShowPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [expandedSection, setExpandedSection] = useState('personal');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Authentication state
+  const [currentPassword, setCurrentPassword] = useState('');
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [credentialsChanged, setCredentialsChanged] = useState(false);
   
   // Reset functionality state
   const [showResetMode, setShowResetMode] = useState(false);
-  const [resetType, setResetType] = useState('password'); // 'password', 'email', or 'both'
+  const [resetType, setResetType] = useState('password');
   const [resetEmail, setResetEmail] = useState('');
   const [resetPassword, setResetPassword] = useState('AV2025!');
   const [isResetting, setIsResetting] = useState(false);
   
-  const auth = getAuth();
-  
-  // Store original values to track changes
+  // Track original values for change detection
   const [originalValues, setOriginalValues] = useState({
-    email: formData?.email || '',
-    name: formData?.name || ''
+    email: '',
+    name: ''
   });
-  
+
+  // Update original values when formData changes
   useEffect(() => {
-    // Update original values when formData changes
-    if (formData) {
+    if (formData && Object.keys(formData).length > 0) {
+      console.log('🔄 [PERSONAL_INFO] Updating original values:', {
+        email: formData.email,
+        name: formData.name
+      });
+      
       setOriginalValues({
         email: formData.email || '',
         name: formData.name || ''
       });
-      // Set reset email to current email when formData changes
+      
       setResetEmail(formData.email || '');
     }
-  }, [formData]);
+  }, [formData?.email, formData?.name]);
 
-  // Debug logging for props
+  // Debug logging
   useEffect(() => {
-    console.log('🎭 [PERSONAL_INFO] Component props:', {
+    console.log('🎭 [PERSONAL_INFO] Component state:', {
       isCurrentUser,
       isAdminUser,
       userId,
       editMode,
       hasFormData: !!formData,
-      authCurrentUser: auth.currentUser?.uid
+      authUser: auth.currentUser?.uid
     });
   }, [isCurrentUser, isAdminUser, userId, editMode, formData, auth.currentUser]);
 
   // Toggle password visibility
   const togglePasswordVisibility = (field) => {
     if (field === 'current') {
-      setShowCurrentPassword(prevState => !prevState);
+      setShowCurrentPassword(prev => !prev);
     } else {
-      setShowPassword(prevState => !prevState);
+      setShowPassword(prev => !prev);
     }
   };
 
-  // Custom handler for password field
+  // Handle password changes with logging
   const handlePasswordChange = (e) => {
     const newPassword = e.target.value;
-    console.log('🔑 [PASSWORD] Password field changed, length:', newPassword.length);
+    console.log('🔑 [PERSONAL_INFO] Password field changed:', {
+      length: newPassword.length,
+      hasValue: !!newPassword
+    });
     
     if (handleInputChange) {
       handleInputChange(e);
     }
   };
 
-  // Handler for current password field
+  // Handle current password changes
   const handleCurrentPasswordChange = (e) => {
     setCurrentPassword(e.target.value);
   };
 
-  // Check if email or password has changed (requiring authentication)
+  // Check if authentication is needed for current user changes
   const needsAuthentication = () => {
     return isCurrentUser && (
-      (formData.email && formData.email !== originalValues.email) ||
+      (formData.email && formData.email.trim() !== (originalValues.email || '').trim()) ||
       (formData.password && formData.password.trim() !== '')
     );
   };
@@ -385,16 +380,268 @@ const PersonalInfoSection = ({
   const handleLogout = async () => {
     try {
       await auth.signOut();
-      // Redirect to login page
       window.location.href = '/login';
     } catch (error) {
       console.error("Error logging out:", error);
-      // Force page refresh as a fallback
       window.location.href = '/login';
     }
   };
 
-  // Reset credentials using admin API
+  // Update current user's Firebase Auth record
+  const updateCurrentUserAuth = async () => {
+    console.log('\n🔐 [AUTH] === CURRENT USER AUTH UPDATE START ===');
+    
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('No authenticated user. Please sign in again.');
+    }
+
+    const emailChanged = formData.email && formData.email.trim() !== (originalValues.email || '').trim();
+    const nameChanged = formData.name && formData.name.trim() !== (originalValues.name || '').trim();
+    const passwordProvided = formData.password && formData.password.trim() !== '';
+
+    console.log('🔐 [AUTH] Changes detected:', {
+      emailChanged,
+      nameChanged,
+      passwordProvided
+    });
+
+    if (!emailChanged && !nameChanged && !passwordProvided) {
+      return { success: true, credentialsChanged: false };
+    }
+
+    // Re-authenticate if changing email or password
+    if (emailChanged || passwordProvided) {
+      if (!currentPassword) {
+        throw new Error('Current password is required to change your email or password.');
+      }
+      
+      try {
+        console.log('🔐 [AUTH] Re-authenticating user...');
+        const credential = EmailAuthProvider.credential(user.email || '', currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        console.log('✅ [AUTH] Re-authentication successful');
+      } catch (error) {
+        console.error('❌ [AUTH] Re-authentication failed:', error);
+        throw new Error('Re-authentication failed. Please check your current password.');
+      }
+    }
+
+    let credentialsWillChange = false;
+
+    try {
+      if (nameChanged) {
+        console.log('📝 [AUTH] Updating displayName...');
+        await updateProfile(user, { displayName: formData.name.trim() });
+      }
+
+      if (emailChanged) {
+        console.log('✉️ [AUTH] Updating email...');
+        await updateEmail(user, formData.email.trim());
+        credentialsWillChange = true;
+      }
+
+      if (passwordProvided) {
+        console.log('🔑 [AUTH] Updating password...');
+        await updatePassword(user, formData.password.trim());
+        credentialsWillChange = true;
+      }
+
+      console.log('✅ [AUTH] Current user auth updated successfully');
+      return { success: true, credentialsChanged: credentialsWillChange };
+    } catch (error) {
+      console.error('❌ [AUTH] Failed to update current user auth:', error);
+      throw error;
+    }
+  };
+
+  // Update another user's auth via admin API
+  const updateUserAuthViaAdmin = async () => {
+    console.log('\n🔧 [ADMIN] === ADMIN AUTH UPDATE START ===');
+    
+    if (isCurrentUser) {
+      return { success: true, skipped: 'is_current_user' };
+    }
+    
+    if (!isAdminUser) {
+      return { success: false, error: 'Current user is not an admin' };
+    }
+
+    // Build updates payload
+    const authUpdates = {};
+    
+    if (formData.name && formData.name.trim() !== (originalValues.name || '').trim()) {
+      authUpdates.displayName = formData.name.trim();
+    }
+    
+    if (formData.email && formData.email.trim() !== (originalValues.email || '').trim()) {
+      authUpdates.email = formData.email.trim();
+    }
+    
+    if (formData.password && formData.password.trim() !== '') {
+      authUpdates.password = formData.password.trim();
+    }
+
+    console.log('🔧 [ADMIN] Auth updates to send:', {
+      ...authUpdates,
+      password: authUpdates.password ? '[REDACTED]' : undefined
+    });
+
+    if (Object.keys(authUpdates).length === 0) {
+      return { success: true, skipped: 'no_auth_changes' };
+    }
+
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      
+      const response = await fetch('/api/admin/update-user-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ userId, updates: authUpdates })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update user auth via admin API');
+      }
+
+      const result = await response.json();
+      console.log('✅ [ADMIN] Admin auth update successful:', result);
+      return { success: true, result };
+    } catch (error) {
+      console.error('❌ [ADMIN] Admin auth update failed:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Update database with all form data
+  const updateDatabaseWithAuthInfo = async () => {
+    try {
+      console.log('🗄️ [DATABASE] Updating database...');
+      
+      const dbUpdates = {};
+      
+      // Update all form fields in the database
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && key !== 'password') {
+          dbUpdates[`users/${userId}/profile/${key}`] = value;
+          
+          // Also update certain fields at root level for backward compatibility
+          if (['name', 'email', 'location'].includes(key)) {
+            dbUpdates[`users/${userId}/${key}`] = value;
+          }
+        }
+      });
+      
+      // Maintain auth link
+      if (isCurrentUser && auth.currentUser) {
+        dbUpdates[`users/${userId}/profile/authUid`] = auth.currentUser.uid;
+      }
+      
+      // Add timestamp
+      dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
+      
+      await update(ref(database), dbUpdates);
+      console.log('✅ [DATABASE] Database updated successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ [DATABASE] Error updating database:', error);
+      throw error;
+    }
+  };
+
+  // Main save handler
+  const handleSaveClick = async () => {
+    console.log('\n🚀 === SAVE PROCESS START ===');
+    setIsSaving(true);
+    setUpdateStatus(null);
+    setCredentialsChanged(false);
+
+    try {
+      // Detect changes
+      const emailChanged = formData.email && formData.email.trim() !== (originalValues.email || '').trim();
+      const nameChanged = formData.name && formData.name.trim() !== (originalValues.name || '').trim();
+      const passwordProvided = formData.password && formData.password.trim() !== '';
+      const shouldUpdateAuth = emailChanged || nameChanged || passwordProvided;
+
+      console.log('💾 [SAVE] Changes detected:', {
+        emailChanged,
+        nameChanged,
+        passwordProvided,
+        shouldUpdateAuth
+      });
+
+      let authUpdateResult = { success: true };
+
+      // Update Firebase Auth if needed
+      if (shouldUpdateAuth) {
+        if (isCurrentUser) {
+          console.log('👤 [SAVE] Updating current user auth...');
+          authUpdateResult = await updateCurrentUserAuth();
+          
+          if (authUpdateResult.credentialsChanged) {
+            setCredentialsChanged(true);
+          }
+        } else {
+          console.log('👥 [SAVE] Updating user auth via admin...');
+          authUpdateResult = await updateUserAuthViaAdmin();
+          
+          if (!authUpdateResult.success) {
+            throw new Error(authUpdateResult.error || 'Failed to update authentication');
+          }
+        }
+      }
+
+      // Update database
+      console.log('🗄️ [SAVE] Updating database...');
+      await updateDatabaseWithAuthInfo();
+
+      // Call parent onSave if provided
+      if (onSave) {
+        console.log('📞 [SAVE] Calling parent onSave...');
+        await onSave();
+      }
+
+      // Show success message
+      if (credentialsChanged) {
+        setUpdateStatus({ 
+          type: 'success', 
+          message: 'Profile updated successfully! You need to log in again with your new credentials.' 
+        });
+        setShowLogoutPrompt(true);
+      } else {
+        setUpdateStatus({ 
+          type: 'success', 
+          message: 'Profile updated successfully!' 
+        });
+        
+        if (fetchUserData) {
+          await fetchUserData();
+        }
+      }
+
+      // Cleanup
+      setCurrentPassword('');
+      if (handleInputChange) {
+        handleInputChange({ target: { name: 'password', value: '' } });
+      }
+
+      console.log('🎯 === SAVE PROCESS COMPLETE ===');
+    } catch (error) {
+      console.error('❌ [SAVE] Error:', error);
+      setUpdateStatus({ 
+        type: 'error', 
+        message: `Error updating profile: ${error.message}` 
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Reset credentials handler
   const handleResetCredentials = async () => {
     if (!isAdminUser && !isCurrentUser) {
       setUpdateStatus({
@@ -405,25 +652,14 @@ const PersonalInfoSection = ({
     }
 
     // Validate inputs
-    if (resetType === 'email' || resetType === 'both') {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!resetEmail || !emailRegex.test(resetEmail)) {
-        setUpdateStatus({
-          type: 'error',
-          message: 'Please enter a valid email address.'
-        });
-        return;
-      }
+    if ((resetType === 'email' || resetType === 'both') && (!resetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail))) {
+      setUpdateStatus({ type: 'error', message: 'Please enter a valid email address.' });
+      return;
     }
 
-    if (resetType === 'password' || resetType === 'both') {
-      if (!resetPassword || resetPassword.length < 6) {
-        setUpdateStatus({
-          type: 'error',
-          message: 'Password must be at least 6 characters long.'
-        });
-        return;
-      }
+    if ((resetType === 'password' || resetType === 'both') && (!resetPassword || resetPassword.length < 6)) {
+      setUpdateStatus({ type: 'error', message: 'Password must be at least 6 characters long.' });
+      return;
     }
 
     setIsResetting(true);
@@ -431,12 +667,9 @@ const PersonalInfoSection = ({
       const updates = {};
       const resetOperations = [];
 
-      // Prepare updates
-      if (resetType === 'email' || resetType === 'both') {
-        if (resetEmail !== formData.email) {
-          updates.email = resetEmail;
-          resetOperations.push('email');
-        }
+      if ((resetType === 'email' || resetType === 'both') && resetEmail !== formData.email) {
+        updates.email = resetEmail;
+        resetOperations.push('email');
       }
 
       if (resetType === 'password' || resetType === 'both') {
@@ -445,19 +678,15 @@ const PersonalInfoSection = ({
       }
 
       if (resetType === 'both' || resetType === 'email') {
-        updates.displayName = formData.name; // Include name to maintain profile
+        updates.displayName = formData.name;
       }
 
       if (Object.keys(updates).length === 0) {
-        setUpdateStatus({
-          type: 'warning',
-          message: 'No changes detected.'
-        });
-        setIsResetting(false);
+        setUpdateStatus({ type: 'warning', message: 'No changes detected.' });
         return;
       }
 
-      // Call admin API to update authentication
+      // Call admin API
       const idToken = await auth.currentUser.getIdToken();
       const response = await fetch('/api/admin/update-user-auth', {
         method: 'POST',
@@ -465,10 +694,7 @@ const PersonalInfoSection = ({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${idToken}`
         },
-        body: JSON.stringify({
-          userId,
-          updates
-        })
+        body: JSON.stringify({ userId, updates })
       });
 
       if (!response.ok) {
@@ -482,20 +708,15 @@ const PersonalInfoSection = ({
         dbUpdates[`users/${userId}/profile/email`] = updates.email;
         dbUpdates[`users/${userId}/email`] = updates.email;
       }
-      if (updates.password) {
-        dbUpdates[`users/${userId}/profile/password`] = updates.password;
-      }
       if (updates.displayName) {
         dbUpdates[`users/${userId}/profile/name`] = updates.displayName;
         dbUpdates[`users/${userId}/name`] = updates.displayName;
       }
-      
       dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
       dbUpdates[`users/${userId}/profile/authUid`] = userId;
 
       await update(ref(database), dbUpdates);
 
-      // Success message
       const operationText = resetOperations.join(' and ');
       const credentialsText = resetOperations.map(op => {
         if (op === 'email') return `Email: ${resetEmail}`;
@@ -508,16 +729,13 @@ const PersonalInfoSection = ({
         message: `Successfully reset ${operationText} for ${formData.name}. New credentials: ${credentialsText}`
       });
 
-      // Reset form
       setShowResetMode(false);
       setResetType('password');
       setResetPassword('AV2025!');
       
-      // Refresh user data
       if (fetchUserData) {
         await fetchUserData();
       }
-
     } catch (error) {
       console.error('Error resetting credentials:', error);
       setUpdateStatus({
@@ -526,358 +744,6 @@ const PersonalInfoSection = ({
       });
     } finally {
       setIsResetting(false);
-    }
-  };
-
-  // Update the database with correct auth info
-  const updateDatabaseWithAuthInfo = async () => {
-    try {
-      // Create updates object for Firebase
-      const dbUpdates = {};
-      
-      // Update all form fields in the database
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          // Update in profile
-          dbUpdates[`users/${userId}/profile/${key}`] = value;
-          
-          // Also update certain fields at root level for backward compatibility
-          if (['name', 'email', 'location'].includes(key)) {
-            dbUpdates[`users/${userId}/${key}`] = value;
-          }
-        }
-      });
-      
-      // Also update authUid link for current user
-      if (isCurrentUser && auth.currentUser) {
-        dbUpdates[`users/${userId}/profile/authUid`] = auth.currentUser.uid;
-      }
-      
-      // Add timestamp
-      dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
-      
-      // Perform the database update
-      await update(ref(database), dbUpdates);
-      console.log('💾 [DATABASE] Database updated successfully');
-      return true;
-    } catch (error) {
-      console.error("❌ [DATABASE] Error updating database:", error);
-      throw error;
-    }
-  };
-
-  // ===============================
-  //  NEW: updateAuthUser FUNCTION  🔑
-  // ===============================
-
-  // This helper updates the Firebase Auth record when the CURRENT user is
-  // updating THEIR OWN credentials (email / password / displayName).
-  // It performs the required re-authentication flow and returns a result
-  // object describing whether the login credentials were changed.
-  const updateAuthUser = async () => {
-    console.log('\n🔐 [AUTH] === CURRENT USER AUTH UPDATE START ===');
-
-    const user = auth.currentUser;
-    if (!user) {
-      throw new Error('No authenticated user. Please sign in again.');
-    }
-
-    // Detect what is changing
-    const emailChanged = formData.email && formData.email !== originalValues.email;
-    const nameChanged  = formData.name  && formData.name  !== originalValues.name;
-    const passwordProvided = formData.password && formData.password.trim() !== '';
-
-    console.log('🔐 [AUTH] Change detection:', {
-      emailChanged,
-      nameChanged,
-      passwordProvided,
-    });
-
-    if (!emailChanged && !nameChanged && !passwordProvided) {
-      console.log('⏭️ [AUTH] No auth changes detected, skipping.');
-      return { success: true, credentialsChanged: false };
-    }
-
-    // If the user is changing email or password we MUST reauthenticate.
-    if ((emailChanged || passwordProvided)) {
-      if (!currentPassword) {
-        throw new Error('Current password is required to change your email or password.');
-      }
-      try {
-        console.log('🔐 [AUTH] Re-authenticating user…');
-        const credential = EmailAuthProvider.credential(
-          user.email || '',
-          currentPassword
-        );
-        await reauthenticateWithCredential(user, credential);
-        console.log('✅ [AUTH] Re-authentication successful');
-      } catch (error) {
-        console.error('❌ [AUTH] Re-authentication failed:', error);
-        throw new Error('Re-authentication failed. Please check your current password.');
-      }
-    }
-
-    let credentialsChanged = false;
-
-    // Apply the requested changes sequentially so that we can surface
-    // useful debug output if something fails.
-    try {
-      if (nameChanged) {
-        console.log(`📝 [AUTH] Updating displayName → "${formData.name}"`);
-        await updateProfile(user, { displayName: formData.name });
-      }
-
-      if (emailChanged) {
-        console.log(`✉️  [AUTH] Updating email → ${formData.email}`);
-        await updateEmail(user, formData.email);
-        credentialsChanged = true;
-      }
-
-      if (passwordProvided) {
-        console.log(`🔑 [AUTH] Updating password (length ${formData.password.length})`);
-        await updatePassword(user, formData.password.trim());
-        credentialsChanged = true;
-      }
-
-      console.log('✅ [AUTH] Auth record updated successfully');
-      return { success: true, credentialsChanged };
-    } catch (error) {
-      console.error('❌ [AUTH] Failed to update auth record:', error);
-      throw error;
-    }
-  };
-
-  // =====================================================
-  //  RESTORED: updateUserAuthViaAdmin FUNCTION  🛡️
-  // =====================================================
-  // This helper is used when an ADMIN user is editing ANOTHER
-  // user's credentials. It calls the protected backend endpoint
-  // that performs privileged Auth updates via the Admin SDK.
-  const updateUserAuthViaAdmin = async () => {
-    console.log('\n🔧 [ADMIN UPDATE] === ADMIN AUTH UPDATE START ===');
-    console.log('🔧 [ADMIN UPDATE] Context:', { isCurrentUser, isAdminUser, userId });
-
-    // Only proceed when the signed-in user is an admin editing someone else
-    if (isCurrentUser) {
-      return { success: true, skipped: 'current_user' };
-    }
-    if (!isAdminUser) {
-      return { success: false, error: 'Current user is not an admin' };
-    }
-
-    // Build the authUpdates payload
-    const authUpdates = {};
-    if (formData.name && formData.name !== originalValues.name) {
-      authUpdates.displayName = formData.name;
-    }
-    if (formData.email && formData.email !== originalValues.email) {
-      authUpdates.email = formData.email;
-    }
-    if (formData.password && formData.password.trim() !== '') {
-      authUpdates.password = formData.password.trim();
-    }
-
-    if (Object.keys(authUpdates).length === 0) {
-      return { success: true, skipped: 'no_changes' };
-    }
-
-    try {
-      const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/admin/update-user-auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ userId, updates: authUpdates })
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Failed to update user auth via admin');
-      }
-
-      const result = await response.json();
-      console.log('✅ [ADMIN UPDATE] Admin auth update successful');
-      return { success: true, result };
-    } catch (error) {
-      console.error('❌ [ADMIN UPDATE] Error:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Enhanced handleSaveClick with comprehensive debugging
-  const handleSaveClick = async () => {
-    try {
-      console.log('\n🚀 === SAVE PROCESS START ===');
-      setIsSaving(true);
-      setUpdateStatus(null);
-      setCredentialsChanged(false);
-      
-      // 🔍 STEP 1: Log initial state
-      console.log('💾 [SAVE] Step 1: Initial State Check');
-      console.log('💾 [SAVE] User permissions:', { isCurrentUser, isAdminUser });
-      console.log('💾 [SAVE] Form data:', {
-        hasEmail: !!formData.email,
-        emailValue: formData.email,
-        hasName: !!formData.name,
-        nameValue: formData.name,
-        hasPassword: !!formData.password,
-        passwordLength: formData.password ? formData.password.length : 0,
-        passwordPreview: formData.password ? formData.password.substring(0, 3) + '***' : 'empty'
-      });
-      console.log('💾 [SAVE] Original values:', originalValues);
-      console.log('💾 [SAVE] Employee ID:', userId);
-      
-      // 🔍 STEP 2: Check what changes will be made
-      const emailChanged = formData.email && formData.email !== originalValues.email;
-      const nameChanged = formData.name && formData.name !== originalValues.name;
-      const passwordProvided = formData.password && formData.password.trim() !== '';
-      
-      console.log('💾 [SAVE] Step 2: Change Detection');
-      console.log('💾 [SAVE] Changes detected:', {
-        emailChanged,
-        emailFrom: originalValues.email,
-        emailTo: formData.email,
-        nameChanged,
-        nameFrom: originalValues.name,
-        nameTo: formData.name,
-        passwordProvided,
-        passwordLength: passwordProvided ? formData.password.length : 0
-      });
-      
-      // 🔍 STEP 3: Determine auth update path
-      const shouldUpdateAuth = emailChanged || nameChanged || passwordProvided;
-      console.log('💾 [SAVE] Step 3: Auth Update Decision');
-      console.log('💾 [SAVE] Should update auth:', shouldUpdateAuth);
-      console.log('💾 [SAVE] Update path:', isCurrentUser ? 'Current User (direct)' : 'Admin API');
-      
-      let authUpdateResult = { success: true };
-      
-      // Step 4: Update Firebase Auth if necessary
-      if (shouldUpdateAuth) {
-        if (isCurrentUser) {
-          try {
-            console.log('👤 [SAVE] Step 4a: Current User Auth Update');
-            // Update authentication for current user
-            const authResult = await updateAuthUser();
-            console.log('👤 [SAVE] Current user auth result:', authResult);
-            if (authResult.credentialsChanged) {
-              setCredentialsChanged(true);
-            }
-          } catch (error) {
-            console.error("❌ [SAVE] Current user auth error:", error);
-            setUpdateStatus({ 
-              type: 'error', 
-              message: `Authentication error: ${error.message}` 
-            });
-            setIsSaving(false);
-            return;
-          }
-        } else {
-          console.log('👥 [SAVE] Step 4b: Admin Auth Update');
-          // Admin updating another user's auth
-          authUpdateResult = await updateUserAuthViaAdmin();
-          
-          console.log('👥 [SAVE] Admin auth update result:', authUpdateResult);
-          
-          if (!authUpdateResult.success) {
-            console.warn('⚠️ [SAVE] Admin auth update failed:', authUpdateResult.error);
-            // Show warning but don't stop the process
-            setUpdateStatus({ 
-              type: 'warning', 
-              message: `Profile updated, but authentication update failed: ${authUpdateResult.error}. User may need to use password reset.` 
-            });
-          } else if (authUpdateResult.skipped) {
-            console.log('ℹ️ [SAVE] Admin auth update skipped:', authUpdateResult.skipped);
-            if (authUpdateResult.skipped === 'no_changes') {
-              console.log('ℹ️ [SAVE] No authentication changes detected');
-            }
-          } else {
-            console.log('✅ [SAVE] Admin auth update successful');
-          }
-        }
-      } else {
-        console.log('⏭️ [SAVE] Step 4: Skipping auth update (no changes)');
-      }
-      
-      // Step 5: Update the database
-      console.log('🗄️ [SAVE] Step 5: Database Update');
-      await updateDatabaseWithAuthInfo();
-      console.log('✅ [SAVE] Database update completed');
-      
-      // Step 6: Call parent onSave if provided
-      if (onSave) {
-        console.log('📞 [SAVE] Step 6: Parent onSave callback');
-        await onSave();
-        console.log('✅ [SAVE] Parent onSave completed');
-      } else {
-        console.log('⏭️ [SAVE] Step 6: No parent onSave callback');
-      }
-      
-      // Step 7: Update state and show feedback
-      console.log('🎉 [SAVE] Step 7: Success Handling');
-      if (credentialsChanged) {
-        console.log('🔑 [SAVE] Credentials changed - logout required');
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully! You need to log in again with your new credentials.' 
-        });
-        setShowLogoutPrompt(true);
-      } else if (authUpdateResult.success && !authUpdateResult.skipped) {
-        console.log('✅ [SAVE] Auth and profile updated successfully');
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully!' 
-        });
-        
-        // If a fetchUserData function was provided, refresh the user data
-        if (fetchUserData) {
-          console.log('🔄 [SAVE] Refreshing user data...');
-          await fetchUserData();
-          console.log('✅ [SAVE] User data refreshed');
-        }
-      } else if (authUpdateResult.skipped) {
-        console.log('✅ [SAVE] Profile updated (auth skipped)');
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully!' 
-        });
-        
-        if (fetchUserData) {
-          await fetchUserData();
-        }
-      }
-      
-      // Step 8: Cleanup
-      console.log('🧹 [SAVE] Step 8: Cleanup');
-      // Clear sensitive data
-      setCurrentPassword('');
-      
-      // Clear the password field from form data after successful save
-      if (handleInputChange) {
-        const clearPasswordEvent = {
-          target: {
-            name: 'password',
-            value: ''
-          }
-        };
-        handleInputChange(clearPasswordEvent);
-        console.log('🧹 [SAVE] Password field cleared');
-      }
-      
-      console.log('🎯 === SAVE PROCESS COMPLETE ===\n');
-      
-    } catch (error) {
-      console.error("❌ [SAVE] Fatal error:", error);
-      console.error("💥 [SAVE] Error stack:", error.stack);
-      setUpdateStatus({ 
-        type: 'error', 
-        message: `Error updating profile: ${error.message}` 
-      });
-    } finally {
-      setIsSaving(false);
-      console.log('🏁 [SAVE] Save process finished (finally block)');
     }
   };
 
@@ -910,7 +776,7 @@ const PersonalInfoSection = ({
     );
   };
 
-  // Render current password field when needed
+  // Render current password field
   const renderCurrentPasswordField = () => {
     if (!editMode || !isCurrentUser || !needsAuthentication()) return null;
     
@@ -930,19 +796,18 @@ const PersonalInfoSection = ({
             value={currentPassword}
             onChange={handleCurrentPasswordChange}
             placeholder="Enter your current password"
-            className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+            className="w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
               px-3 py-2 text-white/90 placeholder-white/50
               focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-              backdrop-blur-md transition-all duration-200 pr-12
-            `}
+              backdrop-blur-md transition-all duration-200 pr-12"
             required
           />
           <button
             type="button"
             onClick={() => togglePasswordVisibility('current')}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white"
           >
-            {showCurrentPassword ? "HIDE" : "SHOW"}
+            {showCurrentPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         </div>
         <p className="text-amber-400 text-xs mt-1">
@@ -964,47 +829,27 @@ const PersonalInfoSection = ({
         </h3>
         
         <div className="space-y-4">
-          {/* Reset Type Selection */}
           <div>
             <label className="block text-sm text-white/90 mb-2">What would you like to reset?</label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
-                <input
-                  type="radio"
-                  name="resetType"
-                  value="password"
-                  checked={resetType === 'password'}
-                  onChange={(e) => setResetType(e.target.value)}
-                  className="text-red-500"
-                />
-                <span className="text-white/80 text-sm">Password Only</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
-                <input
-                  type="radio"
-                  name="resetType"
-                  value="email"
-                  checked={resetType === 'email'}
-                  onChange={(e) => setResetType(e.target.value)}
-                  className="text-red-500"
-                />
-                <span className="text-white/80 text-sm">Email Only</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
-                <input
-                  type="radio"
-                  name="resetType"
-                  value="both"
-                  checked={resetType === 'both'}
-                  onChange={(e) => setResetType(e.target.value)}
-                  className="text-red-500"
-                />
-                <span className="text-white/80 text-sm">Both</span>
-              </label>
+              {['password', 'email', 'both'].map((type) => (
+                <label key={type} className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
+                  <input
+                    type="radio"
+                    name="resetType"
+                    value={type}
+                    checked={resetType === type}
+                    onChange={(e) => setResetType(e.target.value)}
+                    className="text-red-500"
+                  />
+                  <span className="text-white/80 text-sm">
+                    {type === 'both' ? 'Both' : type.charAt(0).toUpperCase() + type.slice(1) + ' Only'}
+                  </span>
+                </label>
+              ))}
             </div>
           </div>
 
-          {/* Email Reset Field */}
           {(resetType === 'email' || resetType === 'both') && (
             <FormField
               label="New Email Address"
@@ -1013,12 +858,10 @@ const PersonalInfoSection = ({
               type="email"
               value={resetEmail}
               onChange={(e) => setResetEmail(e.target.value)}
-              disabled={false}
               required
             />
           )}
 
-          {/* Password Reset Field */}
           {(resetType === 'password' || resetType === 'both') && (
             <FormField
               label="New Password"
@@ -1027,12 +870,10 @@ const PersonalInfoSection = ({
               type="password"
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
-              disabled={false}
               required
             />
           )}
 
-          {/* Action Buttons */}
           <div className="flex gap-2 pt-2">
             <button
               onClick={() => setShowResetMode(false)}
@@ -1067,28 +908,13 @@ const PersonalInfoSection = ({
     );
   };
 
-  // 🔥 Add debugging function
-  useEffect(() => {
-    window.debugFormData = () => {
-      console.log('🔍 FORM DEBUG:');
-      console.log('Form data:', formData);
-      console.log('Password field:', formData?.password);
-      console.log('Password input DOM:', document.querySelector('input[name="password"]')?.value);
-      console.log('isCurrentUser:', isCurrentUser);
-      console.log('isAdminUser:', isAdminUser);
-    };
-    console.log('🔧 Debug function available: debugFormData()');
-  }, [formData, isCurrentUser, isAdminUser]);
-
   return (
     <div className="bg-[rgba(13,25,48,0.4)] backdrop-blur-xl rounded-lg border border-white/10 shadow-xl">
-      {/* Render logout prompt modal if credentials changed */}
       {renderLogoutPrompt()}
       
       <div className="p-6 border-b border-white/10">
         <h2 className="text-lg font-semibold text-white/90">Personal Information</h2>
         {userId && <p className="text-xs text-white/50 mt-1">User ID: {userId}</p>}
-        {/* 🔥 Add debug info */}
         <div className="text-xs text-white/40 mt-1">
           Current User: {isCurrentUser ? 'Yes' : 'No'} | Admin: {isAdminUser ? 'Yes' : 'No'}
         </div>
@@ -1142,7 +968,7 @@ const PersonalInfoSection = ({
         </div>
       )}
 
-      {/* Login Credentials Section - Always visible when editing */}
+      {/* Login Credentials Section */}
       {editMode && (
         <div className="p-6 pt-4">
           <div className="bg-[rgba(13,25,48,0.6)] p-4 rounded-lg border border-blue-500/20 mb-6">
@@ -1193,14 +1019,14 @@ const PersonalInfoSection = ({
                     <button
                       type="button"
                       onClick={() => togglePasswordVisibility('new')}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white"
                     >
-                      {showPassword ? "HIDE" : "SHOW"}
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   )}
                 </div>
                 {errors.password && (
-                  <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
+                  <div className="text-red-400 text-sm mt-1 flex items-center gap-1">
                     <AlertCircle size={14} />
                     <span>{errors.password}</span>
                   </div>
@@ -1208,7 +1034,7 @@ const PersonalInfoSection = ({
               </div>
             </div>
             
-            {/* Help text for login credentials */}
+            {/* Help text */}
             <div className="mt-3 text-amber-400 text-sm flex items-start">
               <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
               <span>
@@ -1218,46 +1044,34 @@ const PersonalInfoSection = ({
               </span>
             </div>
             
-            {/* Current password field for verification when changing own credentials */}
+            {/* Current password field */}
             {renderCurrentPasswordField()}
           </div>
         </div>
       )}
         
-      {/* Navigation tabs */}
+      {/* Tab Navigation */}
       <div className="flex space-x-2 mx-6 overflow-x-auto pb-2 border-b border-white/10">
-        <button
-          onClick={() => setExpandedSection('personal')}
-          className={`px-4 py-2 text-sm rounded-lg ${
-            expandedSection === 'personal'
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'text-white/70 hover:bg-white/5'
-          }`}
-        >
-          Basic Info
-        </button>
-        <button
-          onClick={() => setExpandedSection('contact')}
-          className={`px-4 py-2 text-sm rounded-lg ${
-            expandedSection === 'contact'
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'text-white/70 hover:bg-white/5'
-          }`}
-        >
-          Contact
-        </button>
-        <button
-          onClick={() => setExpandedSection('padrino')}
-          className={`px-4 py-2 text-sm rounded-lg ${
-            expandedSection === 'padrino'
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-              : 'text-white/70 hover:bg-white/5'
-          }`}
-        >
-          Padrino
-        </button>
+        {[
+          { id: 'personal', label: 'Basic Info' },
+          { id: 'contact', label: 'Contact' },
+          { id: 'padrino', label: 'Padrino' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setExpandedSection(tab.id)}
+            className={`px-4 py-2 text-sm rounded-lg ${
+              expandedSection === tab.id
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                : 'text-white/70 hover:bg-white/5'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
+      {/* Tab Content */}
       <div className="p-6">
         {expandedSection === 'personal' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1452,32 +1266,33 @@ const PersonalInfoSection = ({
         )}
       </div>
 
+      {/* Save/Cancel Buttons */}
       {editMode && (
-        <div className="px-6 py-4 border-t border-white/10 flex justify-end gap-2">
-          {onCancel && (
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
-              disabled={isSaving}
-            >
-              Cancel
-            </button>
-          )}
+        <div className="border-t border-white/10 p-6 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-6 py-2 border border-white/20 rounded-lg text-white/70 hover:bg-white/5 transition-colors"
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
           <button
             onClick={handleSaveClick}
-            className={`px-4 py-2 rounded-md ${
-              isSaving 
-                ? 'bg-blue-600/50 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-500'
-            } text-white font-semibold flex items-center justify-center`}
             disabled={isSaving}
+            className={`px-6 py-2 rounded-lg font-semibold transition-colors flex items-center ${
+              isSaving
+                ? 'bg-blue-600/50 cursor-not-allowed text-white/70'
+                : 'bg-blue-600 hover:bg-blue-500 text-white'
+            }`}
           >
             {isSaving ? (
               <>
-                <span className="animate-spin inline-block h-4 w-4 border-2 border-white/20 border-t-white rounded-full mr-2"></span>
+                <RefreshCw className="animate-spin mr-2" size={16} />
                 Saving...
               </>
-            ) : 'Save Changes'}
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
       )}
@@ -1508,7 +1323,7 @@ PersonalInfoSection.propTypes = {
   departments: PropTypes.array,
   onPadrinoChange: PropTypes.func,
   onPadrinoColorChange: PropTypes.func,
-  isAdminUser: PropTypes.bool // 🔥 CRITICAL PROP
+  isAdminUser: PropTypes.bool
 };
 
 export default PersonalInfoSection;
