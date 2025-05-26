@@ -38,6 +38,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   // Refs for cleanup and state tracking
   const mountedRef = useRef(true);
   const eventTypesLoadedRef = useRef(false);
+  const globalEventsLoadedRef = useRef(false);
   const subscriptionsRef = useRef([]);
   
   const DEBUG_PREFIX = '🔍 [StatsSection]';
@@ -308,12 +309,14 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   const [loadingGlobalEvents, setLoadingGlobalEvents] = useState(false);
 
   // Load global events for this user
-  const loadGlobalEvents = useCallback(async () => {
-    if (!userId || loadingGlobalEvents) return;
+  const loadGlobalEvents = useCallback(async (force = false) => {
+    if (!userId) return;
+    if (loadingGlobalEvents && !force) return;
+    if (globalEventsLoadedRef.current && !force) return;
     
     setLoadingGlobalEvents(true);
     try {
-      console.log(`${DEBUG_PREFIX} Loading global events for user: ${userId}`);
+      console.log(`${DEBUG_PREFIX} Loading global events for user: ${userId} (force: ${force})`);
       
       const eventsRef = ref(database, 'events');
       const snapshot = await get(eventsRef);
@@ -321,6 +324,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       if (!snapshot.exists()) {
         console.log(`${DEBUG_PREFIX} No global events found`);
         setGlobalEvents([]);
+        globalEventsLoadedRef.current = true;
         return;
       }
       
@@ -362,20 +366,23 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       })));
       
       setGlobalEvents(userEvents);
+      globalEventsLoadedRef.current = true;
     } catch (error) {
       console.error(`${DEBUG_PREFIX} Error loading global events:`, error);
       setGlobalEvents([]);
+      globalEventsLoadedRef.current = true;
     } finally {
       setLoadingGlobalEvents(false);
     }
-  }, [userId, loadingGlobalEvents]);
+  }, [userId]);
 
   // Load global events when user changes
   useEffect(() => {
-    if (userId && !loadingEventTypes) {
+    if (userId && !loadingEventTypes && !loadingGlobalEvents) {
+      globalEventsLoadedRef.current = false; // Reset the ref when user changes
       loadGlobalEvents();
     }
-  }, [userId, loadingEventTypes, loadGlobalEvents]);
+  }, [userId, loadingEventTypes]); // Removed loadGlobalEvents from dependencies to prevent loop
 
   // FIXED: Enhanced attendance stats with comprehensive event matching and statistics integration
   const attendanceStats = useMemo(() => {
@@ -665,6 +672,8 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
     
     return () => {
       mountedRef.current = false;
+      eventTypesLoadedRef.current = false;
+      globalEventsLoadedRef.current = false;
       subscriptionsRef.current.forEach(unsubscribe => unsubscribe());
       subscriptionsRef.current = [];
       console.log(`${DEBUG_PREFIX} Component unmounted and cleaned up`);
@@ -716,7 +725,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
         if (isEventForUser(data) && mountedRef.current) {
           console.log(`${DEBUG_PREFIX} Event matches our user, refreshing data`);
           loadEmployeeData(true);
-          loadGlobalEvents(); // Also refresh global events
+          loadGlobalEvents(true); // Also refresh global events with force
           setEventCount(prev => prev + 1);
         }
       });
@@ -736,7 +745,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
     setError(null);
     fetchEventTypes();
     loadEmployeeData(true);
-    loadGlobalEvents(); // Also refresh global events
+    loadGlobalEvents(true); // Also refresh global events with force
     if (onRefresh) {
       onRefresh();
     }
