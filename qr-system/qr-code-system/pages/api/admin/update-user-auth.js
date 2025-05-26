@@ -18,7 +18,7 @@ const serviceAccount = {
   client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL || "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fqxwu%40qr-system-1cea7.iam.gserviceaccount.com"
 };
 
-// Initialize Firebase Admin SDK with debug logging
+// Initialize Firebase Admin SDK with debug loggin
 if (!admin.apps.length) {
   try {
     console.log("🚀 [DEBUG] Initializing Firebase Admin SDK...");

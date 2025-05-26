@@ -1018,12 +1018,13 @@ const PersonalInfoSection = ({
                   <button
                     onClick={() => setShowResetMode(!showResetMode)}
                     className="px-3 py-1 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 text-xs"
+                    disabled={true}
                   >
-                    {showResetMode ? 'Cancel Reset' : 'Reset Credentials'}
+                    Reset Credentials (Temporarily Disabled)
                   </button>
                 </div>
                 <p className="text-white/60 text-xs mt-1">
-                  Force reset this user's email and/or password without validation.
+                  Use the email/password fields below instead. Reset dialog temporarily disabled due to API deployment.
                 </p>
               </div>
             )}
