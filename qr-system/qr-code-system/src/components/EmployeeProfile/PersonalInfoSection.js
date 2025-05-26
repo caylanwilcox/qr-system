@@ -387,6 +387,124 @@ const PersonalInfoSection = ({
     }
   };
 
+  // 🔥 NEW: Direct email update function
+  const updateEmailDirectly = async () => {
+    console.log('\n📧 [DIRECT] === DIRECT EMAIL UPDATE START ===');
+    
+    try {
+      const user = auth.currentUser;
+      
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+      
+      const emailChanged = formData.email && formData.email.trim() !== (originalValues.email || '').trim();
+      const nameChanged = formData.name && formData.name.trim() !== (originalValues.name || '').trim();
+      const passwordProvided = formData.password && formData.password.trim() !== '';
+      
+      console.log('📧 [DIRECT] Changes detected:', {
+        emailChanged,
+        nameChanged,
+        passwordProvided,
+        isCurrentUser,
+        userId,
+        currentUserUid: user.uid
+      });
+      
+      // For current user - update Firebase Auth directly
+      if (isCurrentUser && user.uid === userId) {
+        console.log('👤 [DIRECT] Updating current user Firebase Auth...');
+        
+        // Re-authenticate if changing email or password
+        if ((emailChanged || passwordProvided) && !currentPassword) {
+          throw new Error('Current password is required to change email or password');
+        }
+        
+        if (emailChanged || passwordProvided) {
+          console.log('🔐 [DIRECT] Re-authenticating user...');
+          const credential = EmailAuthProvider.credential(user.email || '', currentPassword);
+          await reauthenticateWithCredential(user, credential);
+          console.log('✅ [DIRECT] Re-authentication successful');
+        }
+        
+        let credentialsWillChange = false;
+        
+        // Update email
+        if (emailChanged) {
+          console.log('✉️ [DIRECT] Updating email in Firebase Auth...');
+          await updateEmail(user, formData.email.trim());
+          credentialsWillChange = true;
+          console.log('✅ [DIRECT] Email updated in Firebase Auth');
+        }
+        
+        // Update display name
+        if (nameChanged) {
+          console.log('📝 [DIRECT] Updating display name in Firebase Auth...');
+          await updateProfile(user, { displayName: formData.name.trim() });
+          console.log('✅ [DIRECT] Display name updated in Firebase Auth');
+        }
+        
+        // Update password
+        if (passwordProvided) {
+          console.log('🔑 [DIRECT] Updating password in Firebase Auth...');
+          await updatePassword(user, formData.password.trim());
+          credentialsWillChange = true;
+          console.log('✅ [DIRECT] Password updated in Firebase Auth');
+        }
+        
+        if (credentialsWillChange) {
+          setCredentialsChanged(true);
+        }
+      }
+      
+      // Always update database for any user
+      console.log('🗄️ [DIRECT] Updating database...');
+      const dbUpdates = {};
+      
+      if (emailChanged) {
+        dbUpdates[`users/${userId}/profile/email`] = formData.email.trim();
+        dbUpdates[`users/${userId}/email`] = formData.email.trim();
+      }
+      
+      if (nameChanged) {
+        dbUpdates[`users/${userId}/profile/name`] = formData.name.trim();
+        dbUpdates[`users/${userId}/name`] = formData.name.trim();
+      }
+      
+      // Update other form fields in database
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && !['password', 'email', 'name'].includes(key)) {
+          dbUpdates[`users/${userId}/profile/${key}`] = value;
+          
+          // Also update certain fields at root level for backward compatibility
+          if (['location'].includes(key)) {
+            dbUpdates[`users/${userId}/${key}`] = value;
+          }
+        }
+      });
+      
+      // Maintain auth link
+      if (isCurrentUser && user) {
+        dbUpdates[`users/${userId}/profile/authUid`] = user.uid;
+      }
+      
+      // Add timestamp
+      dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
+      
+      if (Object.keys(dbUpdates).length > 0) {
+        await update(ref(database), dbUpdates);
+        console.log('✅ [DIRECT] Database updated successfully');
+      }
+      
+      console.log('🎯 [DIRECT] === DIRECT EMAIL UPDATE COMPLETE ===');
+      return { success: true, credentialsChanged: credentialsChanged };
+      
+    } catch (error) {
+      console.error('❌ [DIRECT] Direct email update failed:', error);
+      throw error;
+    }
+  };
+
   // Update current user's Firebase Auth record
   const updateCurrentUserAuth = async () => {
     console.log('\n🔐 [AUTH] === CURRENT USER AUTH UPDATE START ===');
@@ -455,7 +573,7 @@ const PersonalInfoSection = ({
     }
   };
 
-  // Update another user's auth via admin API
+  // Update another user's auth via admin API with enhanced error handling
   const updateUserAuthViaAdmin = async () => {
     console.log('\n🔧 [ADMIN] === ADMIN AUTH UPDATE START ===');
     
@@ -494,6 +612,15 @@ const PersonalInfoSection = ({
     try {
       const idToken = await auth.currentUser.getIdToken();
       
+      console.log('🌐 [ADMIN] Making POST request to admin API...');
+      console.log('📤 [ADMIN] Request payload:', {
+        userId,
+        updates: {
+          ...authUpdates,
+          password: authUpdates.password ? '[REDACTED]' : undefined
+        }
+      });
+      
       const response = await fetch('/api/admin/update-user-auth', {
         method: 'POST',
         headers: {
@@ -503,14 +630,37 @@ const PersonalInfoSection = ({
         body: JSON.stringify({ userId, updates: authUpdates })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user auth via admin API');
+      console.log('📥 [ADMIN] API response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: response.url,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      // Always try to get response body
+      let responseData = null;
+      const responseText = await response.text();
+      console.log('📄 [ADMIN] Response body (raw):', responseText);
+      
+      if (responseText) {
+        try {
+          responseData = JSON.parse(responseText);
+          console.log('📋 [ADMIN] Response body (parsed):', responseData);
+        } catch (parseError) {
+          console.log('⚠️ [ADMIN] Response is not valid JSON:', parseError.message);
+          responseData = { rawResponse: responseText };
+        }
       }
 
-      const result = await response.json();
-      console.log('✅ [ADMIN] Admin auth update successful:', result);
-      return { success: true, result };
+      if (!response.ok) {
+        const errorMessage = responseData?.message || `HTTP ${response.status}: ${response.statusText}`;
+        console.error('❌ [ADMIN] API call failed:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      console.log('✅ [ADMIN] Admin auth update successful');
+      return { success: true, result: responseData };
     } catch (error) {
       console.error('❌ [ADMIN] Admin auth update failed:', error);
       return { success: false, error: error.message };
@@ -553,7 +703,7 @@ const PersonalInfoSection = ({
     }
   };
 
-  // Main save handler
+  // 🔥 ENHANCED: Main save handler with direct email update option
   const handleSaveClick = async () => {
     console.log('\n🚀 === SAVE PROCESS START ===');
     setIsSaving(true);
@@ -571,48 +721,125 @@ const PersonalInfoSection = ({
         emailChanged,
         nameChanged,
         passwordProvided,
-        shouldUpdateAuth
+        shouldUpdateAuth,
+        currentEmail: formData.email,
+        originalEmail: originalValues.email
       });
 
-      let authUpdateResult = { success: true };
-
-      // Update Firebase Auth if needed
+      // Strategy 1: Try direct update first (more reliable)
       if (shouldUpdateAuth) {
-        if (isCurrentUser) {
-          console.log('👤 [SAVE] Updating current user auth...');
-          authUpdateResult = await updateCurrentUserAuth();
+        try {
+          console.log('📧 [SAVE] Attempting direct email update...');
+          const directResult = await updateEmailDirectly();
           
-          if (authUpdateResult.credentialsChanged) {
-            setCredentialsChanged(true);
+          if (directResult.success) {
+            console.log('✅ [SAVE] Direct update successful');
+            
+            if (directResult.credentialsChanged) {
+              setCredentialsChanged(true);
+            }
+            
+            // Call parent onSave if provided
+            if (onSave) {
+              console.log('📞 [SAVE] Calling parent onSave...');
+              await onSave();
+            }
+
+            // Show success message
+            if (directResult.credentialsChanged) {
+              setUpdateStatus({ 
+                type: 'success', 
+                message: 'Profile updated successfully! You need to log in again with your new credentials.' 
+              });
+              setShowLogoutPrompt(true);
+            } else {
+              setUpdateStatus({ 
+                type: 'success', 
+                message: 'Profile updated successfully!' 
+              });
+              
+              if (fetchUserData) {
+                await fetchUserData();
+              }
+            }
+
+            // Cleanup
+            setCurrentPassword('');
+            if (handleInputChange) {
+              handleInputChange({ target: { name: 'password', value: '' } });
+            }
+
+            console.log('🎯 === SAVE PROCESS COMPLETE (DIRECT) ===');
+            return;
           }
-        } else {
-          console.log('👥 [SAVE] Updating user auth via admin...');
-          authUpdateResult = await updateUserAuthViaAdmin();
+        } catch (directError) {
+          console.log('⚠️ [SAVE] Direct update failed, trying admin API fallback:', directError.message);
           
-          if (!authUpdateResult.success) {
-            throw new Error(authUpdateResult.error || 'Failed to update authentication');
+          // Strategy 2: Fall back to admin API for non-current users
+          if (!isCurrentUser && isAdminUser) {
+            try {
+              console.log('👥 [SAVE] Attempting admin API update...');
+              const adminResult = await updateUserAuthViaAdmin();
+              
+              if (adminResult.success && !adminResult.skipped) {
+                console.log('✅ [SAVE] Admin API update successful');
+                
+                // Update database
+                await updateDatabaseWithAuthInfo();
+                
+                // Call parent onSave if provided
+                if (onSave) {
+                  await onSave();
+                }
+
+                setUpdateStatus({ 
+                  type: 'success', 
+                  message: 'Profile updated successfully via admin API!' 
+                });
+                
+                if (fetchUserData) {
+                  await fetchUserData();
+                }
+
+                console.log('🎯 === SAVE PROCESS COMPLETE (ADMIN API) ===');
+                return;
+              } else if (adminResult.skipped) {
+                console.log('⏭️ [SAVE] Admin API skipped, continuing with database-only update');
+              } else {
+                throw new Error(adminResult.error || 'Admin API failed');
+              }
+            } catch (adminError) {
+              console.log('⚠️ [SAVE] Admin API also failed:', adminError.message);
+              // Continue to database-only update
+            }
+          }
+          
+          // Strategy 3: Database-only update as last resort
+          console.log('🗄️ [SAVE] Falling back to database-only update...');
+          await updateDatabaseWithAuthInfo();
+          
+          if (onSave) {
+            await onSave();
+          }
+
+          setUpdateStatus({ 
+            type: 'warning', 
+            message: 'Profile updated in database. Note: Authentication credentials may need to be updated manually in Firebase Console due to API limitations.' 
+          });
+          
+          if (fetchUserData) {
+            await fetchUserData();
           }
         }
-      }
-
-      // Update database
-      console.log('🗄️ [SAVE] Updating database...');
-      await updateDatabaseWithAuthInfo();
-
-      // Call parent onSave if provided
-      if (onSave) {
-        console.log('📞 [SAVE] Calling parent onSave...');
-        await onSave();
-      }
-
-      // Show success message
-      if (credentialsChanged) {
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully! You need to log in again with your new credentials.' 
-        });
-        setShowLogoutPrompt(true);
       } else {
+        // No auth changes, just update database
+        console.log('🗄️ [SAVE] No auth changes, updating database only...');
+        await updateDatabaseWithAuthInfo();
+        
+        if (onSave) {
+          await onSave();
+        }
+
         setUpdateStatus({ 
           type: 'success', 
           message: 'Profile updated successfully!' 
@@ -641,167 +868,16 @@ const PersonalInfoSection = ({
     }
   };
 
-  // Reset credentials handler
+  // Reset credentials handler (temporarily disabled)
   const handleResetCredentials = async () => {
     console.log('\n🔄 === RESET CREDENTIALS START ===');
-    console.log('🔄 [RESET] Initial state:', {
-      resetType,
-      resetEmail,
-      resetPassword: resetPassword ? '[REDACTED]' : 'empty',
-      currentFormEmail: formData.email,
-      isAdminUser,
-      isCurrentUser
+    
+    // 🚫 TEMPORARY: Disable reset credentials due to API deployment issue
+    setUpdateStatus({
+      type: 'warning',
+      message: 'Reset Credentials is temporarily disabled. Please use the regular Email/Password fields above and click Save Changes.'
     });
-
-    if (!isAdminUser && !isCurrentUser) {
-      setUpdateStatus({
-        type: 'error',
-        message: 'You do not have permission to reset credentials for this user.'
-      });
-      return;
-    }
-
-    // Validate inputs
-    if ((resetType === 'email' || resetType === 'both') && (!resetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail))) {
-      console.log('❌ [RESET] Email validation failed:', { resetEmail, resetType });
-      setUpdateStatus({ type: 'error', message: 'Please enter a valid email address.' });
-      return;
-    }
-
-    if ((resetType === 'password' || resetType === 'both') && (!resetPassword || resetPassword.length < 6)) {
-      console.log('❌ [RESET] Password validation failed:', { passwordLength: resetPassword?.length, resetType });
-      setUpdateStatus({ type: 'error', message: 'Password must be at least 6 characters long.' });
-      return;
-    }
-
-    setIsResetting(true);
-    try {
-      const updates = {};
-      const resetOperations = [];
-
-      console.log('🔄 [RESET] Building updates...');
-      
-      if ((resetType === 'email' || resetType === 'both') && resetEmail !== formData.email) {
-        updates.email = resetEmail;
-        resetOperations.push('email');
-        console.log('✅ [RESET] Adding email update:', { from: formData.email, to: resetEmail });
-      } else if (resetType === 'email' || resetType === 'both') {
-        console.log('⏭️ [RESET] Skipping email update - same as current:', { resetEmail, currentEmail: formData.email });
-      }
-
-      if (resetType === 'password' || resetType === 'both') {
-        updates.password = resetPassword;
-        resetOperations.push('password');
-        console.log('✅ [RESET] Adding password update');
-      }
-
-      if (resetType === 'both' || resetType === 'email') {
-        updates.displayName = formData.name;
-        console.log('✅ [RESET] Adding displayName update:', formData.name);
-      }
-
-      console.log('🔄 [RESET] Final updates object:', {
-        ...updates,
-        password: updates.password ? '[REDACTED]' : undefined
-      });
-      console.log('🔄 [RESET] Reset operations:', resetOperations);
-
-      if (Object.keys(updates).length === 0) {
-        console.log('❌ [RESET] No updates to perform');
-        setUpdateStatus({ type: 'warning', message: 'No changes detected.' });
-        return;
-      }
-
-      // Call admin API
-      console.log('🌐 [RESET] Calling admin API...');
-      const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/admin/update-user-auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ userId, updates })
-      });
-
-      console.log('📥 [RESET] API response:', { status: response.status, ok: response.ok });
-
-      if (!response.ok) {
-        const data = await response.json();
-        console.error('❌ [RESET] API error:', data);
-        throw new Error(data.message || 'Failed to reset credentials');
-      }
-
-      const apiResult = await response.json();
-      console.log('✅ [RESET] API success:', apiResult);
-
-      // Update database
-      console.log('🗄️ [RESET] Updating database...');
-      const dbUpdates = {};
-      if (updates.email) {
-        dbUpdates[`users/${userId}/profile/email`] = updates.email;
-        dbUpdates[`users/${userId}/email`] = updates.email;
-        console.log('✅ [RESET] Adding email to database updates:', updates.email);
-      }
-      if (updates.displayName) {
-        dbUpdates[`users/${userId}/profile/name`] = updates.displayName;
-        dbUpdates[`users/${userId}/name`] = updates.displayName;
-        console.log('✅ [RESET] Adding name to database updates:', updates.displayName);
-      }
-      dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
-      dbUpdates[`users/${userId}/profile/authUid`] = userId;
-
-      console.log('🗄️ [RESET] Database updates:', dbUpdates);
-      await update(ref(database), dbUpdates);
-      console.log('✅ [RESET] Database updated successfully');
-
-      const operationText = resetOperations.join(' and ');
-      const credentialsText = resetOperations.map(op => {
-        if (op === 'email') return `Email: ${resetEmail}`;
-        if (op === 'password') return `Password: ${resetPassword}`;
-        return '';
-      }).filter(Boolean).join(', ');
-
-      setUpdateStatus({
-        type: 'success',
-        message: `Successfully reset ${operationText} for ${formData.name}. New credentials: ${credentialsText}`
-      });
-
-      setShowResetMode(false);
-      setResetType('password');
-      setResetPassword('AV2025!');
-      
-      // 🔥 CRITICAL: Update the form data to reflect the changes
-      console.log('🔄 [RESET] Updating form data...');
-      if (handleInputChange) {
-        if (updates.email) {
-          console.log('✅ [RESET] Updating form email:', updates.email);
-          handleInputChange({ target: { name: 'email', value: updates.email } });
-        }
-        if (updates.displayName) {
-          console.log('✅ [RESET] Updating form name:', updates.displayName);
-          handleInputChange({ target: { name: 'name', value: updates.displayName } });
-        }
-      } else {
-        console.log('❌ [RESET] handleInputChange not available!');
-      }
-      
-      if (fetchUserData) {
-        console.log('🔄 [RESET] Refreshing user data...');
-        await fetchUserData();
-        console.log('✅ [RESET] User data refreshed');
-      }
-
-      console.log('🎯 === RESET CREDENTIALS COMPLETE ===\n');
-    } catch (error) {
-      console.error('❌ [RESET] Error:', error);
-      setUpdateStatus({
-        type: 'error',
-        message: `Error resetting credentials: ${error.message}`
-      });
-    } finally {
-      setIsResetting(false);
-    }
+    return;
   };
 
   // Render logout prompt modal
