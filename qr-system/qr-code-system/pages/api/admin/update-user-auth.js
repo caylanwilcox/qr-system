@@ -1,4 +1,4 @@
-// api/admin/update-user-auth.js
+//pages/api/admin/update-user-auth.js
 // Enhanced debug version with comprehensive logging
 
 import admin from 'firebase-admin';
