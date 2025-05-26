@@ -529,200 +529,157 @@ const PersonalInfoSection = ({
     }
   };
 
-  // Update Firebase Auth for current user
-  const updateAuthUser = async () => {
-    if (!auth.currentUser) {
-      throw new Error('Not authenticated');
-    }
-    
-    // Authenticate user if required
-    if (needsAuthentication()) {
-      if (!currentPassword) {
-        throw new Error('Current password is required to update email or password');
-      }
-      
-      try {
-        const credential = EmailAuthProvider.credential(
-          auth.currentUser.email,
-          currentPassword
-        );
-        await reauthenticateWithCredential(auth.currentUser, credential);
-      } catch (error) {
-        if (error.code === 'auth/wrong-password') {
-          throw new Error('Current password is incorrect');
-        } else {
-          throw error;
-        }
-      }
-    }
-    
-    // Update the user profile
-    const updates = [];
-    let credChanged = false;
-    
-    // Update display name if changed
-    if (formData.name && formData.name !== auth.currentUser.displayName) {
-      updates.push(updateProfile(auth.currentUser, {
-        displayName: formData.name
-      }));
-    }
-    
-    // Update email if changed
-    if (formData.email && formData.email !== auth.currentUser.email) {
-      updates.push(updateEmail(auth.currentUser, formData.email));
-      credChanged = true;
-    }
-    
-    // Update password if provided
-    if (formData.password && formData.password.trim() !== '') {
-      updates.push(updatePassword(auth.currentUser, formData.password));
-      credChanged = true;
-    }
-    
-    // Execute all updates
-    if (updates.length > 0) {
-      await Promise.all(updates);
-    }
-    
-    return { success: true, credentialsChanged: credChanged };
-  };
+// Enhanced updateUserAuthViaAdmin with more detailed logging
+const updateUserAuthViaAdmin = async () => {
+  console.log('\n🔧 [ADMIN UPDATE] === ADMIN AUTH UPDATE START ===');
+  console.log('🔧 [ADMIN UPDATE] Permissions check:', {
+    isCurrentUser,
+    isAdminUser,
+    userId,
+    shouldCallAdminAPI: !isCurrentUser && isAdminUser
+  });
+  
+  // VALIDATION: Only proceed if this is an admin editing another user
+  if (isCurrentUser) {
+    console.log('❌ [ADMIN UPDATE] Aborting - this is current user (should use updateAuthUser instead)');
+    return { success: true, skipped: 'current_user' };
+  }
+  
+  if (!isAdminUser) {
+    console.log('❌ [ADMIN UPDATE] Aborting - current user is not admin');
+    console.log('❌ [ADMIN UPDATE] This will cause auth update to be silently skipped!');
+    return { 
+      success: false, 
+      error: 'Current user does not have admin privileges. Pass isAdminUser={true} prop if user should have admin access.' 
+    };
+  }
 
-  // 🔥 FIXED: Update Firebase Auth admin API for other users
-  const updateUserAuthViaAdmin = async () => {
-    console.log('🔧 [ADMIN UPDATE] Starting admin authentication update...');
-    console.log('🔧 [ADMIN UPDATE] Permissions check:', {
-      isCurrentUser,
-      isAdminUser,
-      userId,
-      shouldCallAdminAPI: !isCurrentUser && isAdminUser
+  try {
+    // Only call admin API if we have auth-related updates
+    const authUpdates = {};
+    
+    console.log('🔧 [ADMIN UPDATE] Form data analysis:');
+    console.log('🔧 [ADMIN UPDATE] - formData keys:', Object.keys(formData));
+    console.log('🔧 [ADMIN UPDATE] - formData.name:', formData.name);
+    console.log('🔧 [ADMIN UPDATE] - formData.email:', formData.email);
+    console.log('🔧 [ADMIN UPDATE] - formData.password length:', formData.password ? formData.password.length : 0);
+    console.log('🔧 [ADMIN UPDATE] - originalValues:', originalValues);
+    
+    // Check for displayName changes
+    if (formData.name && formData.name !== originalValues.name) {
+      authUpdates.displayName = formData.name;
+      console.log('✅ [ADMIN UPDATE] Adding displayName update:', formData.name);
+    } else {
+      console.log('⏭️ [ADMIN UPDATE] Skipping displayName (no change or empty)');
+    }
+    
+    // Check for email changes
+    if (formData.email && formData.email !== originalValues.email) {
+      authUpdates.email = formData.email;
+      console.log('✅ [ADMIN UPDATE] Adding email update:', formData.email);
+    } else {
+      console.log('⏭️ [ADMIN UPDATE] Skipping email (no change or empty)');
+    }
+    
+    // Password checking
+    console.log('🔑 [ADMIN UPDATE] Password analysis:');
+    console.log('🔑 [ADMIN UPDATE] - Raw password:', formData.password ? '[HAS VALUE]' : '[EMPTY]');
+    console.log('🔑 [ADMIN UPDATE] - After trim:', formData.password ? `"${formData.password.trim()}"` : '[EMPTY]');
+    console.log('🔑 [ADMIN UPDATE] - Trim length:', formData.password ? formData.password.trim().length : 0);
+    
+    if (formData.password && formData.password.trim() !== '') {
+      authUpdates.password = formData.password.trim();
+      console.log('✅ [ADMIN UPDATE] Adding password update, length:', authUpdates.password.length);
+    } else {
+      console.log('⏭️ [ADMIN UPDATE] Skipping password (empty or whitespace)');
+    }
+    
+    console.log('🔧 [ADMIN UPDATE] Final authUpdates object:');
+    console.log('🔧 [ADMIN UPDATE] - Keys:', Object.keys(authUpdates));
+    console.log('🔧 [ADMIN UPDATE] - Full object:', {
+      ...authUpdates,
+      password: authUpdates.password ? `[${authUpdates.password.length} chars]` : undefined
     });
     
-    // 🔥 CRITICAL: Validate permissions first
-    if (isCurrentUser) {
-      console.log('❌ [ADMIN UPDATE] Skipping - this is current user (should use updateAuthUser instead)');
-      return { success: true, skipped: 'current_user' };
+    // If no auth updates needed, skip this step
+    if (Object.keys(authUpdates).length === 0) {
+      console.log('❌ [ADMIN UPDATE] NO AUTH UPDATES - No changes detected');
+      console.log('❌ [ADMIN UPDATE] This usually means the form values are the same as original values');
+      return { success: true, skipped: 'no_changes' };
     }
     
-    if (!isAdminUser) {
-      console.log('❌ [ADMIN UPDATE] Skipping - current user is not admin');
-      console.log('❌ [ADMIN UPDATE] This will cause auth update to be silently skipped!');
-      return { 
-        success: false, 
-        error: 'Current user does not have admin privileges. Pass isAdminUser={true} prop if user should have admin access.' 
-      };
-    }
-
-    try {
-      // Only call admin API if we have auth-related updates
-      const authUpdates = {};
-      
-      console.log('🔧 [ADMIN UPDATE] === PASSWORD UPDATE VERIFICATION ===');
-      console.log('🔧 [ADMIN UPDATE] Form data inspection:');
-      console.log('🔧 [ADMIN UPDATE] - formData object:', formData);
-      console.log('🔧 [ADMIN UPDATE] - formData.password exists:', 'password' in formData);
-      console.log('🔧 [ADMIN UPDATE] - formData.password value:', formData.password);
-      console.log('🔧 [ADMIN UPDATE] - formData.password type:', typeof formData.password);
-      console.log('🔧 [ADMIN UPDATE] - formData.password length:', formData.password ? formData.password.length : 'N/A');
-      console.log('🔧 [ADMIN UPDATE] - formData.password truthy:', !!formData.password);
-      console.log('🔧 [ADMIN UPDATE] - formData.password after trim:', formData.password ? `"${formData.password.trim()}"` : 'N/A');
-      console.log('🔧 [ADMIN UPDATE] - All form data keys:', Object.keys(formData));
-      
-      // Check for displayName changes
-      if (formData.name && formData.name !== originalValues.name) {
-        authUpdates.displayName = formData.name;
-        console.log('✅ [ADMIN UPDATE] Adding displayName update:', formData.name);
-      }
-      
-      // Check for email changes
-      if (formData.email && formData.email !== originalValues.email) {
-        authUpdates.email = formData.email;
-        console.log('✅ [ADMIN UPDATE] Adding email update:', formData.email);
-      }
-      
-      // 🔥 CRITICAL: Enhanced password checking
-      console.log('🔑 [ADMIN UPDATE] Password update check:');
-      console.log('🔑 [ADMIN UPDATE] - Has password field:', !!formData.password);
-      console.log('🔑 [ADMIN UPDATE] - Password after trim:', formData.password ? `"${formData.password.trim()}"` : 'EMPTY');
-      console.log('🔑 [ADMIN UPDATE] - Trim length > 0:', formData.password ? formData.password.trim().length > 0 : false);
-      
-      if (formData.password && formData.password.trim() !== '') {
-        authUpdates.password = formData.password.trim();
-        console.log('✅ [ADMIN UPDATE] Password will be updated! Length:', authUpdates.password.length);
-        console.log('✅ [ADMIN UPDATE] Password preview:', authUpdates.password.substring(0, 3) + '***');
-      } else {
-        console.log('❌ [ADMIN UPDATE] Password will NOT be updated - field is empty or only whitespace');
-      }
-      
-      console.log('🔧 [ADMIN UPDATE] Final authUpdates object:');
-      console.log('🔧 [ADMIN UPDATE] - Object keys:', Object.keys(authUpdates));
-      console.log('🔧 [ADMIN UPDATE] - Has password key:', 'password' in authUpdates);
-      console.log('🔧 [ADMIN UPDATE] - authUpdates:', {
+    // Get the current user's ID token
+    console.log('🎫 [ADMIN UPDATE] Getting ID token...');
+    const idToken = await auth.currentUser.getIdToken();
+    console.log('🎫 [ADMIN UPDATE] ID token obtained, length:', idToken.length);
+    
+    // Prepare the request payload
+    const requestPayload = {
+      userId,
+      updates: authUpdates
+    };
+    
+    console.log('📤 [ADMIN UPDATE] API Request Details:');
+    console.log('📤 [ADMIN UPDATE] - URL: /api/admin/update-user-auth');
+    console.log('📤 [ADMIN UPDATE] - Method: POST');
+    console.log('📤 [ADMIN UPDATE] - Payload:', JSON.stringify({
+      userId,
+      updates: {
         ...authUpdates,
-        password: authUpdates.password ? `[${authUpdates.password.length} chars]` : undefined
-      });
-      
-      // If no auth updates needed, skip this step
-      if (Object.keys(authUpdates).length === 0) {
-        console.log('❌ [ADMIN UPDATE] NO AUTH UPDATES - Skipping admin API call');
-        console.log('❌ [ADMIN UPDATE] This means no password/email changes detected!');
-        return { success: true, skipped: 'no_changes' };
+        password: authUpdates.password ? '[REDACTED]' : undefined
       }
-      
-      // Get the current user's ID token
-      console.log('🎫 [ADMIN UPDATE] Getting ID token...');
-      const idToken = await auth.currentUser.getIdToken();
-      console.log('🎫 [ADMIN UPDATE] ID token obtained, length:', idToken.length);
-      
-      // Prepare the request payload
-      const requestPayload = {
-        userId,
-        updates: authUpdates
-      };
-      
-      console.log('📤 [ADMIN UPDATE] SENDING TO ADMIN API:');
-      console.log('📤 [ADMIN UPDATE] Request payload:', JSON.stringify(requestPayload, null, 2));
-      console.log('📤 [ADMIN UPDATE] Updates include password:', 'password' in requestPayload.updates);
-      
-      // Call the admin API
-      const response = await fetch('/api/admin/update-user-auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify(requestPayload)
-      });
-      
-      console.log('📥 [ADMIN UPDATE] Response status:', response.status);
-      console.log('📥 [ADMIN UPDATE] Response ok:', response.ok);
-      
-      if (!response.ok) {
-        const data = await response.json();
-        console.error('❌ [ADMIN UPDATE] API error response:', data);
-        throw new Error(data.message || 'Failed to update user authentication');
-      }
-      
-      const result = await response.json();
-      console.log('✅ [ADMIN UPDATE] Admin auth update successful:', result);
-      
-      // 🔥 IMPORTANT: Show login credentials if password was updated
-      if (authUpdates.password) {
-        console.log('🔑 [ADMIN UPDATE] NEW PASSWORD FOR LOGIN:', authUpdates.password);
-        console.log('🔑 [ADMIN UPDATE] User should login with:');
-        console.log('🔑 [ADMIN UPDATE] - Email:', authUpdates.email || formData.email);
-        console.log('🔑 [ADMIN UPDATE] - Password:', authUpdates.password);
-      }
-      
-      return { success: true, result };
-    } catch (error) {
-      console.error('❌ [ADMIN UPDATE] Admin update failed:', error);
-      
-      // Don't throw error for admin updates - continue with database update
-      // This allows the profile to be updated even if auth update fails
-      console.warn('⚠️ [ADMIN UPDATE] Continuing with database update despite auth update failure');
-      return { success: false, error: error.message };
+    }, null, 2));
+    
+    // Call the admin API
+    console.log('🌐 [ADMIN UPDATE] Making API call...');
+    const response = await fetch('/api/admin/update-user-auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(requestPayload)
+    });
+    
+    console.log('📥 [ADMIN UPDATE] Response received:');
+    console.log('📥 [ADMIN UPDATE] - Status:', response.status);
+    console.log('📥 [ADMIN UPDATE] - Status Text:', response.statusText);
+    console.log('📥 [ADMIN UPDATE] - OK:', response.ok);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('❌ [ADMIN UPDATE] API error response:', errorData);
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
     }
-  };
+    
+    const result = await response.json();
+    console.log('✅ [ADMIN UPDATE] API success response:', result);
+    
+    // Log the new credentials for testing
+    if (authUpdates.password || authUpdates.email) {
+      console.log('🔑 [ADMIN UPDATE] NEW LOGIN CREDENTIALS:');
+      console.log('🔑 [ADMIN UPDATE] - Email:', authUpdates.email || 'unchanged');
+      console.log('🔑 [ADMIN UPDATE] - Password:', authUpdates.password || 'unchanged');
+      if (authUpdates.password) {
+        console.log('🔑 [ADMIN UPDATE] - Try logging in with these exact credentials!');
+      }
+    }
+    
+    console.log('🎯 [ADMIN UPDATE] === ADMIN AUTH UPDATE COMPLETE ===\n');
+    
+    return { success: true, result };
+  } catch (error) {
+    console.error('💥 [ADMIN UPDATE] Fatal error:', error);
+    console.error('💥 [ADMIN UPDATE] Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // Don't throw error for admin updates - continue with database update
+    console.warn('⚠️ [ADMIN UPDATE] Continuing with database update despite auth update failure');
+    return { success: false, error: error.message };
+  }
+};
 
   // Update the database with correct auth info
   const updateDatabaseWithAuthInfo = async () => {
@@ -762,34 +719,69 @@ const PersonalInfoSection = ({
   };
 
   // 🔥 FIXED: Handle save button click with proper error handling
-  const handleSaveClick = async () => {
-    try {
-      setIsSaving(true);
-      setUpdateStatus(null);
-      setCredentialsChanged(false);
-      
-      console.log('💾 [SAVE] Starting save process...');
-      console.log('💾 [SAVE] User permissions:', { isCurrentUser, isAdminUser });
-      console.log('💾 [SAVE] Form data check:', {
-        hasEmail: !!formData.email,
-        hasName: !!formData.name,
-        hasPassword: !!formData.password,
-        passwordLength: formData.password ? formData.password.length : 0
-      });
-      
-      let authUpdateResult = { success: true };
-      
-      // Step 1: Update Firebase Auth if necessary
+ // Enhanced handleSaveClick with comprehensive debugging
+// Replace your existing handleSaveClick function with this version
+
+const handleSaveClick = async () => {
+  try {
+    console.log('\n🚀 === SAVE PROCESS START ===');
+    setIsSaving(true);
+    setUpdateStatus(null);
+    setCredentialsChanged(false);
+    
+    // 🔍 STEP 1: Log initial state
+    console.log('💾 [SAVE] Step 1: Initial State Check');
+    console.log('💾 [SAVE] User permissions:', { isCurrentUser, isAdminUser });
+    console.log('💾 [SAVE] Form data:', {
+      hasEmail: !!formData.email,
+      emailValue: formData.email,
+      hasName: !!formData.name,
+      nameValue: formData.name,
+      hasPassword: !!formData.password,
+      passwordLength: formData.password ? formData.password.length : 0,
+      passwordPreview: formData.password ? formData.password.substring(0, 3) + '***' : 'empty'
+    });
+    console.log('💾 [SAVE] Original values:', originalValues);
+    console.log('💾 [SAVE] Employee ID:', userId);
+    
+    // 🔍 STEP 2: Check what changes will be made
+    const emailChanged = formData.email && formData.email !== originalValues.email;
+    const nameChanged = formData.name && formData.name !== originalValues.name;
+    const passwordProvided = formData.password && formData.password.trim() !== '';
+    
+    console.log('💾 [SAVE] Step 2: Change Detection');
+    console.log('💾 [SAVE] Changes detected:', {
+      emailChanged,
+      emailFrom: originalValues.email,
+      emailTo: formData.email,
+      nameChanged,
+      nameFrom: originalValues.name,
+      nameTo: formData.name,
+      passwordProvided,
+      passwordLength: passwordProvided ? formData.password.length : 0
+    });
+    
+    // 🔍 STEP 3: Determine auth update path
+    const shouldUpdateAuth = emailChanged || nameChanged || passwordProvided;
+    console.log('💾 [SAVE] Step 3: Auth Update Decision');
+    console.log('💾 [SAVE] Should update auth:', shouldUpdateAuth);
+    console.log('💾 [SAVE] Update path:', isCurrentUser ? 'Current User (direct)' : 'Admin API');
+    
+    let authUpdateResult = { success: true };
+    
+    // Step 4: Update Firebase Auth if necessary
+    if (shouldUpdateAuth) {
       if (isCurrentUser) {
         try {
-          console.log('👤 [SAVE] Updating auth for current user...');
+          console.log('👤 [SAVE] Step 4a: Current User Auth Update');
           // Update authentication for current user
           const authResult = await updateAuthUser();
+          console.log('👤 [SAVE] Current user auth result:', authResult);
           if (authResult.credentialsChanged) {
             setCredentialsChanged(true);
           }
         } catch (error) {
-          console.error("❌ [SAVE] Auth update error:", error);
+          console.error("❌ [SAVE] Current user auth error:", error);
           setUpdateStatus({ 
             type: 'error', 
             message: `Authentication error: ${error.message}` 
@@ -798,9 +790,11 @@ const PersonalInfoSection = ({
           return;
         }
       } else {
-        console.log('👥 [SAVE] Updating auth for other user via admin API...');
+        console.log('👥 [SAVE] Step 4b: Admin Auth Update');
         // Admin updating another user's auth
         authUpdateResult = await updateUserAuthViaAdmin();
+        
+        console.log('👥 [SAVE] Admin auth update result:', authUpdateResult);
         
         if (!authUpdateResult.success) {
           console.warn('⚠️ [SAVE] Admin auth update failed:', authUpdateResult.error);
@@ -812,75 +806,98 @@ const PersonalInfoSection = ({
         } else if (authUpdateResult.skipped) {
           console.log('ℹ️ [SAVE] Admin auth update skipped:', authUpdateResult.skipped);
           if (authUpdateResult.skipped === 'no_changes') {
-            console.log('ℹ️ [SAVE] No authentication changes to apply');
+            console.log('ℹ️ [SAVE] No authentication changes detected');
           }
+        } else {
+          console.log('✅ [SAVE] Admin auth update successful');
         }
       }
-      
-      // Step 2: Update the database
-      console.log('🗄️ [SAVE] Updating database...');
-      await updateDatabaseWithAuthInfo();
-      
-      // Step 3: Call parent onSave if provided
-      if (onSave) {
-        console.log('📞 [SAVE] Calling parent onSave...');
-        await onSave();
-      }
-      
-      // Step 4: Update state and show feedback
-      if (credentialsChanged) {
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully! You need to log in again with your new credentials.' 
-        });
-        setShowLogoutPrompt(true);
-      } else if (authUpdateResult.success && !authUpdateResult.skipped) {
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully!' 
-        });
-        
-        // If a fetchUserData function was provided, refresh the user data
-        if (fetchUserData) {
-          await fetchUserData();
-        }
-      } else if (authUpdateResult.skipped) {
-        setUpdateStatus({ 
-          type: 'success', 
-          message: 'Profile updated successfully!' 
-        });
-        
-        if (fetchUserData) {
-          await fetchUserData();
-        }
-      }
-      // If there was a warning, we already set it above
-      
-      // Clear sensitive data
-      setCurrentPassword('');
-      
-      // Clear the password field from form data after successful save
-      if (handleInputChange) {
-        const clearPasswordEvent = {
-          target: {
-            name: 'password',
-            value: ''
-          }
-        };
-        handleInputChange(clearPasswordEvent);
-      }
-      console.log('🧹 [SAVE] Cleared password field from form');
-      
-    } catch (error) {
-      console.error("❌ [SAVE] Error saving profile:", error);
-      setUpdateStatus({ 
-        type: 'error', 
-        message: `Error updating profile: ${error.message}` 
-      });
-    } finally {
-      setIsSaving(false);
+    } else {
+      console.log('⏭️ [SAVE] Step 4: Skipping auth update (no changes)');
     }
-  };
+    
+    // Step 5: Update the database
+    console.log('🗄️ [SAVE] Step 5: Database Update');
+    await updateDatabaseWithAuthInfo();
+    console.log('✅ [SAVE] Database update completed');
+    
+    // Step 6: Call parent onSave if provided
+    if (onSave) {
+      console.log('📞 [SAVE] Step 6: Parent onSave callback');
+      await onSave();
+      console.log('✅ [SAVE] Parent onSave completed');
+    } else {
+      console.log('⏭️ [SAVE] Step 6: No parent onSave callback');
+    }
+    
+    // Step 7: Update state and show feedback
+    console.log('🎉 [SAVE] Step 7: Success Handling');
+    if (credentialsChanged) {
+      console.log('🔑 [SAVE] Credentials changed - logout required');
+      setUpdateStatus({ 
+        type: 'success', 
+        message: 'Profile updated successfully! You need to log in again with your new credentials.' 
+      });
+      setShowLogoutPrompt(true);
+    } else if (authUpdateResult.success && !authUpdateResult.skipped) {
+      console.log('✅ [SAVE] Auth and profile updated successfully');
+      setUpdateStatus({ 
+        type: 'success', 
+        message: 'Profile updated successfully!' 
+      });
+      
+      // If a fetchUserData function was provided, refresh the user data
+      if (fetchUserData) {
+        console.log('🔄 [SAVE] Refreshing user data...');
+        await fetchUserData();
+        console.log('✅ [SAVE] User data refreshed');
+      }
+    } else if (authUpdateResult.skipped) {
+      console.log('✅ [SAVE] Profile updated (auth skipped)');
+      setUpdateStatus({ 
+        type: 'success', 
+        message: 'Profile updated successfully!' 
+      });
+      
+      if (fetchUserData) {
+        await fetchUserData();
+      }
+    }
+    
+    // Step 8: Cleanup
+    console.log('🧹 [SAVE] Step 8: Cleanup');
+    // Clear sensitive data
+    setCurrentPassword('');
+    
+    // Clear the password field from form data after successful save
+    if (handleInputChange) {
+      const clearPasswordEvent = {
+        target: {
+          name: 'password',
+          value: ''
+        }
+      };
+      handleInputChange(clearPasswordEvent);
+      console.log('🧹 [SAVE] Password field cleared');
+    }
+    
+    console.log('🎯 === SAVE PROCESS COMPLETE ===\n');
+    
+  } catch (error) {
+    console.error("💥 [SAVE] Fatal error:", error);
+    console.error("💥 [SAVE] Error stack:", error.stack);
+    setUpdateStatus({ 
+      type: 'error', 
+      message: `Error updating profile: ${error.message}` 
+    });
+  } finally {
+    setIsSaving(false);
+    console.log('🏁 [SAVE] Save process finished (finally block)');
+  }
+};
+
+// Enhanced updateUserAuthViaAdmin with more detailed logging
+
 
   // Render logout prompt modal
   const renderLogoutPrompt = () => {
