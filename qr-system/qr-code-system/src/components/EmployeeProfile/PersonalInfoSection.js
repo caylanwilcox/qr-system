@@ -643,6 +643,16 @@ const PersonalInfoSection = ({
 
   // Reset credentials handler
   const handleResetCredentials = async () => {
+    console.log('\n🔄 === RESET CREDENTIALS START ===');
+    console.log('🔄 [RESET] Initial state:', {
+      resetType,
+      resetEmail,
+      resetPassword: resetPassword ? '[REDACTED]' : 'empty',
+      currentFormEmail: formData.email,
+      isAdminUser,
+      isCurrentUser
+    });
+
     if (!isAdminUser && !isCurrentUser) {
       setUpdateStatus({
         type: 'error',
@@ -653,11 +663,13 @@ const PersonalInfoSection = ({
 
     // Validate inputs
     if ((resetType === 'email' || resetType === 'both') && (!resetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail))) {
+      console.log('❌ [RESET] Email validation failed:', { resetEmail, resetType });
       setUpdateStatus({ type: 'error', message: 'Please enter a valid email address.' });
       return;
     }
 
     if ((resetType === 'password' || resetType === 'both') && (!resetPassword || resetPassword.length < 6)) {
+      console.log('❌ [RESET] Password validation failed:', { passwordLength: resetPassword?.length, resetType });
       setUpdateStatus({ type: 'error', message: 'Password must be at least 6 characters long.' });
       return;
     }
@@ -667,26 +679,41 @@ const PersonalInfoSection = ({
       const updates = {};
       const resetOperations = [];
 
+      console.log('🔄 [RESET] Building updates...');
+      
       if ((resetType === 'email' || resetType === 'both') && resetEmail !== formData.email) {
         updates.email = resetEmail;
         resetOperations.push('email');
+        console.log('✅ [RESET] Adding email update:', { from: formData.email, to: resetEmail });
+      } else if (resetType === 'email' || resetType === 'both') {
+        console.log('⏭️ [RESET] Skipping email update - same as current:', { resetEmail, currentEmail: formData.email });
       }
 
       if (resetType === 'password' || resetType === 'both') {
         updates.password = resetPassword;
         resetOperations.push('password');
+        console.log('✅ [RESET] Adding password update');
       }
 
       if (resetType === 'both' || resetType === 'email') {
         updates.displayName = formData.name;
+        console.log('✅ [RESET] Adding displayName update:', formData.name);
       }
 
+      console.log('🔄 [RESET] Final updates object:', {
+        ...updates,
+        password: updates.password ? '[REDACTED]' : undefined
+      });
+      console.log('🔄 [RESET] Reset operations:', resetOperations);
+
       if (Object.keys(updates).length === 0) {
+        console.log('❌ [RESET] No updates to perform');
         setUpdateStatus({ type: 'warning', message: 'No changes detected.' });
         return;
       }
 
       // Call admin API
+      console.log('🌐 [RESET] Calling admin API...');
       const idToken = await auth.currentUser.getIdToken();
       const response = await fetch('/api/admin/update-user-auth', {
         method: 'POST',
@@ -697,25 +724,36 @@ const PersonalInfoSection = ({
         body: JSON.stringify({ userId, updates })
       });
 
+      console.log('📥 [RESET] API response:', { status: response.status, ok: response.ok });
+
       if (!response.ok) {
         const data = await response.json();
+        console.error('❌ [RESET] API error:', data);
         throw new Error(data.message || 'Failed to reset credentials');
       }
 
+      const apiResult = await response.json();
+      console.log('✅ [RESET] API success:', apiResult);
+
       // Update database
+      console.log('🗄️ [RESET] Updating database...');
       const dbUpdates = {};
       if (updates.email) {
         dbUpdates[`users/${userId}/profile/email`] = updates.email;
         dbUpdates[`users/${userId}/email`] = updates.email;
+        console.log('✅ [RESET] Adding email to database updates:', updates.email);
       }
       if (updates.displayName) {
         dbUpdates[`users/${userId}/profile/name`] = updates.displayName;
         dbUpdates[`users/${userId}/name`] = updates.displayName;
+        console.log('✅ [RESET] Adding name to database updates:', updates.displayName);
       }
       dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
       dbUpdates[`users/${userId}/profile/authUid`] = userId;
 
+      console.log('🗄️ [RESET] Database updates:', dbUpdates);
       await update(ref(database), dbUpdates);
+      console.log('✅ [RESET] Database updated successfully');
 
       const operationText = resetOperations.join(' and ');
       const credentialsText = resetOperations.map(op => {
@@ -734,20 +772,29 @@ const PersonalInfoSection = ({
       setResetPassword('AV2025!');
       
       // 🔥 CRITICAL: Update the form data to reflect the changes
+      console.log('🔄 [RESET] Updating form data...');
       if (handleInputChange) {
         if (updates.email) {
+          console.log('✅ [RESET] Updating form email:', updates.email);
           handleInputChange({ target: { name: 'email', value: updates.email } });
         }
         if (updates.displayName) {
+          console.log('✅ [RESET] Updating form name:', updates.displayName);
           handleInputChange({ target: { name: 'name', value: updates.displayName } });
         }
+      } else {
+        console.log('❌ [RESET] handleInputChange not available!');
       }
       
       if (fetchUserData) {
+        console.log('🔄 [RESET] Refreshing user data...');
         await fetchUserData();
+        console.log('✅ [RESET] User data refreshed');
       }
+
+      console.log('🎯 === RESET CREDENTIALS COMPLETE ===\n');
     } catch (error) {
-      console.error('Error resetting credentials:', error);
+      console.error('❌ [RESET] Error:', error);
       setUpdateStatus({
         type: 'error',
         message: `Error resetting credentials: ${error.message}`
@@ -951,33 +998,6 @@ const PersonalInfoSection = ({
         </div>
       )}
 
-      {/* Admin Reset Section */}
-      {isAdminUser && !isCurrentUser && (
-        <div className="p-6 pt-4">
-          {!showResetMode ? (
-            <div className="bg-[rgba(220,38,38,0.1)] p-4 rounded-lg border border-red-500/30 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Shield size={18} className="text-red-400 mr-2" />
-                  <span className="text-red-400 font-semibold">Admin: Reset User Credentials</span>
-                </div>
-                <button
-                  onClick={() => setShowResetMode(true)}
-                  className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 text-sm"
-                >
-                  Reset Credentials
-                </button>
-              </div>
-              <p className="text-white/60 text-sm mt-2">
-                As an administrator, you can reset this user's email and/or password.
-              </p>
-            </div>
-          ) : (
-            renderResetSection()
-          )}
-        </div>
-      )}
-
       {/* Login Credentials Section */}
       {editMode && (
         <div className="p-6 pt-4">
@@ -986,6 +1006,31 @@ const PersonalInfoSection = ({
               <KeyRound size={18} className="mr-2" />
               Login Credentials
             </h3>
+            
+            {/* Admin Reset Option */}
+            {isAdminUser && !isCurrentUser && (
+              <div className="mb-4 p-3 bg-[rgba(220,38,38,0.1)] rounded-lg border border-red-500/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Shield size={16} className="text-red-400 mr-2" />
+                    <span className="text-red-400 font-semibold text-sm">Admin: Quick Reset</span>
+                  </div>
+                  <button
+                    onClick={() => setShowResetMode(!showResetMode)}
+                    className="px-3 py-1 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 text-xs"
+                  >
+                    {showResetMode ? 'Cancel Reset' : 'Reset Credentials'}
+                  </button>
+                </div>
+                <p className="text-white/60 text-xs mt-1">
+                  Force reset this user's email and/or password without validation.
+                </p>
+              </div>
+            )}
+
+            {/* Reset Credentials Dialog */}
+            {showResetMode && renderResetSection()}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Email */}
               <FormField
