@@ -26,7 +26,10 @@ import {
   AlertTriangle,
   KeyRound,
   Award,
-  X
+  X,
+  RefreshCw,
+  Shield,
+  Key
 } from 'lucide-react';
 import { calculatePadrinoColor, PADRINO_COLORS } from '../utils/padrinoColorCalculator';
 
@@ -295,7 +298,8 @@ const PersonalInfoSection = ({
   locations = [],
   departments = [],
   onPadrinoChange,
-  onPadrinoColorChange
+  onPadrinoColorChange,
+  isAdminUser = false // New prop to indicate if current user is admin
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -305,6 +309,14 @@ const PersonalInfoSection = ({
   const [isSaving, setIsSaving] = useState(false);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [credentialsChanged, setCredentialsChanged] = useState(false);
+  
+  // Reset functionality state
+  const [showResetMode, setShowResetMode] = useState(false);
+  const [resetType, setResetType] = useState('password'); // 'password', 'email', or 'both'
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetPassword, setResetPassword] = useState('AV2025!');
+  const [isResetting, setIsResetting] = useState(false);
+  
   const auth = getAuth();
   
   // Store original values to track changes
@@ -320,6 +332,8 @@ const PersonalInfoSection = ({
         email: formData.email || '',
         name: formData.name || ''
       });
+      // Set reset email to current email when formData changes
+      setResetEmail(formData.email || '');
     }
   }, [formData]);
 
@@ -362,6 +376,141 @@ const PersonalInfoSection = ({
       console.error("Error logging out:", error);
       // Force page refresh as a fallback
       window.location.href = '/login';
+    }
+  };
+
+  // Reset credentials using admin API
+  const handleResetCredentials = async () => {
+    if (!isAdminUser && !isCurrentUser) {
+      setUpdateStatus({
+        type: 'error',
+        message: 'You do not have permission to reset credentials for this user.'
+      });
+      return;
+    }
+
+    // Validate inputs
+    if (resetType === 'email' || resetType === 'both') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!resetEmail || !emailRegex.test(resetEmail)) {
+        setUpdateStatus({
+          type: 'error',
+          message: 'Please enter a valid email address.'
+        });
+        return;
+      }
+    }
+
+    if (resetType === 'password' || resetType === 'both') {
+      if (!resetPassword || resetPassword.length < 6) {
+        setUpdateStatus({
+          type: 'error',
+          message: 'Password must be at least 6 characters long.'
+        });
+        return;
+      }
+    }
+
+    setIsResetting(true);
+    try {
+      const updates = {};
+      const resetOperations = [];
+
+      // Prepare updates
+      if (resetType === 'email' || resetType === 'both') {
+        if (resetEmail !== formData.email) {
+          updates.email = resetEmail;
+          resetOperations.push('email');
+        }
+      }
+
+      if (resetType === 'password' || resetType === 'both') {
+        updates.password = resetPassword;
+        resetOperations.push('password');
+      }
+
+      if (resetType === 'both' || resetType === 'email') {
+        updates.displayName = formData.name; // Include name to maintain profile
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setUpdateStatus({
+          type: 'warning',
+          message: 'No changes detected.'
+        });
+        setIsResetting(false);
+        return;
+      }
+
+      // Call admin API to update authentication
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/update-user-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          userId,
+          updates
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to reset credentials');
+      }
+
+      // Update database
+      const dbUpdates = {};
+      if (updates.email) {
+        dbUpdates[`users/${userId}/profile/email`] = updates.email;
+        dbUpdates[`users/${userId}/email`] = updates.email;
+      }
+      if (updates.password) {
+        dbUpdates[`users/${userId}/profile/password`] = updates.password;
+      }
+      if (updates.displayName) {
+        dbUpdates[`users/${userId}/profile/name`] = updates.displayName;
+        dbUpdates[`users/${userId}/name`] = updates.displayName;
+      }
+      
+      dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
+      dbUpdates[`users/${userId}/profile/authUid`] = userId;
+
+      await update(ref(database), dbUpdates);
+
+      // Success message
+      const operationText = resetOperations.join(' and ');
+      const credentialsText = resetOperations.map(op => {
+        if (op === 'email') return `Email: ${resetEmail}`;
+        if (op === 'password') return `Password: ${resetPassword}`;
+        return '';
+      }).filter(Boolean).join(', ');
+
+      setUpdateStatus({
+        type: 'success',
+        message: `Successfully reset ${operationText} for ${formData.name}. New credentials: ${credentialsText}`
+      });
+
+      // Reset form
+      setShowResetMode(false);
+      setResetType('password');
+      setResetPassword('AV2025!');
+      
+      // Refresh user data
+      if (fetchUserData) {
+        await fetchUserData();
+      }
+
+    } catch (error) {
+      console.error('Error resetting credentials:', error);
+      setUpdateStatus({
+        type: 'error',
+        message: `Error resetting credentials: ${error.message}`
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -669,6 +818,121 @@ const PersonalInfoSection = ({
     );
   };
 
+  // Render reset credentials section
+  const renderResetSection = () => {
+    if (!showResetMode) return null;
+
+    return (
+      <div className="bg-[rgba(220,38,38,0.1)] p-4 rounded-lg border border-red-500/30 mb-6">
+        <h3 className="text-red-400 text-md font-semibold mb-3 flex items-center">
+          <Shield size={18} className="mr-2" />
+          Reset User Credentials
+        </h3>
+        
+        <div className="space-y-4">
+          {/* Reset Type Selection */}
+          <div>
+            <label className="block text-sm text-white/90 mb-2">What would you like to reset?</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
+                <input
+                  type="radio"
+                  name="resetType"
+                  value="password"
+                  checked={resetType === 'password'}
+                  onChange={(e) => setResetType(e.target.value)}
+                  className="text-red-500"
+                />
+                <span className="text-white/80 text-sm">Password Only</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
+                <input
+                  type="radio"
+                  name="resetType"
+                  value="email"
+                  checked={resetType === 'email'}
+                  onChange={(e) => setResetType(e.target.value)}
+                  className="text-red-500"
+                />
+                <span className="text-white/80 text-sm">Email Only</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-[rgba(13,25,48,0.6)] hover:bg-[rgba(13,25,48,0.8)]">
+                <input
+                  type="radio"
+                  name="resetType"
+                  value="both"
+                  checked={resetType === 'both'}
+                  onChange={(e) => setResetType(e.target.value)}
+                  className="text-red-500"
+                />
+                <span className="text-white/80 text-sm">Both</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Email Reset Field */}
+          {(resetType === 'email' || resetType === 'both') && (
+            <FormField
+              label="New Email Address"
+              icon={<Mail size={16} className="text-white/70" />}
+              name="resetEmail"
+              type="email"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              disabled={false}
+              required
+            />
+          )}
+
+          {/* Password Reset Field */}
+          {(resetType === 'password' || resetType === 'both') && (
+            <FormField
+              label="New Password"
+              icon={<Key size={16} className="text-white/70" />}
+              name="resetPassword"
+              type="password"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              disabled={false}
+              required
+            />
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => setShowResetMode(false)}
+              className="px-4 py-2 rounded-md border border-white/20 text-white/70 hover:bg-white/10"
+              disabled={isResetting}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleResetCredentials}
+              disabled={isResetting}
+              className={`px-4 py-2 rounded-md ${
+                isResetting 
+                  ? 'bg-red-600/50 cursor-not-allowed' 
+                  : 'bg-red-600 hover:bg-red-500'
+              } text-white font-semibold flex items-center justify-center`}
+            >
+              {isResetting ? (
+                <>
+                  <RefreshCw className="animate-spin mr-2" size={16} />
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  Reset {resetType === 'both' ? 'Credentials' : resetType === 'email' ? 'Email' : 'Password'}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-[rgba(13,25,48,0.4)] backdrop-blur-xl rounded-lg border border-white/10 shadow-xl">
       {/* Render logout prompt modal if credentials changed */}
@@ -697,6 +961,33 @@ const PersonalInfoSection = ({
             )}
             <span>{updateStatus.message}</span>
           </div>
+        </div>
+      )}
+
+      {/* Admin Reset Section */}
+      {isAdminUser && !isCurrentUser && (
+        <div className="p-6 pt-4">
+          {!showResetMode ? (
+            <div className="bg-[rgba(220,38,38,0.1)] p-4 rounded-lg border border-red-500/30 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Shield size={18} className="text-red-400 mr-2" />
+                  <span className="text-red-400 font-semibold">Admin: Reset User Credentials</span>
+                </div>
+                <button
+                  onClick={() => setShowResetMode(true)}
+                  className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 text-sm"
+                >
+                  Reset Credentials
+                </button>
+              </div>
+              <p className="text-white/60 text-sm mt-2">
+                As an administrator, you can reset this user's email and/or password.
+              </p>
+            </div>
+          ) : (
+            renderResetSection()
+          )}
         </div>
       )}
 
@@ -1054,7 +1345,8 @@ PersonalInfoSection.propTypes = {
   locations: PropTypes.array,
   departments: PropTypes.array,
   onPadrinoChange: PropTypes.func,
-  onPadrinoColorChange: PropTypes.func
+  onPadrinoColorChange: PropTypes.func,
+  isAdminUser: PropTypes.bool
 };
 
 export default PersonalInfoSection;
