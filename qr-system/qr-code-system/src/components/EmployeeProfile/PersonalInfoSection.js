@@ -1273,6 +1273,17 @@ const PersonalInfoSection = ({
             />
 
             <FormField
+              label="Username"
+              icon={<User size={16} className="text-white/70" />}
+              name="username"
+              value={formData.username || ''}
+              onChange={handleInputChange}
+              disabled={!editMode}
+              error={errors.username}
+              required
+            />
+
+            <FormField
               label="Position"
               icon={<Award size={16} className="text-white/70" />}
               name="position"
