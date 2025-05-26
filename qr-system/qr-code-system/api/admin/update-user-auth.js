@@ -391,8 +391,50 @@ export default async function handler(req, res) {
         password: validUpdates.password ? '[REDACTED]' : undefined
       });
       
+      // Before update - get current user state
+      const beforeUpdate = await auth.getUser(userId);
+      console.log(`📋 [DEBUG:${requestId}] User state BEFORE update:`, {
+        uid: beforeUpdate.uid,
+        email: beforeUpdate.email,
+        displayName: beforeUpdate.displayName,
+        emailVerified: beforeUpdate.emailVerified,
+        disabled: beforeUpdate.disabled,
+        customClaims: beforeUpdate.customClaims
+      });
+      
       await auth.updateUser(userId, validUpdates);
       console.log(`✅ [DEBUG:${requestId}] Auth user updated successfully`);
+      
+      // After update - get updated user state
+      const afterUpdate = await auth.getUser(userId);
+      console.log(`📋 [DEBUG:${requestId}] User state AFTER update:`, {
+        uid: afterUpdate.uid,
+        email: afterUpdate.email,
+        displayName: afterUpdate.displayName,
+        emailVerified: afterUpdate.emailVerified,
+        disabled: afterUpdate.disabled,
+        customClaims: afterUpdate.customClaims
+      });
+      
+      // Log what actually changed
+      const changes = {};
+      if (beforeUpdate.email !== afterUpdate.email) {
+        changes.email = { from: beforeUpdate.email, to: afterUpdate.email };
+      }
+      if (beforeUpdate.displayName !== afterUpdate.displayName) {
+        changes.displayName = { from: beforeUpdate.displayName, to: afterUpdate.displayName };
+      }
+      if (validUpdates.password) {
+        changes.password = 'Password was updated (cannot verify)';
+      }
+      
+      console.log(`📝 [DEBUG:${requestId}] Actual changes made:`, changes);
+      console.log(`🔑 [DEBUG:${requestId}] Login credentials after update:`, {
+        email: afterUpdate.email,
+        passwordChanged: !!validUpdates.password,
+        emailVerified: afterUpdate.emailVerified,
+        accountDisabled: afterUpdate.disabled
+      });
       
       // If role is included in updates, update custom claims
       if (updates.role) {
@@ -410,6 +452,10 @@ export default async function handler(req, res) {
         console.log(`🎭 [DEBUG:${requestId}] Updating custom claims:`, claims);
         await auth.setCustomUserClaims(userId, claims);
         console.log(`✅ [DEBUG:${requestId}] Custom claims updated successfully`);
+        
+        // Verify claims were set
+        const userWithClaims = await auth.getUser(userId);
+        console.log(`🎭 [DEBUG:${requestId}] Custom claims after update:`, userWithClaims.customClaims);
       }
       
       // Ensure the authUid link is maintained in the database
@@ -417,11 +463,44 @@ export default async function handler(req, res) {
       await db.ref(`users/${userId}/profile/authUid`).set(userId);
       console.log(`✅ [DEBUG:${requestId}] Database auth link maintained`);
       
+      // Final verification - get the complete user record one more time
+      const finalUserRecord = await auth.getUser(userId);
+      console.log(`🎯 [DEBUG:${requestId}] FINAL USER RECORD for login verification:`, {
+        uid: finalUserRecord.uid,
+        email: finalUserRecord.email,
+        displayName: finalUserRecord.displayName,
+        emailVerified: finalUserRecord.emailVerified,
+        disabled: finalUserRecord.disabled,
+        providerData: finalUserRecord.providerData.map(p => ({
+          uid: p.uid,
+          email: p.email,
+          providerId: p.providerId
+        })),
+        customClaims: finalUserRecord.customClaims,
+        metadata: {
+          creationTime: finalUserRecord.metadata.creationTime,
+          lastSignInTime: finalUserRecord.metadata.lastSignInTime,
+          lastRefreshTime: finalUserRecord.metadata.lastRefreshTime
+        }
+      });
+      
+      console.log(`🔑 [DEBUG:${requestId}] LOGIN INSTRUCTIONS:`, {
+        message: "User should login with these exact credentials:",
+        email: finalUserRecord.email,
+        password: validUpdates.password ? "The password that was just set" : "Their existing password (not changed)",
+        note: validUpdates.password ? "Password was updated in this request" : "Password was NOT changed in this request"
+      });
+      
       console.log(`🎉 [DEBUG:${requestId}] User update completed successfully`);
       return res.status(200).json({
         success: true,
         message: 'User authentication updated successfully',
-        userId
+        userId,
+        loginCredentials: {
+          email: finalUserRecord.email,
+          passwordChanged: !!validUpdates.password,
+          emailVerified: finalUserRecord.emailVerified
+        }
       });
     } catch (updateError) {
       console.error(`❌ [DEBUG:${requestId}] Error updating auth user:`, {

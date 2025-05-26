@@ -1,4 +1,4 @@
-// Updated EmployeeProfile.jsx with fixed carousel implementation
+// Fixed EmployeeProfile.jsx with proper admin user detection and props
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -124,7 +124,11 @@ const EmployeeProfile = () => {
   const [newScheduleTime, setNewScheduleTime] = useState('');
   const [activeSlide, setActiveSlide] = useState(0);
 
+  // 🔥 CRITICAL: User permission states
   const [isCurrentUser, setIsCurrentUser] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [currentUserData, setCurrentUserData] = useState(null);
+  const [adminCheckComplete, setAdminCheckComplete] = useState(false);
   
   // Total number of slides in personal tab carousel
   const totalPersonalSlides = 3;
@@ -136,19 +140,99 @@ const EmployeeProfile = () => {
     }, 3000);
   }, []);
 
-  // Check if the profile belongs to the current user
+  // 🔥 CRITICAL: Check if the profile belongs to the current user AND get admin status
   useEffect(() => {
-    const currentUser = auth.currentUser;
-    if (currentUser && currentUser.uid === employeeId) {
-      setIsCurrentUser(true);
-    } else {
-      setIsCurrentUser(false);
+    const checkUserPermissions = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setIsCurrentUser(false);
+        setIsAdminUser(false);
+        setAdminCheckComplete(true);
+        return;
+      }
+
+      console.log('🎭 [EMPLOYEE_PROFILE] Checking user permissions...', {
+        currentUserId: currentUser.uid,
+        profileUserId: employeeId,
+        userEmail: currentUser.email
+      });
+
+      // Check if current user
+      const isCurrent = currentUser.uid === employeeId;
+      setIsCurrentUser(isCurrent);
+
+      try {
+        // Get current user's data from database to check admin status
+        const currentUserRef = ref(database, `users/${currentUser.uid}`);
+        const currentUserSnapshot = await get(currentUserRef);
+        
+        if (currentUserSnapshot.exists()) {
+          const userData = currentUserSnapshot.val();
+          setCurrentUserData(userData);
+          
+          // Check for admin privileges from multiple sources
+          const userRole = userData?.profile?.role?.toLowerCase() || userData?.role?.toLowerCase() || '';
+          const hasAdminRole = userRole.includes('admin') || userRole === 'super_admin';
+          
+          // Also check custom claims if available (from Firebase Auth token)
+          const hasAdminClaims = currentUser?.customClaims?.admin === true || 
+                                currentUser?.customClaims?.superAdmin === true;
+          
+          // Check if Firebase Auth user record has admin claims
+          let tokenAdminClaims = false;
+          try {
+            const idToken = await currentUser.getIdToken();
+            const tokenPayload = JSON.parse(atob(idToken.split('.')[1]));
+            tokenAdminClaims = tokenPayload.admin === true || tokenPayload.superAdmin === true;
+          } catch (tokenError) {
+            console.warn('Could not parse token for admin claims:', tokenError);
+          }
+          
+          const isAdmin = hasAdminRole || hasAdminClaims || tokenAdminClaims;
+          
+          console.log('🔍 [EMPLOYEE_PROFILE] Admin status check:', {
+            userId: currentUser.uid,
+            role: userRole,
+            hasAdminRole,
+            hasAdminClaims,
+            tokenAdminClaims,
+            isAdmin,
+            profileRole: userData?.profile?.role,
+            rootRole: userData?.role
+          });
+          
+          setIsAdminUser(isAdmin);
+        } else {
+          console.warn('🔍 [EMPLOYEE_PROFILE] Current user data not found in database');
+          setIsAdminUser(false);
+        }
+      } catch (error) {
+        console.error('🔍 [EMPLOYEE_PROFILE] Error checking admin status:', error);
+        setIsAdminUser(false);
+      } finally {
+        setAdminCheckComplete(true);
+      }
+    };
+
+    if (employeeId) {
+      checkUserPermissions();
     }
   }, [auth, employeeId]);
 
   // Control form input changes
   const handleInputChange = (e) => {
     const { name, type, checked, value } = e.target;
+    
+    // Debug logging for password changes
+    if (name === 'password') {
+      console.log('🔑 [EMPLOYEE_PROFILE] Password field changed:', {
+        name,
+        hasValue: !!value,
+        length: value?.length || 0,
+        preview: value ? value.substring(0, 3) + '***' : 'empty'
+      });
+    }
+    
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
@@ -214,8 +298,16 @@ const EmployeeProfile = () => {
     }
   };
 
-  // Main "Save" for the entire personal info form
+  // 🔥 UPDATED: Main "Save" for the entire personal info form
   const handleSave = async () => {
+    console.log('💾 [EMPLOYEE_PROFILE] Starting save process...', {
+      isCurrentUser,
+      isAdminUser,
+      employeeId,
+      hasPassword: !!formData.password,
+      passwordLength: formData.password?.length || 0
+    });
+
     // Build our updates for RTDB
     const updates = {
       name: formData.name,
@@ -239,6 +331,7 @@ const EmployeeProfile = () => {
     try {
       // First update the profile in RTDB
       await update(ref(database, `users/${employeeId}/profile`), updates);
+      console.log('💾 [EMPLOYEE_PROFILE] Database profile updated');
 
       // Update local details
       setEmployeeDetails((prev) => ({
@@ -246,18 +339,21 @@ const EmployeeProfile = () => {
         profile: { ...prev?.profile, ...updates },
       }));
 
-      // Handle password update without requiring current password
+      // Handle password update - store in database for admin reference
       if (formData.password && formData.password.trim() !== '') {
         try {
+          console.log('🔑 [EMPLOYEE_PROFILE] Updating password in database...');
           // Store the password in RTDB for record-keeping
           await update(ref(database, `users/${employeeId}/profile`), {
             password: formData.password
           });
           
+          console.log('🔑 [EMPLOYEE_PROFILE] Password stored in database for admin reference');
+          
           // Clear the password from formData
           setFormData((prev) => ({ ...prev, password: '' }));
           
-          showNotification('Profile and password updated successfully');
+          showNotification('Profile and password updated successfully. Note: Authentication system will be updated separately.');
         } catch (err) {
           console.error('Error updating password in database:', err);
           showNotification('Profile updated, but failed to update password', 'warning');
@@ -330,11 +426,6 @@ const EmployeeProfile = () => {
       const data = snapshot.val();
       setEmployeeDetails(data);
 
-      // Don't format attendance here - let AttendanceSection handle its own comprehensive data fetching
-      // const records = formatAttendanceRecords(data.clockInTimes, data.clockOutTimes);
-      // setAttendanceRecords(records);
-      // setStats(calculateStats(records));
-
       // Set local form data
       setFormData({
         name: data.profile?.name || '',
@@ -395,7 +486,7 @@ const EmployeeProfile = () => {
     { id: 'calendar', label: 'Calendar', icon: Calendar },
   ];
 
-  // Render slide content based on index
+  // 🔥 UPDATED: Render slide content with proper props
   const renderSlideContent = (index, data) => {
     switch (index) {
       case 0:
@@ -414,7 +505,8 @@ const EmployeeProfile = () => {
             onCancel={() => setEditMode(false)}
             errors={{}} // You can pass form validation errors here
             userData={employeeDetails}
-            isCurrentUser={isCurrentUser}
+            isCurrentUser={isCurrentUser}  // 🔥 CRITICAL
+            isAdminUser={isAdminUser}      // 🔥 CRITICAL - This was missing!
             onSendPasswordReset={handleSendPasswordReset}
             fetchUserData={fetchEmployeeDetails}
           />
@@ -480,6 +572,16 @@ const EmployeeProfile = () => {
     }
   };
 
+  // 🔥 Wait for admin check to complete before rendering
+  if (!adminCheckComplete) {
+    return (
+      <div className="loading-overlay">
+        <div className="loading-spinner" />
+        <p>Checking permissions...</p>
+      </div>
+    );
+  }
+
   // Loading
   if (loading) {
     return (
@@ -510,6 +612,15 @@ const EmployeeProfile = () => {
           {notification.message}
         </div>
       )}
+
+      {/* 🔥 Debug Panel - Remove in production */}
+      <div className="mb-4 p-3 bg-slate-800/50 rounded text-xs text-white/60">
+        <strong>Debug Info:</strong> Current User: {isCurrentUser ? 'Yes' : 'No'} | 
+        Admin: {isAdminUser ? 'Yes' : 'No'} | 
+        Profile ID: {employeeId} | 
+        Current User ID: {auth.currentUser?.uid || 'None'} |
+        Role: {currentUserData?.profile?.role || currentUserData?.role || 'None'}
+      </div>
 
       {/* Profile Header (with Edit/Save & Status toggles) */}
       <ProfileHeader
