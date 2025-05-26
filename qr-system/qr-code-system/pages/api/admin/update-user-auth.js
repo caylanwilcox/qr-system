@@ -238,7 +238,7 @@ export default async function handler(req, res) {
       });
     }
     
-    // Filter out undefined/null values and format updates object
+    // Filterr out undefined/null values and format updates object
     const validUpdates = Object.entries(updates)
       .filter(([_, value]) => value !== undefined && value !== null && value !== '')
       .reduce((obj, [key, value]) => {
