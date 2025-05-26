@@ -733,6 +733,16 @@ const PersonalInfoSection = ({
       setResetType('password');
       setResetPassword('AV2025!');
       
+      // 🔥 CRITICAL: Update the form data to reflect the changes
+      if (handleInputChange) {
+        if (updates.email) {
+          handleInputChange({ target: { name: 'email', value: updates.email } });
+        }
+        if (updates.displayName) {
+          handleInputChange({ target: { name: 'name', value: updates.displayName } });
+        }
+      }
+      
       if (fetchUserData) {
         await fetchUserData();
       }
