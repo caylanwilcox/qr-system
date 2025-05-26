@@ -255,6 +255,32 @@ const QRScannerPage = () => {
     userUpdates[`events/${normalizedEventType}/${eventId}/location`] = locationKey;
     userUpdates[`events/${normalizedEventType}/${eventId}/eventType`] = normalizedEventType;
     
+    // ENHANCED: Update any assigned statistics for today's events to mark as clocked in
+    if (userData.statistics) {
+      Object.entries(userData.statistics).forEach(([statEventId, statEntry]) => {
+        if (statEntry && 
+            statEntry.date === currentDate && 
+            statEntry.status === 'assigned' && 
+            !statEntry.clockedIn) {
+          
+          // Check if this statistic matches our event type
+          const statEventType = statEntry.eventType?.toLowerCase().replace(/[_\s-]/g, '');
+          const currentEventType = normalizedEventType.toLowerCase().replace(/[_\s-]/g, '');
+          
+          if (statEventType === currentEventType || 
+              statEventType === 'general' || 
+              currentEventType === 'generalmeeting') {
+            
+            console.log(`🔍 Updating assigned statistic ${statEventId} to clocked in`);
+            userUpdates[`statistics/${statEventId}/clockedIn`] = true;
+            userUpdates[`statistics/${statEventId}/clockInTime`] = formattedTime;
+            userUpdates[`statistics/${statEventId}/status`] = 'completed';
+            userUpdates[`statistics/${statEventId}/attendedAt`] = chicagoNow.toISOString();
+          }
+        }
+      });
+    }
+    
     console.log('🔍 Clock-in updates to be applied:', userUpdates);
     
     try {

@@ -157,26 +157,36 @@ body {
 }
 
 .header-content {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: 100%;
-}
-.header-right {
-  display: flex;
-  align-items: center;
+  padding: 20px 30px;
   gap: 20px;
 }
 
 .header-content h1 {
   margin: 0;
-  font-size: 1.rem;
+  font-size: 1.35rem;
   color: white;
-  font-weight: 500;
+  font-weight: 400;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.3px;
+  grid-column: 2;
+  white-space: nowrap;
 }
 
 .current-date {
   color: rgba(255, 255, 255, 0.8);
+  justify-self: start;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  justify-self: end;
 }
 
 .weather-strip {
@@ -231,7 +241,28 @@ body {
   .sidebar-logo {
     width: 40px;
   }
-}@import 'react-big-calendar/lib/css/react-big-calendar.css';
+  
+  .header-content {
+    padding: 15px 20px;
+    grid-template-columns: auto 1fr auto;
+    gap: 15px;
+  }
+  
+  .header-content h1 {
+    font-size: 1.4rem;
+    letter-spacing: 0.2px;
+  }
+  
+  .header-right {
+    gap: 10px;
+  }
+  
+  .current-date {
+    display: none;
+  }
+}
+
+@import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 /* User info button and container */
 /* Ensure the container also has proper positioning context */
@@ -239,6 +270,7 @@ body {
   position: relative;
   z-index: 9000;
 }
+
 .user-info-button {
   display: flex;
   align-items: center;

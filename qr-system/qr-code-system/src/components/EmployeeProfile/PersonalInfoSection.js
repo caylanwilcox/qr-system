@@ -313,11 +313,6 @@ const PersonalInfoSection = ({
   // Update original values when formData changes
   useEffect(() => {
     if (formData && Object.keys(formData).length > 0) {
-      console.log('🔄 [PERSONAL_INFO] Updating original values:', {
-        email: formData.email,
-        name: formData.name
-      });
-      
       setOriginalValues({
         email: formData.email || '',
         name: formData.name || ''
@@ -327,14 +322,7 @@ const PersonalInfoSection = ({
 
   // Debug logging
   useEffect(() => {
-    console.log('🎭 [PERSONAL_INFO] Component state:', {
-      isCurrentUser,
-      isAdminUser,
-      userId,
-      editMode,
-      hasFormData: !!formData,
-      authUser: auth.currentUser?.uid
-    });
+    // Component state tracking removed for production
   }, [isCurrentUser, isAdminUser, userId, editMode, formData, auth.currentUser]);
 
   // Toggle password visibility
@@ -349,10 +337,6 @@ const PersonalInfoSection = ({
   // Handle password changes with logging
   const handlePasswordChange = (e) => {
     const newPassword = e.target.value;
-    console.log('🔑 [PERSONAL_INFO] Password field changed:', {
-      length: newPassword.length,
-      hasValue: !!newPassword
-    });
     
     if (handleInputChange) {
       handleInputChange(e);
@@ -385,8 +369,6 @@ const PersonalInfoSection = ({
 
   // Update current user's Firebase Auth record
   const updateCurrentUserAuth = async () => {
-    console.log('\n🔐 [AUTH] === CURRENT USER AUTH UPDATE START ===');
-    
     const user = auth.currentUser;
     if (!user) {
       throw new Error('No authenticated user. Please sign in again.');
@@ -395,12 +377,6 @@ const PersonalInfoSection = ({
     const emailChanged = formData.email && formData.email.trim() !== (originalValues.email || '').trim();
     const nameChanged = formData.name && formData.name.trim() !== (originalValues.name || '').trim();
     const passwordProvided = formData.password && formData.password.trim() !== '';
-
-    console.log('🔐 [AUTH] Changes detected:', {
-      emailChanged,
-      nameChanged,
-      passwordProvided
-    });
 
     if (!emailChanged && !nameChanged && !passwordProvided) {
       return { success: true, credentialsChanged: false };
@@ -413,12 +389,9 @@ const PersonalInfoSection = ({
       }
       
       try {
-        console.log('🔐 [AUTH] Re-authenticating user...');
         const credential = EmailAuthProvider.credential(user.email || '', currentPassword);
         await reauthenticateWithCredential(user, credential);
-        console.log('✅ [AUTH] Re-authentication successful');
       } catch (error) {
-        console.error('❌ [AUTH] Re-authentication failed:', error);
         throw new Error('Re-authentication failed. Please check your current password.');
       }
     }
@@ -427,34 +400,27 @@ const PersonalInfoSection = ({
 
     try {
       if (nameChanged) {
-        console.log('📝 [AUTH] Updating displayName...');
         await updateProfile(user, { displayName: formData.name.trim() });
       }
 
       if (emailChanged) {
-        console.log('✉️ [AUTH] Updating email...');
         await updateEmail(user, formData.email.trim());
         credentialsWillChange = true;
       }
 
       if (passwordProvided) {
-        console.log('🔑 [AUTH] Updating password...');
         await updatePassword(user, formData.password.trim());
         credentialsWillChange = true;
       }
 
-      console.log('✅ [AUTH] Current user auth updated successfully');
       return { success: true, credentialsChanged: credentialsWillChange };
     } catch (error) {
-      console.error('❌ [AUTH] Failed to update current user auth:', error);
       throw error;
     }
   };
 
   // Update another user's auth via admin API
   const updateUserAuthViaAdmin = async () => {
-    console.log('\n🔧 [ADMIN] === ADMIN AUTH UPDATE START ===');
-    
     if (isCurrentUser) {
       return { success: true, skipped: 'is_current_user' };
     }
@@ -478,11 +444,6 @@ const PersonalInfoSection = ({
       authUpdates.password = formData.password.trim();
     }
 
-    console.log('🔧 [ADMIN] Auth updates to send:', {
-      ...authUpdates,
-      password: authUpdates.password ? '[REDACTED]' : undefined
-    });
-
     if (Object.keys(authUpdates).length === 0) {
       return { success: true, skipped: 'no_auth_changes' };
     }
@@ -505,10 +466,8 @@ const PersonalInfoSection = ({
       }
 
       const result = await response.json();
-      console.log('✅ [ADMIN] Admin auth update successful:', result);
       return { success: true, result };
     } catch (error) {
-      console.error('❌ [ADMIN] Admin auth update failed:', error);
       return { success: false, error: error.message };
     }
   };
@@ -516,8 +475,6 @@ const PersonalInfoSection = ({
   // Update database with all form data
   const updateDatabaseWithAuthInfo = async () => {
     try {
-      console.log('🗄️ [DATABASE] Updating database...');
-      
       const dbUpdates = {};
       
       // Update all form fields in the database
@@ -541,17 +498,14 @@ const PersonalInfoSection = ({
       dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
       
       await update(ref(database), dbUpdates);
-      console.log('✅ [DATABASE] Database updated successfully');
       return true;
     } catch (error) {
-      console.error('❌ [DATABASE] Error updating database:', error);
       throw error;
     }
   };
 
   // Main save handler
   const handleSaveClick = async () => {
-    console.log('\n🚀 === SAVE PROCESS START ===');
     setIsSaving(true);
     setUpdateStatus(null);
     setCredentialsChanged(false);
@@ -563,26 +517,17 @@ const PersonalInfoSection = ({
       const passwordProvided = formData.password && formData.password.trim() !== '';
       const shouldUpdateAuth = emailChanged || nameChanged || passwordProvided;
 
-      console.log('💾 [SAVE] Changes detected:', {
-        emailChanged,
-        nameChanged,
-        passwordProvided,
-        shouldUpdateAuth
-      });
-
       let authUpdateResult = { success: true };
 
       // Update Firebase Auth if needed
       if (shouldUpdateAuth) {
         if (isCurrentUser) {
-          console.log('👤 [SAVE] Updating current user auth...');
           authUpdateResult = await updateCurrentUserAuth();
           
           if (authUpdateResult.credentialsChanged) {
             setCredentialsChanged(true);
           }
         } else {
-          console.log('👥 [SAVE] Updating user auth via admin...');
           authUpdateResult = await updateUserAuthViaAdmin();
           
           if (!authUpdateResult.success) {
@@ -592,12 +537,10 @@ const PersonalInfoSection = ({
       }
 
       // Update database
-      console.log('🗄️ [SAVE] Updating database...');
       await updateDatabaseWithAuthInfo();
 
       // Call parent onSave if provided
       if (onSave) {
-        console.log('📞 [SAVE] Calling parent onSave...');
         await onSave();
       }
 
@@ -624,10 +567,7 @@ const PersonalInfoSection = ({
       if (handleInputChange) {
         handleInputChange({ target: { name: 'password', value: '' } });
       }
-
-      console.log('🎯 === SAVE PROCESS COMPLETE ===');
     } catch (error) {
-      console.error('❌ [SAVE] Error:', error);
       setUpdateStatus({ 
         type: 'error', 
         message: `Error updating profile: ${error.message}` 
@@ -721,7 +661,6 @@ const PersonalInfoSection = ({
         await fetchUserData();
       }
     } catch (error) {
-      console.error('❌ [QUICK_RESET] Error:', error);
       setUpdateStatus({
         type: 'error',
         message: `Error resetting ${type}: ${error.message}`
@@ -807,10 +746,6 @@ const PersonalInfoSection = ({
       
       <div className="p-6 border-b border-white/10">
         <h2 className="text-lg font-semibold text-white/90">Personal Information</h2>
-        {userId && <p className="text-xs text-white/50 mt-1">User ID: {userId}</p>}
-        <div className="text-xs text-white/40 mt-1">
-          Current User: {isCurrentUser ? 'Yes' : 'No'} | Admin: {isAdminUser ? 'Yes' : 'No'}
-        </div>
       </div>
 
       {updateStatus && (

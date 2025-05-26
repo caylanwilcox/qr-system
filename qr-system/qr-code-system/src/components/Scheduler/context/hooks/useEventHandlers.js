@@ -430,6 +430,22 @@ export const useEventHandlers = (authState, eventState, uiState) => {
         
         // Add event to user's schedule
         batchUpdates[`users/${userId}/schedule/${eventId}`] = true;
+        
+        // Add to user's statistics array with red X status until they clock in
+        const eventDate = new Date(eventData.start).toISOString().split('T')[0]; // Get YYYY-MM-DD format
+        const statisticsEntry = {
+          eventId: eventId,
+          eventTitle: eventData.title || 'Untitled Event',
+          eventType: eventData.eventType || 'general',
+          location: eventData.location || 'Unknown',
+          date: eventDate,
+          assignedAt: new Date().toISOString(),
+          status: 'assigned', // Will show as red X until they clock in
+          clockedIn: false,
+          clockInTime: null
+        };
+        
+        batchUpdates[`users/${userId}/statistics/${eventId}`] = statisticsEntry;
       }
       
       // Apply all updates in one batch

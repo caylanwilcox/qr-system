@@ -218,6 +218,26 @@ class AttendanceService {
         statsUpdate[`events/${eventType}/${eventData.id}/attendedAt`] = now.toISOString();
       }
       
+      // ENHANCED: Update any assigned statistics for today's events to mark as clocked in
+      if (user.statistics) {
+        const todayString = moment(now).format('YYYY-MM-DD');
+        const clockInTime = moment(now).format('hh:mm A');
+        
+        Object.entries(user.statistics).forEach(([statEventId, statEntry]) => {
+          if (statEntry && 
+              statEntry.date === todayString && 
+              statEntry.status === 'assigned' && 
+              !statEntry.clockedIn) {
+            
+            console.log(`${this.DEBUG_PREFIX} Updating assigned statistic ${statEventId} to clocked in`);
+            statsUpdate[`statistics/${statEventId}/clockedIn`] = true;
+            statsUpdate[`statistics/${statEventId}/clockInTime`] = clockInTime;
+            statsUpdate[`statistics/${statEventId}/status`] = 'completed';
+            statsUpdate[`statistics/${statEventId}/attendedAt`] = now.toISOString();
+          }
+        });
+      }
+      
       // Apply all updates to user
       await update(userRef, statsUpdate);
       

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Users, User, Filter, Check, MapPin, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Search, Users, User, Filter, Check, MapPin, AlertCircle, Loader2, UserPlus, Calendar } from 'lucide-react';
 import { useSchedulerContext } from '../context/SchedulerContext';
 import '../styles/ParticipantSelectionDialog.css';
 import { ref, get } from 'firebase/database';
@@ -301,7 +301,10 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
         const locations = [...new Set(usersToShow.map(user => user.primaryLocation).filter(Boolean))];
         const departments = [...new Set(usersToShow.map(user => user.department).filter(Boolean))];
         
-        setUniqueLocations(locations);
+        // Add "All Locations" option at the beginning
+        const locationsWithAll = ['All Locations', ...locations];
+        
+        setUniqueLocations(locationsWithAll);
         setUniqueDepartments(departments);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -343,6 +346,23 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
       ...prev,
       [name]: value
     }));
+    
+    // Auto-select users when "All Locations" is selected
+    if (name === 'location' && value === 'All Locations') {
+      // Use setTimeout to ensure filteredUsers is updated after state change
+      setTimeout(() => {
+        const allFilteredUsers = users.filter(user => {
+          const matchesSearch = searchTerm === '' || 
+                               (user.name && user.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                               (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase()));
+          const matchesDepartment = filters.department === '' || 
+                                   (user.department && 
+                                    user.department.toLowerCase().trim() === filters.department.toLowerCase().trim());
+          return matchesSearch && matchesDepartment;
+        });
+        setSelectedUsers(allFilteredUsers.map(user => user.id));
+      }, 0);
+    }
   };
 
   // Select/Deselect all users
@@ -372,8 +392,9 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
                          (user.name && user.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    // Filter by location
+    // Filter by location - "All Locations" shows all users
     const matchesLocation = filters.location === '' || 
+                           filters.location === 'All Locations' ||
                            (user.primaryLocation && 
                             user.primaryLocation.toLowerCase().trim() === filters.location.toLowerCase().trim());
     
@@ -385,9 +406,14 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
     return matchesSearch && matchesLocation && matchesDepartment;
   });
 
-  // Group users by location for display
+  // Group users by location for display (normalize case)
   const groupedUsers = filteredUsers.reduce((acc, user) => {
-    const location = user.primaryLocation || 'No Location';
+    const rawLocation = user.primaryLocation || 'No Location';
+    // Normalize location name: capitalize first letter, lowercase the rest
+    const location = rawLocation === 'No Location' 
+      ? 'No Location' 
+      : rawLocation.charAt(0).toUpperCase() + rawLocation.slice(1).toLowerCase();
+    
     if (!acc[location]) {
       acc[location] = [];
     }
@@ -406,16 +432,17 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
       <div className="participant-dialog-overlay">
         <div className="participant-dialog">
           <div className="dialog-header">
-            <h2>Loading Event...</h2>
-            <button onClick={onClose} className="close-button">
-              <X size={20} />
+            <div className="header-content">
+              <UserPlus size={24} className="header-icon" />
+              <h2>Loading Event...</h2>
+            </div>
+            <button onClick={onClose} className="close-btn">
+              <X size={24} />
             </button>
           </div>
-          <div className="dialog-content">
-            <div className="loading">
-              <Loader2 size={24} className="animate-spin" />
-              <span>Loading event details...</span>
-            </div>
+          <div className="loading-state">
+            <Loader2 className="spinner" size={32} />
+            <p>Loading event details...</p>
           </div>
         </div>
       </div>
@@ -426,110 +453,185 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
     <div className="participant-dialog-overlay">
       <div className="participant-dialog">
         <div className="dialog-header">
-          <h2>Select Participants</h2>
-          <div className="event-info">
-            <h3>{event?.title || 'Event'}</h3>
-            <p>
-              <MapPin size={14} className="inline-icon" />
-              {event?.location || 'No location'} - {event?.start ? new Date(event.start).toLocaleDateString() : 'No date'}
-            </p>
+          <div className="header-content">
+            <UserPlus size={24} className="header-icon" />
+            <div className="header-text">
+              <h2>Select Participants</h2>
+              <div className="event-info">
+                <Calendar size={14} />
+                <span>{event?.title || 'Event'}</span>
+                <MapPin size={14} />
+                <span>{event?.location || 'No location'}</span>
+                <span>•</span>
+                <span>{event?.start ? new Date(event.start).toLocaleDateString() : 'No date'}</span>
+              </div>
+            </div>
           </div>
-          <button onClick={onClose} className="close-button">
-            <X size={20} />
+          <button onClick={onClose} className="close-btn">
+            <X size={24} />
           </button>
         </div>
 
-        <div className="dialog-content">
-          {error && (
-            <div className="error-message">
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
+        {error && (
+          <div className="error-banner">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+            <button onClick={() => setError(null)}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
-          <div className="search-filters">
-            <div className="search-bar">
-              <Search size={18} className="search-icon" />
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="search-input"
-              />
-              {(searchTerm || filters.location || filters.department) && (
-                <button 
-                  className="clear-filters-button"
-                  onClick={handleClearFilters}
-                  title="Clear all filters"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
+        <div className="dialog-content">
+          <div className="search-section">
+            <h3>
+              <Search size={16} />
+              Search & Filter
+            </h3>
             
-            <div className="filters">
-              <div className="filter-group">
-                <Filter size={16} className="filter-icon" />
-                <select
-                  value={filters.location}
-                  onChange={(e) => handleFilterChange('location', e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="">All Locations</option>
-                  {uniqueLocations.map(location => (
-                    <option key={location} value={location}>{location}</option>
-                  ))}
-                </select>
+            <div className="search-controls">
+              <div className="search-bar">
+                <Search size={18} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+                {searchTerm && (
+                  <button 
+                    className="clear-search-btn"
+                    onClick={() => setSearchTerm('')}
+                    title="Clear search"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
               </div>
               
-              <div className="filter-group">
-                <Filter size={16} className="filter-icon" />
-                <select
-                  value={filters.department}
-                  onChange={(e) => handleFilterChange('department', e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="">All Departments</option>
-                  {uniqueDepartments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
+              <div className="filter-row">
+                <div className="filter-group">
+                  <label htmlFor="location-filter">
+                    <MapPin size={14} />
+                    Location
+                  </label>
+                  <select
+                    id="location-filter"
+                    value={filters.location}
+                    onChange={(e) => handleFilterChange('location', e.target.value)}
+                  >
+                    <option value="">All Locations</option>
+                    {uniqueLocations.map(location => (
+                      <option key={location} value={location}>{location}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="filter-group">
+                  <label htmlFor="department-filter">
+                    <Filter size={14} />
+                    Department
+                  </label>
+                  <select
+                    id="department-filter"
+                    value={filters.department}
+                    onChange={(e) => handleFilterChange('department', e.target.value)}
+                  >
+                    <option value="">All Departments</option>
+                    {uniqueDepartments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {(searchTerm || filters.location || filters.department) && (
+                  <button 
+                    className="clear-filters-btn"
+                    onClick={handleClearFilters}
+                    title="Clear all filters"
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
           {loading ? (
-            <div className="loading">
-              <Loader2 size={24} className="animate-spin" />
-              <span>Loading users...</span>
+            <div className="loading-state">
+              <Loader2 className="spinner" size={32} />
+              <p>Loading users...</p>
             </div>
           ) : (
-            <div className="user-selection">
+            <div className="selection-section">
               <div className="selection-header">
-                <div className="selection-count">
-                  <div className="count-badge">{selectedUsers.length}</div>
-                  <span>users selected</span>
-                </div>
+                <h3>
+                  <Users size={16} />
+                  Available Users
+                </h3>
                 
-                <button 
-                  className="select-all-button"
-                  onClick={() => handleSelectAll(filteredUsers)}
-                  disabled={filteredUsers.length === 0}
-                >
-                  {filteredUsers.length === selectedUsers.length && filteredUsers.length > 0 
-                    ? 'Deselect All' 
-                    : 'Select All'}
-                </button>
+                <div className="selection-controls">
+                  <div className="user-stats">
+                    <div className="selection-count">
+                      <span className="count-badge">{selectedUsers.length}</span>
+                      <span>selected</span>
+                    </div>
+                    <div className="total-count">
+                      <span>{filteredUsers.length} of {users.length} users</span>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    className="select-all-btn"
+                    onClick={() => handleSelectAll(filteredUsers)}
+                    disabled={filteredUsers.length === 0}
+                  >
+                    {filteredUsers.length === selectedUsers.length && filteredUsers.length > 0 
+                      ? 'Deselect All' 
+                      : 'Select All'}
+                  </button>
+                </div>
               </div>
               
               <div className="user-list">
                 {Object.entries(groupedUsers).length > 0 ? (
-                  Object.entries(groupedUsers).map(([location, locationUsers]) => (
+                  <>
+
+                    {filteredUsers.length > 10 && (
+                      <div className="scroll-hint">
+                        <span>Scroll down to see all {filteredUsers.length} users</span>
+                      </div>
+                    )}
+                    {Object.entries(groupedUsers).map(([location, locationUsers]) => (
                     <div key={location} className="location-group">
                       <div className="location-header">
-                        <h4>{location}</h4>
-                        <span className="user-count">{locationUsers.length} users</span>
+                        <div className="location-title">
+                          <h4>
+                            <MapPin size={14} />
+                            {location}
+                          </h4>
+                          <span className="user-count">{locationUsers.length} users</span>
+                        </div>
+                        <button 
+                          className="select-location-btn"
+                          onClick={() => {
+                            const locationUserIds = locationUsers.map(user => user.id);
+                            const allSelected = locationUserIds.every(id => selectedUsers.includes(id));
+                            
+                            if (allSelected) {
+                              // Deselect all users in this location
+                              setSelectedUsers(prev => prev.filter(id => !locationUserIds.includes(id)));
+                            } else {
+                              // Select all users in this location
+                              setSelectedUsers(prev => [...new Set([...prev, ...locationUserIds])]);
+                            }
+                          }}
+                        >
+                          {locationUsers.every(user => selectedUsers.includes(user.id)) 
+                            ? 'Deselect All' 
+                            : 'Select All'}
+                        </button>
                       </div>
                       
                       <div className="user-grid">
@@ -545,33 +647,37 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
                             <div className="user-info">
                               <div className="user-name">{user.name}</div>
                               <div className="user-details">
-                                {user.department && <span>{user.department}</span>}
-                                {user.position && <span>{user.position}</span>}
+                                {user.position && <span className="position">{user.position}</span>}
+                                {user.department && <span className="department">{user.department}</span>}
+                                {user.email && <span className="email">{user.email}</span>}
                               </div>
                             </div>
                             <div className="selection-indicator">
-                              {selectedUsers.includes(user.id) && <Check size={16} />}
+                              {selectedUsers.includes(user.id) && (
+                                <div className="check-circle">
+                                  <Check size={14} />
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
-                  ))
+                    ))}
+                  </>
                 ) : (
                   <div className="no-results">
-                    <Users size={24} />
-                    <p>No users match your criteria</p>
-                    <div className="suggestion">
-                      {event?.location && (
-                        <p>Try clearing your filters or check that users exist in "{event.location}"</p>
-                      )}
+                    <Users size={48} className="no-results-icon" />
+                    <h4>No users found</h4>
+                    <p>No users match your current search and filter criteria.</p>
+                    {(searchTerm || filters.location || filters.department) && (
                       <button 
-                        className="reset-search-button"
+                        className="clear-filters-btn"
                         onClick={handleClearFilters}
                       >
                         Clear All Filters
                       </button>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -579,15 +685,23 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
           )}
         </div>
 
-        <div className="dialog-footer">
-          <button onClick={onClose} className="cancel-button">Cancel</button>
-          <button 
-            onClick={handleSave}
-            disabled={selectedUsers.length === 0}
-            className="save-button"
-          >
-            Assign {selectedUsers.length} Participants
-          </button>
+        <div className="dialog-actions">
+          <div className="action-group">
+            <button onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+          
+          <div className="action-group">
+            <button 
+              onClick={handleSave}
+              disabled={selectedUsers.length === 0}
+              className="btn-primary"
+            >
+              <UserPlus size={16} />
+              Assign {selectedUsers.length} Participant{selectedUsers.length !== 1 ? 's' : ''}
+            </button>
+          </div>
         </div>
       </div>
     </div>

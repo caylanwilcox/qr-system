@@ -303,13 +303,90 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
     return employeeData.stats;
   }, [employeeData?.stats]);
 
-  // FIXED: Enhanced attendance stats with comprehensive event matching
-  const attendanceStats = useMemo(() => {
-    if (!employeeData?.events) return [];
+  // State for global events
+  const [globalEvents, setGlobalEvents] = useState([]);
+  const [loadingGlobalEvents, setLoadingGlobalEvents] = useState(false);
+
+  // Load global events for this user
+  const loadGlobalEvents = useCallback(async () => {
+    if (!userId || loadingGlobalEvents) return;
     
-    const events = employeeData.events;
+    setLoadingGlobalEvents(true);
+    try {
+      console.log(`${DEBUG_PREFIX} Loading global events for user: ${userId}`);
+      
+      const eventsRef = ref(database, 'events');
+      const snapshot = await get(eventsRef);
+      
+      if (!snapshot.exists()) {
+        console.log(`${DEBUG_PREFIX} No global events found`);
+        setGlobalEvents([]);
+        return;
+      }
+      
+      const allEvents = snapshot.val();
+      const userEvents = [];
+      
+      // Filter events where this user is a participant
+      Object.entries(allEvents).forEach(([eventId, eventData]) => {
+        if (eventData.participants && eventData.participants[userId]) {
+          const participantData = eventData.participants[userId];
+          
+          userEvents.push({
+            id: eventId,
+            ...eventData,
+            // Normalize participant data
+            assigned: participantData === true ? false : (participantData.assigned || false),
+            attended: participantData === true ? true : (participantData.attended || false),
+            assignedAt: participantData.assignedAt || null,
+            attendedAt: participantData.attendedAt || null,
+            // Parse dates
+            startDate: new Date(eventData.start),
+            endDate: new Date(eventData.end),
+            // Extract date for grouping (use start date)
+            date: new Date(eventData.start).toISOString().split('T')[0]
+          });
+        }
+      });
+      
+      // Sort by start date (most recent first)
+      userEvents.sort((a, b) => b.startDate - a.startDate);
+      
+      console.log(`${DEBUG_PREFIX} Found ${userEvents.length} events for user:`, userEvents.map(e => ({
+        id: e.id,
+        title: e.title,
+        eventType: e.eventType,
+        date: e.date,
+        assigned: e.assigned,
+        attended: e.attended
+      })));
+      
+      setGlobalEvents(userEvents);
+    } catch (error) {
+      console.error(`${DEBUG_PREFIX} Error loading global events:`, error);
+      setGlobalEvents([]);
+    } finally {
+      setLoadingGlobalEvents(false);
+    }
+  }, [userId, loadingGlobalEvents]);
+
+  // Load global events when user changes
+  useEffect(() => {
+    if (userId && !loadingEventTypes) {
+      loadGlobalEvents();
+    }
+  }, [userId, loadingEventTypes, loadGlobalEvents]);
+
+  // FIXED: Enhanced attendance stats with comprehensive event matching and statistics integration
+  const attendanceStats = useMemo(() => {
+    if (!employeeData?.events && !employeeData?.statistics && globalEvents.length === 0) return [];
+    
+    const events = employeeData.events || {};
+    const statistics = employeeData.statistics || {};
     
     console.log(`${DEBUG_PREFIX} Processing attendance stats with events:`, Object.keys(events));
+    console.log(`${DEBUG_PREFIX} Processing statistics:`, Object.keys(statistics));
+    console.log(`${DEBUG_PREFIX} Processing global events:`, globalEvents.length);
     
     const standardEventTypes = [
       { key: 'workshops', title: 'PO Workshops', displayName: 'PO Workshops (Monthly)', total: 12 },
@@ -398,39 +475,156 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       
       let eventsArray = [];
       
+      // ENHANCED: Start with global events for this event type
+      const globalEventsForType = globalEvents.filter(event => {
+        const eventType = event.eventType?.toLowerCase().replace(/[_\s-]/g, '');
+        const targetType = eventTypeInfo.key.toLowerCase().replace(/[_\s-]/g, '');
+        const alternateTypes = (eventTypeInfo.alternateKeys || []).map(k => k.toLowerCase().replace(/[_\s-]/g, ''));
+        
+        return eventType === targetType || alternateTypes.includes(eventType);
+      });
+      
+      console.log(`${DEBUG_PREFIX} Found ${globalEventsForType.length} global events for ${eventTypeInfo.key}`);
+      
+      // Add global events to the array
+      globalEventsForType.forEach(globalEvent => {
+        eventsArray.push({
+          id: globalEvent.id,
+          eventType: eventTypeInfo.key,
+          title: globalEvent.title || 'Untitled Event',
+          date: globalEvent.date,
+          location: globalEvent.location,
+          scheduled: true, // Global events are always scheduled
+          attended: globalEvent.attended,
+          assigned: globalEvent.assigned,
+          assignedAt: globalEvent.assignedAt,
+          attendedAt: globalEvent.attendedAt,
+          clockedIn: globalEvent.attended, // If attended, they clocked in
+          source: 'global'
+        });
+      });
+      
+      // LEGACY: Also process old events structure for backwards compatibility
       if (eventData) {
-        console.log(`${DEBUG_PREFIX} Found event data for ${eventTypeInfo.key} under key ${matchedKey}:`, eventData);
+        console.log(`${DEBUG_PREFIX} Found legacy event data for ${eventTypeInfo.key} under key ${matchedKey}:`, eventData);
         
         if (Array.isArray(eventData)) {
-          eventsArray = eventData.map(evt => ({
-            ...evt,
-            eventType: eventTypeInfo.key,
-            scheduled: evt.scheduled === undefined ? true : evt.scheduled,
-            attended: evt.attended === true
-          }));
+          eventData.forEach(evt => {
+            // Check if this event is already in global events
+            const existingGlobal = eventsArray.find(e => e.id === evt.id);
+            if (!existingGlobal) {
+              eventsArray.push({
+                ...evt,
+                eventType: eventTypeInfo.key,
+                scheduled: evt.scheduled === undefined ? true : evt.scheduled,
+                attended: evt.attended === true,
+                source: 'legacy'
+              });
+            }
+          });
         } else if (typeof eventData === 'object') {
-          eventsArray = Object.entries(eventData).map(([id, evt]) => ({
-            ...evt,
-            id,
-            eventType: eventTypeInfo.key,
-            scheduled: evt.scheduled === undefined ? true : evt.scheduled,
-            attended: evt.attended === true
-          }));
+          Object.entries(eventData).forEach(([id, evt]) => {
+            // Check if this event is already in global events
+            const existingGlobal = eventsArray.find(e => e.id === id);
+            if (!existingGlobal) {
+              eventsArray.push({
+                ...evt,
+                id,
+                eventType: eventTypeInfo.key,
+                scheduled: evt.scheduled === undefined ? true : evt.scheduled,
+                attended: evt.attended === true,
+                source: 'legacy'
+              });
+            }
+          });
         }
         
-        console.log(`${DEBUG_PREFIX} Processed ${eventsArray.length} events for ${eventTypeInfo.key}:`, 
-          eventsArray.map(e => ({ id: e.id, attended: e.attended, scheduled: e.scheduled, date: e.date })));
-      } else {
-        console.log(`${DEBUG_PREFIX} No event data found for ${eventTypeInfo.key}`);
+        console.log(`${DEBUG_PREFIX} Processed ${eventsArray.length} total events for ${eventTypeInfo.key}:`, 
+          eventsArray.map(e => ({ id: e.id, attended: e.attended, scheduled: e.scheduled, date: e.date, source: e.source })));
       }
+      
+      // ENHANCED: Merge with statistics data to include assigned events
+      if (statistics && Object.keys(statistics).length > 0) {
+        console.log(`${DEBUG_PREFIX} Merging statistics data for ${eventTypeInfo.key}`);
+        
+        Object.entries(statistics).forEach(([eventId, statEntry]) => {
+          if (!statEntry || typeof statEntry !== 'object') return;
+          
+          // Check if this statistic entry matches our event type
+          const statEventType = statEntry.eventType?.toLowerCase().replace(/[_\s-]/g, '');
+          const targetEventType = eventTypeInfo.key.toLowerCase().replace(/[_\s-]/g, '');
+          
+          // Also check alternate keys for matching
+          const allTargetTypes = [targetEventType, ...(eventTypeInfo.alternateKeys || []).map(k => k.toLowerCase().replace(/[_\s-]/g, ''))];
+          
+          const isMatchingEventType = allTargetTypes.includes(statEventType);
+          
+          if (isMatchingEventType) {
+            console.log(`${DEBUG_PREFIX} Found matching statistic for ${eventTypeInfo.key}:`, statEntry);
+            
+            // Check if this event is already in our events array
+            const existingEvent = eventsArray.find(e => e.id === eventId);
+            
+            if (!existingEvent) {
+              // Add new event from statistics
+              const newEvent = {
+                id: eventId,
+                eventType: eventTypeInfo.key,
+                title: statEntry.eventTitle || 'Assigned Event',
+                date: statEntry.date,
+                location: statEntry.location,
+                scheduled: true,
+                attended: statEntry.clockedIn === true || statEntry.status === 'completed',
+                assigned: statEntry.status === 'assigned',
+                assignedAt: statEntry.assignedAt,
+                clockedIn: statEntry.clockedIn === true,
+                clockInTime: statEntry.clockInTime,
+                status: statEntry.status
+              };
+              
+              eventsArray.push(newEvent);
+              console.log(`${DEBUG_PREFIX} Added assigned event from statistics:`, newEvent);
+            } else {
+              // Update existing event with statistics info
+              existingEvent.assigned = statEntry.status === 'assigned';
+              existingEvent.assignedAt = statEntry.assignedAt;
+              existingEvent.clockedIn = statEntry.clockedIn === true;
+              existingEvent.clockInTime = statEntry.clockInTime;
+              existingEvent.status = statEntry.status;
+              
+              // If they've clocked in, mark as attended
+              if (statEntry.clockedIn === true || statEntry.status === 'completed') {
+                existingEvent.attended = true;
+              }
+              
+              console.log(`${DEBUG_PREFIX} Updated existing event with statistics:`, existingEvent);
+            }
+          }
+        });
+      }
+      
+      // Sort events by date (most recent first)
+      eventsArray.sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return new Date(b.date) - new Date(a.date);
+      });
       
       const pendingEvents = eventsArray.filter(
         e => e.scheduled && !e.attended && !e.markedAbsent
       ).length;
       
-      const displayTitle = pendingEvents > 0 
-        ? `${eventTypeInfo.displayName} (${pendingEvents} pending)`
-        : eventTypeInfo.displayName;
+      const assignedEvents = eventsArray.filter(
+        e => e.assigned && !e.clockedIn
+      ).length;
+      
+      let displayTitle = eventTypeInfo.displayName;
+      if (assignedEvents > 0) {
+        displayTitle += ` (${assignedEvents} assigned)`;
+      } else if (pendingEvents > 0) {
+        displayTitle += ` (${pendingEvents} pending)`;
+      }
       
       return {
         title: displayTitle,
@@ -439,7 +633,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
         eventType: eventTypeInfo.key
       };
     });
-  }, [employeeData?.events]);
+  }, [employeeData?.events, employeeData?.statistics, globalEvents]);
 
   // Memoized calculated stats
   const calculatedStats = useMemo(() => {
@@ -522,6 +716,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
         if (isEventForUser(data) && mountedRef.current) {
           console.log(`${DEBUG_PREFIX} Event matches our user, refreshing data`);
           loadEmployeeData(true);
+          loadGlobalEvents(); // Also refresh global events
           setEventCount(prev => prev + 1);
         }
       });
@@ -541,10 +736,11 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
     setError(null);
     fetchEventTypes();
     loadEmployeeData(true);
+    loadGlobalEvents(); // Also refresh global events
     if (onRefresh) {
       onRefresh();
     }
-  }, [onRefresh, fetchEventTypes, loadEmployeeData]);
+  }, [onRefresh, fetchEventTypes, loadEmployeeData, loadGlobalEvents]);
 
   // Helper function for score colors
   const getScoreClass = useCallback((score) => {
@@ -589,12 +785,14 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   ], [calculatedStats, stats, getScoreClass]);
 
   // Loading state
-  if ((loading || loadingEventTypes) && !employeeData) {
+  if ((loading || loadingEventTypes || loadingGlobalEvents) && !employeeData) {
     return (
       <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-8 flex justify-center items-center">
         <div className="flex flex-col items-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-          <div className="text-white/70">Loading employee data...</div>
+          <div className="text-white/70">
+            Loading {loadingGlobalEvents ? 'events' : loadingEventTypes ? 'event types' : 'employee data'}...
+          </div>
         </div>
       </div>
     );
@@ -627,31 +825,44 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
     );
   }
 
-  // Timeline Box component
-  const TimelineBox = ({ isAttended, date, tooltipContent, isScheduled, attendanceStatus }) => {
+  // Timeline Box component - ENHANCED to handle assigned status
+  const TimelineBox = ({ isAttended, date, tooltipContent, isScheduled, attendanceStatus, isAssigned, clockedIn }) => {
     let backgroundClass = '';
     let borderClass = '';
     let textClass = '';
     let icon = null;
 
     if (isScheduled) {
-      if (attendanceStatus === 'pending') {
-        backgroundClass = 'bg-orange-500/20';
-        borderClass = 'border-orange-500/30';
-        textClass = 'text-orange-400';
-        icon = <Clock className="w-4 h-4" />;
-      } else if (isAttended) {
+      // PRIORITY 1: Assigned but not clocked in - RED BOX
+      if (isAssigned && !clockedIn) {
+        backgroundClass = 'bg-red-500/30';
+        borderClass = 'border-red-500/50';
+        textClass = 'text-red-300';
+        icon = <AlertCircle className="w-4 h-4" />;
+      }
+      // PRIORITY 2: Attended/Clocked in - GREEN BOX
+      else if (isAttended || clockedIn) {
         backgroundClass = 'bg-green-500/20';
         borderClass = 'border-green-500/30';
         textClass = 'text-green-400';
         icon = <CheckSquare className="w-4 h-4" />;
-      } else {
+      }
+      // PRIORITY 3: Pending (scheduled but not attended) - ORANGE BOX
+      else if (attendanceStatus === 'pending') {
+        backgroundClass = 'bg-orange-500/20';
+        borderClass = 'border-orange-500/30';
+        textClass = 'text-orange-400';
+        icon = <Clock className="w-4 h-4" />;
+      }
+      // PRIORITY 4: Missed/Absent - DARK RED BOX
+      else {
         backgroundClass = 'bg-red-500/20';
         borderClass = 'border-red-500/30';
         textClass = 'text-red-400';
         icon = <XSquare className="w-4 h-4" />;
       }
     } else {
+      // Not scheduled - GRAY BOX
       backgroundClass = 'bg-slate-800/50';
       borderClass = 'border-slate-700/30';
       textClass = 'text-slate-600';
@@ -663,7 +874,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       <div className="flex flex-col items-center mb-1">
         <div className={`w-6 h-6 border relative group ${backgroundClass} ${borderClass} ${textClass}
           flex items-center justify-center text-xs rounded-md cursor-help`}>
-          {icon || (isScheduled ? (isAttended ? '✓' : attendanceStatus === 'pending' ? '⏱' : '✗') : '-')}
+          {icon || (isScheduled ? (isAttended || clockedIn ? '✓' : isAssigned && !clockedIn ? '!' : attendanceStatus === 'pending' ? '⏱' : '✗') : '-')}
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2
             px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100
             transition pointer-events-none whitespace-nowrap z-10 border border-slate-600">
@@ -675,14 +886,24 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
     );
   };
 
-  // Registry Section component
+  // Registry Section component - ENHANCED to handle assigned events and chronological ordering
   const RegistrySection = ({ title, events = [], total = 0, eventType }) => {
     const eventsArray = Array.isArray(events) ? events : [];
-    const scheduledEvents = eventsArray.filter(e => e.scheduled);
-    const pendingEvents = scheduledEvents.filter(e => e.scheduled && !e.attended && !e.markedAbsent);
-    const nonPendingEvents = scheduledEvents.filter(e => e.attended !== undefined || e.markedAbsent);
+    
+    // Sort events by date (most recent first) for proper chronological display
+    const sortedEvents = [...eventsArray].sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return new Date(b.date) - new Date(a.date);
+    });
+    
+    const scheduledEvents = sortedEvents.filter(e => e.scheduled);
+    const pendingEvents = scheduledEvents.filter(e => e.scheduled && !e.attended && !e.markedAbsent && !e.assigned);
+    const assignedEvents = sortedEvents.filter(e => e.assigned && !e.clockedIn);
+    const nonPendingEvents = scheduledEvents.filter(e => e.attended !== undefined || e.markedAbsent || e.clockedIn);
     const attendancePercentage = nonPendingEvents.length > 0
-      ? ((nonPendingEvents.filter(e => e.attended).length / nonPendingEvents.length) * 100).toFixed(1)
+      ? ((nonPendingEvents.filter(e => e.attended || e.clockedIn).length / nonPendingEvents.length) * 100).toFixed(1)
         : 0;
 
     return (
@@ -690,24 +911,34 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
         <div className="flex justify-between items-center mb-4">
           <h4 className="text-sm font-medium text-white/80">{title}</h4>
           <div className="flex items-center gap-2">
+            {assignedEvents.length > 0 && (
+              <span className="text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-full">
+                {assignedEvents.length} Assigned
+              </span>
+            )}
             {pendingEvents.length > 0 && (
               <span className="text-xs text-orange-400 bg-orange-500/10 px-2 py-1 rounded-full">
                 {pendingEvents.length} Pending
               </span>
             )}
-            <span className="text-xs text-white/50">Attendance: {attendancePercentage}%</span>
+            <span className="text-xs text-white/50">
+              Attendance: {attendancePercentage}% ({sortedEvents.length}/{total})
+            </span>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           {Array.from({ length: total }).map((_, index) => {
-            const event = eventsArray[index] || {};
+            // Use sorted events for chronological display
+            const event = sortedEvents[index] || {};
 
             let attendanceStatus = 'none';
             if (event.scheduled) {
-              if (event.attended === true) {
+              if (event.attended === true || event.clockedIn === true) {
                 attendanceStatus = 'attended';
               } else if (event.markedAbsent === true || event.attended === false) {
                 attendanceStatus = 'absent';
+              } else if (event.assigned && !event.clockedIn) {
+                attendanceStatus = 'assigned';
               } else {
                 attendanceStatus = 'pending';
               }
@@ -716,21 +947,25 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
             const tooltipContent = event.date
               ? `${moment(event.date).format('MMM D, YYYY')}: ${
                   event.scheduled
-                    ? attendanceStatus === 'pending'
+                    ? attendanceStatus === 'assigned'
+                      ? `Assigned - Clock in required${event.assignedAt ? ` (assigned ${moment(event.assignedAt).format('MMM D, h:mm A')})` : ''}`
+                      : attendanceStatus === 'pending'
                       ? 'Pending attendance'
                       : attendanceStatus === 'attended'
-                      ? 'Attended'
+                      ? `Attended${event.clockInTime ? ` at ${event.clockInTime}` : ''}${event.attendedAt ? ` (${moment(event.attendedAt).format('MMM D, h:mm A')})` : ''}`
                       : 'Absent'
                     : 'Not scheduled'
-                }${event.title ? ` - ${event.title}` : ''}${eventType ? ` (${formatEventType(eventType)})` : ''}`
-              : 'Not scheduled yet';
+                }${event.title ? ` - ${event.title}` : ''}${eventType ? ` (${formatEventType(eventType)})` : ''}${event.location ? ` @ ${event.location}` : ''}${event.source ? ` [${event.source}]` : ''}`
+              : `Slot ${index + 1} - Not scheduled yet`;
 
             return (
               <TimelineBox
-                key={index}
+                key={`${eventType}-${index}-${event.id || 'empty'}`}
                 isAttended={event.attended || false}
                 isScheduled={event.scheduled || false}
                 attendanceStatus={attendanceStatus}
+                isAssigned={event.assigned || false}
+                clockedIn={event.clockedIn || false}
                 date={event.date}
                 tooltipContent={tooltipContent}
               />
@@ -747,10 +982,10 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       <div className="p-6 border-b border-slate-700 flex justify-between items-center">
         <h2 className="text-lg font-semibold text-white/90 flex items-center gap-2">
           Registry
-          {loadingEventTypes && (
+          {(loadingEventTypes || loadingGlobalEvents) && (
             <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded-full flex items-center gap-1">
               <RefreshCw size={10} className="animate-spin" />
-              Loading...
+              {loadingGlobalEvents ? 'Loading Events...' : 'Loading Types...'}
             </span>
           )}
           {error && (
@@ -761,14 +996,14 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
           )}
         </h2>
         <div className="flex items-center gap-2">
-          {loading && <span className="text-xs text-gray-400 italic">Refreshing...</span>}
+          {(loading || loadingGlobalEvents) && <span className="text-xs text-gray-400 italic">Refreshing...</span>}
           <button 
             onClick={handleRefresh}
             className="flex items-center gap-1 text-sm bg-blue-600 px-3 py-1 rounded text-white hover:bg-blue-700 disabled:opacity-50"
             title={`Last refresh: ${lastRefresh.toLocaleTimeString()}`}
-            disabled={loading || loadingEventTypes}
+            disabled={loading || loadingEventTypes || loadingGlobalEvents}
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={(loading || loadingGlobalEvents) ? "animate-spin" : ""} />
             Refresh
           </button>
         </div>
@@ -796,6 +1031,37 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
 
       {/* Event Registry */}
       <div className="p-6 space-y-6 border-t border-slate-700">
+        {/* Legend */}
+        <div className="bg-slate-800/80 backdrop-blur rounded-lg p-4 mb-6">
+          <h4 className="text-sm font-medium text-white/80 mb-3">Status Legend</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500/30 border border-red-500/50 rounded-md flex items-center justify-center text-red-300">
+                <AlertCircle className="w-3 h-3" />
+              </div>
+              <span className="text-white/70">Assigned - Clock in required</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500/20 border border-green-500/30 rounded-md flex items-center justify-center text-green-400">
+                <CheckSquare className="w-3 h-3" />
+              </div>
+              <span className="text-white/70">Attended</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-500/20 border border-orange-500/30 rounded-md flex items-center justify-center text-orange-400">
+                <Clock className="w-3 h-3" />
+              </div>
+              <span className="text-white/70">Pending</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500/20 border border-red-500/30 rounded-md flex items-center justify-center text-red-400">
+                <XSquare className="w-3 h-3" />
+              </div>
+              <span className="text-white/70">Missed/Absent</span>
+            </div>
+          </div>
+        </div>
+
         {attendanceStats.map((section, index) => (
           <RegistrySection
             key={`${section.eventType}-${index}`}
