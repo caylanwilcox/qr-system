@@ -346,19 +346,16 @@ const PersonalInfoSection = ({
 
   // Check if email or password has changed (requiring authentication)
   const needsAuthentication = () => {
-    // Remove authentication requirement - no longer need current password
-    return false;
+    return isCurrentUser && (
+      (formData.email && formData.email !== originalValues.email) ||
+      (formData.password && formData.password.trim() !== '')
+    );
   };
 
   // Handle user logout
   const handleLogout = async () => {
     try {
-      // If your auth context has a logout function
-      if (window.logout) {
-        await window.logout();
-      } else {
-        await auth.signOut();
-      }
+      await auth.signOut();
       // Redirect to login page
       window.location.href = '/login';
     } catch (error) {
@@ -374,71 +371,84 @@ const PersonalInfoSection = ({
       throw new Error('Not authenticated');
     }
     
-    // No authentication required - directly update user profile
+    // Authenticate user if required
+    if (needsAuthentication()) {
+      if (!currentPassword) {
+        throw new Error('Current password is required to update email or password');
+      }
+      
+      try {
+        const credential = EmailAuthProvider.credential(
+          auth.currentUser.email,
+          currentPassword
+        );
+        await reauthenticateWithCredential(auth.currentUser, credential);
+      } catch (error) {
+        if (error.code === 'auth/wrong-password') {
+          throw new Error('Current password is incorrect');
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    // Update the user profile
     const updates = [];
     let credChanged = false;
     
-    try {
-      // Update display name if changed
-      if (formData.name && formData.name !== auth.currentUser.displayName) {
-        updates.push(updateProfile(auth.currentUser, {
-          displayName: formData.name
-        }));
-      }
-      
-      // Update email if changed - no reauthentication required
-      if (formData.email && formData.email !== auth.currentUser.email) {
-        updates.push(updateEmail(auth.currentUser, formData.email));
-        credChanged = true;
-      }
-      
-      // Update password if provided - no reauthentication required
-      if (formData.password && formData.password.trim() !== '') {
-        updates.push(updatePassword(auth.currentUser, formData.password));
-        credChanged = true;
-      }
-      
-      // Execute all updates
-      if (updates.length > 0) {
-        await Promise.all(updates);
-      }
-      
-      return { success: true, credentialsChanged: credChanged };
-    } catch (error) {
-      console.error('Firebase Auth update error:', error);
-      // If Firebase Auth fails, we'll still update the database
-      return { success: true, credentialsChanged: false, authError: error.message };
+    // Update display name if changed
+    if (formData.name && formData.name !== auth.currentUser.displayName) {
+      updates.push(updateProfile(auth.currentUser, {
+        displayName: formData.name
+      }));
     }
+    
+    // Update email if changed
+    if (formData.email && formData.email !== auth.currentUser.email) {
+      updates.push(updateEmail(auth.currentUser, formData.email));
+      credChanged = true;
+    }
+    
+    // Update password if provided
+    if (formData.password && formData.password.trim() !== '') {
+      updates.push(updatePassword(auth.currentUser, formData.password));
+      credChanged = true;
+    }
+    
+    // Execute all updates
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+    
+    return { success: true, credentialsChanged: credChanged };
   };
 
-  // Simplified admin update that works directly with Firebase Admin SDK
+  // Update Firebase Auth admin API for other users
   const updateUserAuthViaAdmin = async () => {
     try {
-      // Create update object
-      const updates = {};
+      // Only call admin API if we have auth-related updates
+      const authUpdates = {};
       
-      if (formData.name) updates.displayName = formData.name;
-      if (formData.email) updates.email = formData.email;
+      if (formData.name && formData.name !== originalValues.name) {
+        authUpdates.displayName = formData.name;
+      }
+      if (formData.email && formData.email !== originalValues.email) {
+        authUpdates.email = formData.email;
+      }
       if (formData.password && formData.password.trim() !== '') {
-        updates.password = formData.password;
+        authUpdates.password = formData.password;
       }
       
-      // Only proceed if we have updates
-      if (Object.keys(updates).length === 0) return { success: true };
+      // If no auth updates needed, skip this step
+      if (Object.keys(authUpdates).length === 0) {
+        return { success: true };
+      }
       
       // Get the current user's ID token
       const idToken = await auth.currentUser.getIdToken();
       
-      // Determine the API endpoint URL
-      const apiUrl = '/api/admin/update-user-auth'; // Always use Vercel API endpoint
-      
-      console.log('=== ADMIN API CALL ===');
-      console.log('API URL:', apiUrl);
-      console.log('User ID:', userId);
-      console.log('Updates to send:', updates);
-      
       // Call the admin API
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/admin/update-user-auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -446,24 +456,26 @@ const PersonalInfoSection = ({
         },
         body: JSON.stringify({
           userId,
-          updates
+          updates: authUpdates
         })
       });
       
-      const responseData = await response.json();
-      console.log('API Response:', responseData);
-      
       if (!response.ok) {
-        throw new Error(responseData.message || `HTTP ${response.status}: Failed to update user authentication`);
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to update user authentication');
       }
       
-      console.log('=== ADMIN API SUCCESS ===');
-      return { success: true };
+      const result = await response.json();
+      console.log('Admin auth update successful:', result);
       
+      return { success: true };
     } catch (error) {
-      console.error('=== ADMIN API ERROR ===');
-      console.error('Error details:', error);
-      throw error;
+      console.error('Admin update failed:', error);
+      
+      // Don't throw error for admin updates - continue with database update
+      // This allows the profile to be updated even if auth update fails
+      console.warn('Continuing with database update despite auth update failure');
+      return { success: false, error: error.message };
     }
   };
 
@@ -473,86 +485,30 @@ const PersonalInfoSection = ({
       // Create updates object for Firebase
       const dbUpdates = {};
       
-      // Update name in both places
-      if (formData.name) {
-        dbUpdates[`users/${userId}/profile/name`] = formData.name;
-        dbUpdates[`users/${userId}/name`] = formData.name; // Update root level too
-      }
-      
-      // Update username separately if provided
-      if (formData.username !== undefined) {
-        dbUpdates[`users/${userId}/profile/username`] = formData.username || '';
-        dbUpdates[`users/${userId}/username`] = formData.username || '';
-      }
-      
-      // Update email
-      if (formData.email) {
-        dbUpdates[`users/${userId}/profile/email`] = formData.email;
-        dbUpdates[`users/${userId}/email`] = formData.email; // Update root level too
-      }
-      
-      // Update phone
-      if (formData.phone !== undefined) {
-        dbUpdates[`users/${userId}/profile/phone`] = formData.phone || '';
-      }
-      
-      // Update service
-      if (formData.service) {
-        dbUpdates[`users/${userId}/profile/service`] = formData.service;
-      }
-      
-      // Update password in database if provided
-      if (formData.password && formData.password.trim() !== '') {
-        dbUpdates[`users/${userId}/profile/password`] = formData.password;
-      }
-      
-      // Update location if provided
-      if (formData.location) {
-        dbUpdates[`users/${userId}/profile/location`] = formData.location;
-        dbUpdates[`users/${userId}/location`] = formData.location;
-        dbUpdates[`users/${userId}/profile/primaryLocation`] = formData.location;
-      }
-      
-      // Update department if provided
-      if (formData.department) {
-        dbUpdates[`users/${userId}/profile/department`] = formData.department;
-      }
-      
-      // Update position if provided
-      if (formData.position) {
-        dbUpdates[`users/${userId}/profile/position`] = formData.position;
-      }
-      
-      // Update joinDate if provided
-      if (formData.joinDate) {
-        dbUpdates[`users/${userId}/profile/joinDate`] = formData.joinDate;
-      }
-      
-      // Update emergency contact fields if provided
-      if (formData.emergencyContact) {
-        dbUpdates[`users/${userId}/profile/emergencyContact`] = formData.emergencyContact;
-      }
-      
-      if (formData.emergencyPhone) {
-        dbUpdates[`users/${userId}/profile/emergencyPhone`] = formData.emergencyPhone;
-      }
-      
-      // Update padrino fields if needed
-      if (formData.padrino !== undefined) {
-        dbUpdates[`users/${userId}/profile/padrino`] = formData.padrino;
-      }
-      
-      if (formData.padrinoColor) {
-        dbUpdates[`users/${userId}/profile/padrinoColor`] = formData.padrinoColor;
-      }
+      // Update all form fields in the database
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          // Update in profile
+          dbUpdates[`users/${userId}/profile/${key}`] = value;
+          
+          // Also update certain fields at root level for backward compatibility
+          if (['name', 'email', 'location'].includes(key)) {
+            dbUpdates[`users/${userId}/${key}`] = value;
+          }
+        }
+      });
       
       // Also update authUid link for current user
       if (isCurrentUser && auth.currentUser) {
         dbUpdates[`users/${userId}/profile/authUid`] = auth.currentUser.uid;
       }
       
+      // Add timestamp
+      dbUpdates[`users/${userId}/profile/updatedAt`] = new Date().toISOString();
+      
       // Perform the database update
       await update(ref(database), dbUpdates);
+      console.log('Database updated successfully');
       return true;
     } catch (error) {
       console.error("Error updating database:", error);
@@ -567,18 +523,15 @@ const PersonalInfoSection = ({
       setUpdateStatus(null);
       setCredentialsChanged(false);
       
-      let authUpdateResult = null;
+      let authUpdateResult = { success: true };
       
-      // Step 1: Update Firebase Auth
+      // Step 1: Update Firebase Auth if necessary
       if (isCurrentUser) {
         try {
           // Update authentication for current user
-          authUpdateResult = await updateAuthUser();
-          if (authUpdateResult.credentialsChanged) {
+          const authResult = await updateAuthUser();
+          if (authResult.credentialsChanged) {
             setCredentialsChanged(true);
-          }
-          if (authUpdateResult.authError) {
-            console.warn('Firebase Auth update failed, but continuing with database update:', authUpdateResult.authError);
           }
         } catch (error) {
           console.error("Auth update error:", error);
@@ -590,17 +543,20 @@ const PersonalInfoSection = ({
           return;
         }
       } else {
-        // Admin updating another user - simplified approach
-        try {
-          authUpdateResult = await updateUserAuthViaAdmin();
-          console.log("Admin update result:", authUpdateResult);
-        } catch (error) {
-          console.error("Admin update error:", error);
-          // Continue with database update even if this fails
+        // Admin updating another user's auth
+        authUpdateResult = await updateUserAuthViaAdmin();
+        
+        if (!authUpdateResult.success) {
+          console.warn('Admin auth update failed, but continuing with database update');
+          // Show warning but don't stop the process
+          setUpdateStatus({ 
+            type: 'warning', 
+            message: `Profile updated, but authentication update failed: ${authUpdateResult.error}. User may need to use password reset.` 
+          });
         }
       }
       
-      // Step 2: Update the database (this always works)
+      // Step 2: Update the database
       await updateDatabaseWithAuthInfo();
       
       // Step 3: Call parent onSave if provided
@@ -615,20 +571,10 @@ const PersonalInfoSection = ({
           message: 'Profile updated successfully! You need to log in again with your new credentials.' 
         });
         setShowLogoutPrompt(true);
-      } else {
-        let message = 'Profile updated successfully!';
-        
-        if (!isCurrentUser) {
-          if (formData.email || formData.password) {
-            message = 'Profile updated in database! For login credentials to work, the user should use "Forgot Password" on the login page to sync with Firebase Auth.';
-          }
-        } else if (authUpdateResult?.authError) {
-          message = 'Profile updated in database! Firebase Auth update failed, but database changes were saved.';
-        }
-        
+      } else if (authUpdateResult.success) {
         setUpdateStatus({ 
           type: 'success', 
-          message: message
+          message: 'Profile updated successfully!' 
         });
         
         // If a fetchUserData function was provided, refresh the user data
@@ -636,6 +582,7 @@ const PersonalInfoSection = ({
           await fetchUserData();
         }
       }
+      // If there was a warning, we already set it above
       
       // Clear sensitive data
       setCurrentPassword('');
@@ -682,8 +629,44 @@ const PersonalInfoSection = ({
 
   // Render current password field when needed
   const renderCurrentPasswordField = () => {
-    // No longer require current password verification
-    return null;
+    if (!editMode || !isCurrentUser || !needsAuthentication()) return null;
+    
+    return (
+      <div className="form-group md:col-span-2 mt-2">
+        <label htmlFor="currentPassword" className="block mb-2">
+          <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+            <Lock size={16} className="text-white/70" />
+            <span>Current Password</span>
+            <span className="text-red-400">*</span>
+          </span>
+        </label>
+        <div className="relative">
+          <input
+            id="currentPassword"
+            type={showCurrentPassword ? "text" : "password"}
+            value={currentPassword}
+            onChange={handleCurrentPasswordChange}
+            placeholder="Enter your current password"
+            className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+              px-3 py-2 text-white/90 placeholder-white/50
+              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+              backdrop-blur-md transition-all duration-200 pr-12
+            `}
+            required
+          />
+          <button
+            type="button"
+            onClick={() => togglePasswordVisibility('current')}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+          >
+            {showCurrentPassword ? "HIDE" : "SHOW"}
+          </button>
+        </div>
+        <p className="text-amber-400 text-xs mt-1">
+          Required to confirm changes to password or email
+        </p>
+      </div>
+    );
   };
 
   return (
@@ -698,11 +681,17 @@ const PersonalInfoSection = ({
 
       {updateStatus && (
         <div className={`mx-6 mt-4 p-3 rounded ${
-          updateStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+          updateStatus.type === 'success' 
+            ? 'bg-green-900/50 text-green-300' 
+            : updateStatus.type === 'warning'
+            ? 'bg-yellow-900/50 text-yellow-300'
+            : 'bg-red-900/50 text-red-300'
         }`}>
           <div className="flex items-start">
             {updateStatus.type === 'success' ? (
               <CheckCircle size={18} className="mr-2 mt-0.5 flex-shrink-0" />
+            ) : updateStatus.type === 'warning' ? (
+              <AlertTriangle size={18} className="mr-2 mt-0.5 flex-shrink-0" />
             ) : (
               <AlertCircle size={18} className="mr-2 mt-0.5 flex-shrink-0" />
             )}
@@ -711,73 +700,73 @@ const PersonalInfoSection = ({
         </div>
       )}
 
-      {/* Login Credentials Section - Always visible */}
-      <div className="p-6 pt-4">
-        <div className="bg-[rgba(13,25,48,0.6)] p-4 rounded-lg border border-blue-500/20 mb-6">
-          <h3 className="text-blue-400 text-md font-semibold mb-3 flex items-center">
-            <KeyRound size={18} className="mr-2" />
-            Login Credentials
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Email */}
-            <FormField
-              label="Email Address"
-              icon={<Mail size={16} className="text-white/70" />}
-              name="email"
-              type="email"
-              value={formData.email || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.email}
-              required
-            />
-            
-            {/* Password */}
-            <div className="form-group">
-              <label htmlFor="password" className="block mb-2">
-                <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
-                  <Lock size={16} className="text-white/70" />
-                  <span>Password</span>
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  value={formData.password || ''}
-                  onChange={handlePasswordChange}
-                  disabled={!editMode}
-                  placeholder="Enter new password"
-                  className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
-                    px-3 py-2 text-white/90 placeholder-white/50
-                    focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-                    disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
-                    backdrop-blur-md transition-all duration-200 pr-12
-                    ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
-                  `}
-                />
-                {editMode && (
-                  <button
-                    type="button"
-                    onClick={() => togglePasswordVisibility('new')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-                  >
-                    {showPassword ? "HIDE" : "SHOW"}
-                  </button>
+      {/* Login Credentials Section - Always visible when editing */}
+      {editMode && (
+        <div className="p-6 pt-4">
+          <div className="bg-[rgba(13,25,48,0.6)] p-4 rounded-lg border border-blue-500/20 mb-6">
+            <h3 className="text-blue-400 text-md font-semibold mb-3 flex items-center">
+              <KeyRound size={18} className="mr-2" />
+              Login Credentials
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Email */}
+              <FormField
+                label="Email Address"
+                icon={<Mail size={16} className="text-white/70" />}
+                name="email"
+                type="email"
+                value={formData.email || ''}
+                onChange={handleInputChange}
+                disabled={!editMode}
+                error={errors.email}
+                required
+              />
+              
+              {/* Password */}
+              <div className="form-group">
+                <label htmlFor="password" className="block mb-2">
+                  <span className="inline-flex items-center gap-2 text-sm text-gray-300/90">
+                    <Lock size={16} className="text-white/70" />
+                    <span>Password</span>
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={formData.password || ''}
+                    onChange={handlePasswordChange}
+                    disabled={!editMode}
+                    placeholder="Enter new password"
+                    className={`w-full rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10
+                      px-3 py-2 text-white/90 placeholder-white/50
+                      focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+                      disabled:bg-[rgba(13,25,48,0.3)] disabled:text-white/30 disabled:cursor-not-allowed
+                      backdrop-blur-md transition-all duration-200 pr-12
+                      ${errors.password ? 'border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50' : ''}
+                    `}
+                  />
+                  {editMode && (
+                    <button
+                      type="button"
+                      onClick={() => togglePasswordVisibility('new')}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                    >
+                      {showPassword ? "HIDE" : "SHOW"}
+                    </button>
+                  )}
+                </div>
+                {errors.password && (
+                  <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
+                    <AlertCircle size={14} />
+                    <span>{errors.password}</span>
+                  </div>
                 )}
               </div>
-              {errors.password && (
-                <div id="password-error" className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                  <AlertCircle size={14} />
-                  <span>{errors.password}</span>
-                </div>
-              )}
             </div>
-          </div>
-          
-          {/* Help text for login credentials */}
-          {editMode && (
+            
+            {/* Help text for login credentials */}
             <div className="mt-3 text-amber-400 text-sm flex items-start">
               <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
               <span>
@@ -786,12 +775,12 @@ const PersonalInfoSection = ({
                   : 'As an admin, you can update this user\'s login credentials. They will need to use these new details next time they log in.'}
               </span>
             </div>
-          )}
-          
-          {/* Current password field for verification when changing own credentials */}
-          {renderCurrentPasswordField()}
+            
+            {/* Current password field for verification when changing own credentials */}
+            {renderCurrentPasswordField()}
+          </div>
         </div>
-      </div>
+      )}
         
       {/* Navigation tabs */}
       <div className="flex space-x-2 mx-6 overflow-x-auto pb-2 border-b border-white/10">
@@ -839,16 +828,6 @@ const PersonalInfoSection = ({
               disabled={!editMode}
               error={errors.name}
               required
-            />
-
-            <FormField
-              label="Username"
-              icon={<User size={16} className="text-white/70" />}
-              name="username"
-              value={formData.username || ''}
-              onChange={handleInputChange}
-              disabled={!editMode}
-              error={errors.username}
             />
 
             <FormField
