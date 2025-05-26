@@ -301,6 +301,8 @@ const PersonalInfoSection = ({
   
   // Reset functionality state
   const [isResetting, setIsResetting] = useState(false);
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [newPassword, setNewPassword] = useState('AV2025!');
   
   // Track original values for change detection
   const [originalValues, setOriginalValues] = useState({
@@ -645,6 +647,12 @@ const PersonalInfoSection = ({
       return;
     }
 
+    // For password reset, show input first if not already shown
+    if (type === 'password' && !showPasswordInput) {
+      setShowPasswordInput(true);
+      return;
+    }
+
     setIsResetting(true);
     try {
       const updates = {};
@@ -657,7 +665,11 @@ const PersonalInfoSection = ({
         updates.email = formData.email;
         updates.displayName = formData.name;
       } else if (type === 'password') {
-        updates.password = 'AV2025!';
+        if (!newPassword || newPassword.length < 6) {
+          setUpdateStatus({ type: 'error', message: 'Password must be at least 6 characters long.' });
+          return;
+        }
+        updates.password = newPassword;
       }
 
       // Call admin API
@@ -692,12 +704,18 @@ const PersonalInfoSection = ({
 
       const message = type === 'email' 
         ? `Email reset to: ${updates.email}` 
-        : `Password reset to: AV2025!`;
+        : `Password reset to: ${newPassword}`;
       
       setUpdateStatus({
         type: 'success',
         message: `Successfully reset ${type}. ${message}`
       });
+      
+      // Reset password input state
+      if (type === 'password') {
+        setShowPasswordInput(false);
+        setNewPassword('AV2025!');
+      }
       
       if (fetchUserData) {
         await fetchUserData();
@@ -846,12 +864,37 @@ const PersonalInfoSection = ({
                       className="px-3 py-1 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 text-xs"
                       disabled={isResetting}
                     >
-                      Reset Password
+                      {showPasswordInput ? 'Confirm Reset' : 'Reset Password'}
                     </button>
                   </div>
                 </div>
+                
+                {/* Password input field */}
+                {showPasswordInput && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                      className="flex-1 px-3 py-1 rounded-md bg-[rgba(13,25,48,0.6)] border border-white/10 text-white/90 placeholder-white/50 text-xs"
+                    />
+                    <button
+                      onClick={() => {
+                        setShowPasswordInput(false);
+                        setNewPassword('AV2025!');
+                      }}
+                      className="px-2 py-1 rounded-md border border-white/20 text-white/70 hover:bg-white/10 text-xs"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                
                 <p className="text-white/60 text-xs mt-1">
-                  Reset email to current form value or password to "AV2025!"
+                  {showPasswordInput 
+                    ? 'Enter the new password and click "Confirm Reset"' 
+                    : 'Reset email to current form value or set a custom password'}
                 </p>
               </div>
             )}
