@@ -127,34 +127,77 @@ export default async function handler(req, res) {
       const userSnapshot = await userRef.once('value');
       const userData = userSnapshot.val();
       
-      console.log(`👤 [DEBUG:${requestId}] User data from database:`, {
+      console.log(`👤 [DEBUG:${requestId}] FULL User data from database:`, JSON.stringify(userData, null, 2));
+      console.log(`👤 [DEBUG:${requestId}] User data breakdown:`, {
         exists: !!userData,
+        hasProfile: !!userData?.profile,
+        profileKeys: userData?.profile ? Object.keys(userData.profile) : 'No profile',
         profile: userData?.profile ? {
           name: userData.profile.name,
           email: userData.profile.email,
           role: userData.profile.role,
-          authUid: userData.profile.authUid
+          authUid: userData.profile.authUid,
+          allProfileFields: Object.keys(userData.profile)
         } : 'No profile found',
         rootLevel: {
           name: userData?.name,
           email: userData?.email,
-          role: userData?.role
+          role: userData?.role,
+          allRootFields: userData ? Object.keys(userData) : 'No userData'
         }
       });
       
-      const userRole = userData?.profile?.role?.toLowerCase() || userData?.role?.toLowerCase();
-      console.log(`🎭 [DEBUG:${requestId}] User role (normalized): ${userRole || 'No role found'}`);
+      // Check multiple possible role locations
+      const possibleRoles = [
+        userData?.profile?.role,
+        userData?.role,
+        userData?.profile?.userRole,
+        userData?.userRole,
+        userData?.profile?.position,
+        userData?.position
+      ];
       
-      if (!userRole || (!userRole.includes('admin') && userRole !== 'super_admin')) {
+      console.log(`🎭 [DEBUG:${requestId}] All possible role values:`, possibleRoles);
+      
+      const userRole = possibleRoles.find(role => role && typeof role === 'string')?.toLowerCase();
+      console.log(`🎭 [DEBUG:${requestId}] Selected user role (normalized): ${userRole || 'No role found'}`);
+      
+      // Also check custom claims from token
+      const tokenClaims = {
+        admin: decodedToken.admin,
+        role: decodedToken.role,
+        superAdmin: decodedToken.superAdmin
+      };
+      console.log(`🎫 [DEBUG:${requestId}] Token custom claims:`, tokenClaims);
+      
+      // Check if user has admin privileges from either database or token claims
+      const hasAdminFromToken = decodedToken.admin === true || decodedToken.superAdmin === true;
+      const hasAdminFromRole = userRole && (userRole.includes('admin') || userRole === 'super_admin');
+      const hasAdminPrivileges = hasAdminFromToken || hasAdminFromRole;
+      
+      console.log(`🔐 [DEBUG:${requestId}] Admin privilege check:`, {
+        hasAdminFromToken,
+        hasAdminFromRole,
+        hasAdminPrivileges,
+        tokenAdmin: decodedToken.admin,
+        tokenSuperAdmin: decodedToken.superAdmin,
+        databaseRole: userRole
+      });
+      
+      if (!hasAdminPrivileges) {
         console.log(`❌ [DEBUG:${requestId}] Access denied - insufficient privileges`);
-        console.log(`❌ [DEBUG:${requestId}] Required: admin or super_admin, Found: ${userRole || 'none'}`);
+        console.log(`❌ [DEBUG:${requestId}] Required: admin privileges via token claims OR database role containing 'admin'`);
+        console.log(`❌ [DEBUG:${requestId}] Found: Token admin=${decodedToken.admin}, Token superAdmin=${decodedToken.superAdmin}, DB role=${userRole || 'none'}`);
         return res.status(403).json({ 
           success: false, 
           message: 'Forbidden: Admin privileges required' 
         });
       }
       
-      console.log(`✅ [DEBUG:${requestId}] User has sufficient privileges: ${userRole}`);
+      console.log(`✅ [DEBUG:${requestId}] User has sufficient privileges:`, {
+        source: hasAdminFromToken ? 'Token Claims' : 'Database Role',
+        value: hasAdminFromToken ? `admin=${decodedToken.admin}, superAdmin=${decodedToken.superAdmin}` : userRole
+      });
       
     } catch (tokenError) {
       console.error(`❌ [DEBUG:${requestId}] Error verifying ID token:`, {
