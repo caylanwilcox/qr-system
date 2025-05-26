@@ -1,5 +1,6 @@
 //pages/api/admin/update-user-auth.js
 // Enhanced debug version with comprehensive logging
+// Force deployment update - v2
 
 import admin from 'firebase-admin';
 
