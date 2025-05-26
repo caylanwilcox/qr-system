@@ -1,5 +1,5 @@
-// Fixed EmployeeProfile.jsx with proper admin user detection and props
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// Fixed EmployeeProfile.jsx with proper edit mode and admin authentication
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ref,
@@ -29,10 +29,8 @@ import {
   User, 
   BarChart2, 
   Calendar, 
-  ChevronLeft, 
-  ChevronRight, 
-  CreditCard, 
-  Clock 
+  Edit3,
+  X
 } from 'lucide-react';
 
 // Import your subcomponents:
@@ -298,75 +296,56 @@ const EmployeeProfile = () => {
     }
   };
 
-  // 🔥 UPDATED: Main "Save" for the entire personal info form
+  // 🔥 ENHANCED: Handle save - this will be called by PersonalInfoSection
   const handleSave = async () => {
-    console.log('💾 [EMPLOYEE_PROFILE] Starting save process...', {
-      isCurrentUser,
-      isAdminUser,
-      employeeId,
-      hasPassword: !!formData.password,
-      passwordLength: formData.password?.length || 0
-    });
-
-    // Build our updates for RTDB
-    const updates = {
-      name: formData.name,
-      username: formData.username,
-      email: formData.email,
-      phone: formData.phone,
-      position: formData.position,
-      department: formData.department,
-      primaryLocation: formData.location,
-      joinDate: formData.joinDate,
-      role: formData.role,
-      status: formData.status,
-      emergencyContact: formData.emergencyContact,
-      emergencyPhone: formData.emergencyPhone,
-      notes: formData.notes,
-      padrino: formData.padrino,
-      padrinoColor: formData.padrinoColor,
-      service: formData.service,
-    };
-
+    console.log('💾 [EMPLOYEE_PROFILE] Save called from PersonalInfoSection');
+    
+    // The PersonalInfoSection handles the actual saving logic
+    // This is just for any additional parent-level logic
     try {
-      // First update the profile in RTDB
-      await update(ref(database, `users/${employeeId}/profile`), updates);
-      console.log('💾 [EMPLOYEE_PROFILE] Database profile updated');
-
-      // Update local details
-      setEmployeeDetails((prev) => ({
-        ...prev,
-        profile: { ...prev?.profile, ...updates },
-      }));
-
-      // Handle password update - store in database for admin reference
-      if (formData.password && formData.password.trim() !== '') {
-        try {
-          console.log('🔑 [EMPLOYEE_PROFILE] Updating password in database...');
-          // Store the password in RTDB for record-keeping
-          await update(ref(database, `users/${employeeId}/profile`), {
-            password: formData.password
-          });
-          
-          console.log('🔑 [EMPLOYEE_PROFILE] Password stored in database for admin reference');
-          
-          // Clear the password from formData
-          setFormData((prev) => ({ ...prev, password: '' }));
-          
-          showNotification('Profile and password updated successfully. Note: Authentication system will be updated separately.');
-        } catch (err) {
-          console.error('Error updating password in database:', err);
-          showNotification('Profile updated, but failed to update password', 'warning');
-        }
-      } else {
-        showNotification('Profile updated successfully');
-      }
-
-      // Exit edit mode
+      // Refresh employee details after save
+      await fetchEmployeeDetails();
+      
+      // Exit edit mode after successful save
       setEditMode(false);
-    } catch (err) {
-      console.error('Save error:', err);
-      showNotification('Failed to save changes', 'error');
+      
+      console.log('✅ [EMPLOYEE_PROFILE] Save completed, edit mode disabled');
+    } catch (error) {
+      console.error('❌ [EMPLOYEE_PROFILE] Error in parent save handler:', error);
+    }
+  };
+
+  // 🔥 FIXED: Handle edit mode toggle
+  const handleEditToggle = () => {
+    console.log('✏️ [EMPLOYEE_PROFILE] Edit mode toggle:', !editMode);
+    setEditMode(prev => !prev);
+  };
+
+  // 🔥 FIXED: Handle cancel edit
+  const handleCancelEdit = () => {
+    console.log('❌ [EMPLOYEE_PROFILE] Cancel edit mode');
+    setEditMode(false);
+    // Reset form data to original values
+    if (employeeDetails?.profile) {
+      setFormData({
+        name: employeeDetails.profile?.name || '',
+        username: employeeDetails.profile?.username || '',
+        email: employeeDetails.profile?.email || '',
+        phone: employeeDetails.profile?.phone || '',
+        position: employeeDetails.profile?.position || '',
+        department: employeeDetails.profile?.department || '',
+        location: employeeDetails.profile?.primaryLocation || '',
+        joinDate: employeeDetails.profile?.joinDate || '',
+        role: employeeDetails.profile?.role || 'employee',
+        status: employeeDetails.profile?.status || 'inactive',
+        emergencyContact: employeeDetails.profile?.emergencyContact || '',
+        emergencyPhone: employeeDetails.profile?.emergencyPhone || '',
+        notes: employeeDetails.profile?.notes || '',
+        padrino: employeeDetails.profile?.padrino ?? false,
+        padrinoColor: employeeDetails.profile?.padrinoColor || 'red',
+        service: employeeDetails.profile?.service || '',
+        password: '', // Always clear password field
+      });
     }
   };
 
@@ -444,7 +423,7 @@ const EmployeeProfile = () => {
         padrino: data.profile?.padrino ?? false,
         padrinoColor: data.profile?.padrinoColor || 'red',
         service: data.profile?.service || '',
-        password: '',
+        password: '', // Always start with empty password
       });
 
       // Format scheduled dates
@@ -486,30 +465,70 @@ const EmployeeProfile = () => {
     { id: 'calendar', label: 'Calendar', icon: Calendar },
   ];
 
-  // 🔥 UPDATED: Render slide content with proper props
+  // 🔥 UPDATED: Render slide content with proper props and edit controls
   const renderSlideContent = (index, data) => {
     switch (index) {
       case 0:
         return (
-          <PersonalInfoSection
-            formData={formData}
-            editMode={editMode}
-            handleInputChange={handleInputChange}
-            userId={employeeId}
-            onRoleToggle={handleRoleToggle}
-            locations={LOCATIONS}
-            departments={DEPARTMENTS}
-            onPadrinoChange={handlePadrinoChange}
-            onPadrinoColorChange={handlePadrinoColorChange}
-            onSave={handleSave}
-            onCancel={() => setEditMode(false)}
-            errors={{}} // You can pass form validation errors here
-            userData={employeeDetails}
-            isCurrentUser={isCurrentUser}  // 🔥 CRITICAL
-            isAdminUser={isAdminUser}      // 🔥 CRITICAL - This was missing!
-            onSendPasswordReset={handleSendPasswordReset}
-            fetchUserData={fetchEmployeeDetails}
-          />
+          <div className="space-y-6">
+            {/* Edit Mode Controls - Only show if user has permission */}
+            {(isCurrentUser || isAdminUser) && (
+              <div className="flex justify-between items-center p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${editMode ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+                  <span className="text-white/80 font-medium">
+                    {editMode ? 'Edit Mode Active' : 'View Mode'}
+                  </span>
+                  {editMode && (
+                    <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded">
+                      Make changes and click Save
+                    </span>
+                  )}
+                </div>
+                
+                <div className="flex gap-2">
+                  {!editMode ? (
+                    <button
+                      onClick={handleEditToggle}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+                    >
+                      <Edit3 size={16} />
+                      Edit Profile
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCancelEdit}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                      <X size={16} />
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* PersonalInfoSection with all required props */}
+            <PersonalInfoSection
+              formData={formData}
+              editMode={editMode}
+              handleInputChange={handleInputChange}
+              userId={employeeId}
+              onRoleToggle={handleRoleToggle}
+              locations={LOCATIONS}
+              departments={DEPARTMENTS}
+              onPadrinoChange={handlePadrinoChange}
+              onPadrinoColorChange={handlePadrinoColorChange}
+              onSave={handleSave}
+              onCancel={handleCancelEdit}
+              errors={{}} // You can pass form validation errors here
+              userData={employeeDetails}
+              isCurrentUser={isCurrentUser}
+              isAdminUser={isAdminUser}  // 🔥 CRITICAL - This was missing!
+              onSendPasswordReset={handleSendPasswordReset}
+              fetchUserData={fetchEmployeeDetails}
+            />
+          </div>
         );
       case 1:
         return (
@@ -613,13 +632,27 @@ const EmployeeProfile = () => {
         </div>
       )}
 
-      {/* 🔥 Debug Panel - Remove in production */}
-      <div className="mb-4 p-3 bg-slate-800/50 rounded text-xs text-white/60">
-        <strong>Debug Info:</strong> Current User: {isCurrentUser ? 'Yes' : 'No'} | 
-        Admin: {isAdminUser ? 'Yes' : 'No'} | 
-        Profile ID: {employeeId} | 
-        Current User ID: {auth.currentUser?.uid || 'None'} |
-        Role: {currentUserData?.profile?.role || currentUserData?.role || 'None'}
+      {/* 🔥 Enhanced Debug Panel */}
+      <div className="mb-4 p-4 bg-slate-800/50 rounded-lg text-sm text-white/70 border border-slate-700">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <strong className="text-white">User Permissions:</strong>
+            <div className="mt-1 space-y-1">
+              <div>Current User: <span className={isCurrentUser ? 'text-green-400' : 'text-red-400'}>{isCurrentUser ? 'Yes' : 'No'}</span></div>
+              <div>Admin User: <span className={isAdminUser ? 'text-green-400' : 'text-red-400'}>{isAdminUser ? 'Yes' : 'No'}</span></div>
+              <div>Can Edit: <span className={(isCurrentUser || isAdminUser) ? 'text-green-400' : 'text-red-400'}>{(isCurrentUser || isAdminUser) ? 'Yes' : 'No'}</span></div>
+            </div>
+          </div>
+          <div>
+            <strong className="text-white">Profile State:</strong>
+            <div className="mt-1 space-y-1">
+              <div>Profile ID: <span className="text-blue-400">{employeeId}</span></div>
+              <div>Current User ID: <span className="text-blue-400">{auth.currentUser?.uid || 'None'}</span></div>
+              <div>Edit Mode: <span className={editMode ? 'text-green-400' : 'text-gray-400'}>{editMode ? 'Active' : 'Inactive'}</span></div>
+              <div>Role: <span className="text-yellow-400">{currentUserData?.profile?.role || currentUserData?.role || 'None'}</span></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Profile Header (with Edit/Save & Status toggles) */}
@@ -627,7 +660,7 @@ const EmployeeProfile = () => {
         formData={formData}
         editMode={editMode}
         employeeId={employeeId}
-        onEdit={() => setEditMode((prev) => !prev)}
+        onEdit={handleEditToggle}
         onSave={handleSave}
         onStatusToggle={handleStatusToggle}
         handleInputChange={handleInputChange}
