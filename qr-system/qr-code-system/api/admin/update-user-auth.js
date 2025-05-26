@@ -84,7 +84,7 @@ async function updateUserAuth(userId, updates) {
   }
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // Enable CORS for development
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -197,4 +197,4 @@ module.exports = async function handler(req, res) {
       message: `Server error: ${error.message}`
     });
   }
-};
+}
