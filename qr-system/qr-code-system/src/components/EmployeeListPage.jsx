@@ -166,8 +166,8 @@ const EmployeeList = () => {
     if (numScore >= 75) return 'bg-teal-400';
     if (numScore >= 65) return 'bg-yellow-400';
     if (numScore >= 55) return 'bg-orange-400';
-    if (numScore >= 45) return 'bg-red-400';
-    return 'bg-red-600';
+    if (numScore >= 45) return 'bg-blue-400';
+    return 'bg-blue-600';
   };
 
   // Get color for padrino rank

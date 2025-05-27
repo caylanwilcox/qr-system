@@ -361,9 +361,9 @@ const PersonalInfoSection = ({
                     <Shield className="mr-2 text-yellow-400" size={16} />
                     <span className="text-white/70 mr-2">Padrino Status:</span>
                     <div className="flex items-center">
-                      <span className={`w-3 h-3 rounded-full bg-${formData.padrinoColor}-500 mr-2`}></span>
-                      <span className={`text-${formData.padrinoColor}-400 capitalize`}>
-                        {formData.padrinoColor || 'Red'}
+                      <span className={`w-3 h-3 rounded-full bg-${formData.padrinoColorCode || 'blue'}-500 mr-2`}></span>
+                      <span className={`text-${formData.padrinoColorCode || 'blue'}-400 capitalize`}>
+                        {formData.padrinoColorCode || 'Blue'}
                       </span>
                     </div>
                   </div>

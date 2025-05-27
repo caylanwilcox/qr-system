@@ -72,7 +72,8 @@ const INITIAL_FORM_DATA = {
   emergencyPhone: '',
   notes: '',
   padrino: false,
-  padrinoColor: 'red',
+  padrinoColor: 'blue',
+  padrinoColorCode: 'blue',
   service: '',
   password: '',
 };
@@ -268,10 +269,12 @@ const EmployeeProfile = () => {
       // If enabling Padrino, attempt to auto-calc color
       if (checked) {
         const padrinoStatus = calculatePadrinoColor(employeeDetails);
-        updates.padrinoColor = padrinoStatus.eligible ? padrinoStatus.color : 'red';
+        updates.padrinoColor = padrinoStatus.eligible ? padrinoStatus.color : 'blue';
+        updates.padrinoColorCode = padrinoStatus.eligible ? padrinoStatus.color : 'blue';
       } else {
-        // If disabling, just keep color in DB or default to 'red'
-        updates.padrinoColor = formData.padrinoColor || 'red';
+        // If disabling, just keep color in DB or default to 'blue'
+        updates.padrinoColor = formData.padrinoColorCode || 'blue';
+        updates.padrinoColorCode = formData.padrinoColorCode || 'blue';
       }
 
       await update(ref(database, `users/${employeeId}/profile`), updates);
@@ -287,8 +290,8 @@ const EmployeeProfile = () => {
   const handlePadrinoColorChange = async (e) => {
     const { value } = e.target;
     try {
-      await update(ref(database, `users/${employeeId}/profile`), { padrinoColor: value });
-      setFormData((prev) => ({ ...prev, padrinoColor: value }));
+      await update(ref(database, `users/${employeeId}/profile`), { padrinoColor: value, padrinoColorCode: value });
+      setFormData((prev) => ({ ...prev, padrinoColorCode: value }));
       showNotification('Padrino color updated successfully');
     } catch (err) {
       console.error('Error updating padrino color:', err);
@@ -342,7 +345,8 @@ const EmployeeProfile = () => {
         emergencyPhone: employeeDetails.profile?.emergencyPhone || '',
         notes: employeeDetails.profile?.notes || '',
         padrino: employeeDetails.profile?.padrino ?? false,
-        padrinoColor: employeeDetails.profile?.padrinoColor || 'red',
+        padrinoColor: employeeDetails.profile?.padrinoColor || 'blue',
+        padrinoColorCode: employeeDetails.profile?.padrinoColorCode || 'blue',
         service: employeeDetails.profile?.service || '',
         password: '', // Always clear password field
       });
@@ -421,7 +425,8 @@ const EmployeeProfile = () => {
         emergencyPhone: data.profile?.emergencyPhone || '',
         notes: data.profile?.notes || '',
         padrino: data.profile?.padrino ?? false,
-        padrinoColor: data.profile?.padrinoColor || 'red',
+        padrinoColor: data.profile?.padrinoColor || 'blue',
+        padrinoColorCode: data.profile?.padrinoColorCode || 'blue',
         service: data.profile?.service || '',
         password: '', // Always start with empty password
       });
@@ -438,10 +443,12 @@ const EmployeeProfile = () => {
         ) {
           await update(ref(database, `users/${employeeId}/profile`), {
             padrinoColor: padrinoStatus.color,
+            padrinoColorCode: padrinoStatus.color,
           });
           setFormData((prev) => ({
             ...prev,
             padrinoColor: padrinoStatus.color,
+            padrinoColorCode: padrinoStatus.color,
           }));
           console.log(`Auto-updated padrino color to ${padrinoStatus.color}`);
         }

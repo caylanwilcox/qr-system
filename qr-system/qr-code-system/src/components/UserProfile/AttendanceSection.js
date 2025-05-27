@@ -18,17 +18,17 @@ const AttendanceSection = ({ employeeId, viewOnly = false }) => {
 
   // Function to determine status color based on clock in time
   const getStatusColor = (clockIn, expectedTime = '09:00') => {
-    if (!clockIn) return 'text-red-400';
+    if (!clockIn) return 'text-blue-400';
     
     // Parse times for comparison
     const clockInTime = new Date(`2000-01-01 ${clockIn}`);
     const expectedDateTime = new Date(`2000-01-01 ${expectedTime}`);
     const lateDateTime = new Date(`2000-01-01 09:15`);
     
-    // On time - green, slightly late - yellow, very late - red
+    // On time - green, slightly late - yellow, very late - blue
     if (clockInTime <= expectedDateTime) return 'text-emerald-400';
     if (clockInTime <= lateDateTime) return 'text-yellow-400';
-    return 'text-red-400';
+    return 'text-blue-400';
   };
 
   // Status badge component with consistent styling

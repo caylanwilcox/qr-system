@@ -3,13 +3,13 @@ import { Activity, Award } from 'lucide-react';
 import PropTypes from 'prop-types';
 
 const getRankColor = (rank) => {
-  if (!rank) return 'text-gray-400';
+  if (!rank) return 'text-blue-400';
   switch (rank.toLowerCase()) {
     case 'blue': return 'text-blue-400';
     case 'green': return 'text-green-400';
-    case 'red': return 'text-red-400';
+    case 'red': return 'text-blue-400';
     case 'orange': return 'text-orange-400';
-    default: return 'text-gray-400';
+    default: return 'text-blue-400';
   }
 };
 
@@ -26,11 +26,11 @@ const UserProfileHeader = ({ formData }) => (
             <span className={`status-dot ${formData?.status || 'inactive'}`} />
             {formData?.status || 'inactive'}
           </div>
-          {formData?.padrinoColor && (
+          {formData?.padrinoColorCode && (
             <div className="flex items-center gap-2">
-              <Award className={`w-4 h-4 ${getRankColor(formData.padrinoColor)}`} />
-              <span className={`text-sm ${getRankColor(formData.padrinoColor)}`}>
-                {`${formData.padrinoColor.charAt(0).toUpperCase()}${formData.padrinoColor.slice(1)} Rank`}
+              <Award className={`w-4 h-4 ${getRankColor(formData.padrinoColorCode)}`} />
+              <span className={`text-sm ${getRankColor(formData.padrinoColorCode)}`}>
+                {`${formData.padrinoColorCode.charAt(0).toUpperCase()}${formData.padrinoColorCode.slice(1)} Rank`}
               </span>
             </div>
           )}
@@ -46,7 +46,7 @@ UserProfileHeader.propTypes = {
     id: PropTypes.string,
     name: PropTypes.string,
     status: PropTypes.string,
-    padrinoColor: PropTypes.oneOf(['blue', 'green', 'red', 'orange', null]),
+    padrinoColorCode: PropTypes.oneOf(['blue', 'green', 'red', 'orange', null]),
   }).isRequired,
 };
 

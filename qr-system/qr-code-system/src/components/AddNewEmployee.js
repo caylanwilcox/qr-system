@@ -347,7 +347,7 @@ const AddNewEmployee = () => {
           // Only include padrino fields if padrino is true
           ...(formData.padrino ? {
             padrino: true,
-            padrinoColor: formData.padrinoColor || "red"
+            padrinoColor: formData.padrinoColor || "blue"
           } : {})
         },
         stats: {
@@ -588,10 +588,10 @@ const AddNewEmployee = () => {
                   onChange={handleChange}
                   className="form-select"
                 >
-                  <option value="red">Red</option>
                   <option value="blue">Blue</option>
                   <option value="green">Green</option>
-                  <option value="yellow">Yellow</option>
+                  <option value="orange">Orange</option>
+                  <option value="red">Red</option>
                 </select>
               </div>
             )}

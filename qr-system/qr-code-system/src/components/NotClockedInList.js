@@ -214,7 +214,7 @@ const NotClockedInList = ({ data, date }) => {
         results.push({
           id,
           name: getUserFullName(user),
-          padrinoColor: user.profile?.padrinoColor?.toLowerCase() || 'gray',
+          padrinoColor: user.profile?.padrinoColorCode?.toLowerCase() || 'gray',
           location: location,
           lastActiveDate: lastActiveDate,
           lastActiveDaysAgo: lastActiveDate 

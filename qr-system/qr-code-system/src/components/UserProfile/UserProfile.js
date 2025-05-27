@@ -70,7 +70,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
     emergencyContact: '',
     emergencyPhone: '',
     padrino: false,
-    padrinoColor: 'red',
+    padrinoColorCode: 'blue',
     service: '',
   });
   const [scheduledDates, setScheduledDates] = useState([]);
@@ -142,7 +142,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
         emergencyContact: data.profile?.emergencyContact || '',
         emergencyPhone: data.profile?.emergencyPhone || '',
         padrino: data.profile?.padrino ?? false,
-        padrinoColor: data.profile?.padrinoColor || 'red',
+        padrinoColorCode: data.profile?.padrinoColorCode || 'blue',
         service: data.profile?.service || '',
       });
       
@@ -246,6 +246,11 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
       console.error('Error saving profile:', err);
       showNotification('Failed to save profile', 'error');
     }
+  };
+
+  // Handle padrino color change
+  const handlePadrinoColorChange = (e) => {
+    setFormData(prev => ({ ...prev, padrinoColorCode: e.target.value }));
   };
 
   // Render slide content based on index
@@ -530,7 +535,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
                 title="Padrino Status"
                 description="Earn Padrino status through consistent service"
                 isUnlocked={Boolean(employeeDetails?.profile?.padrino)}
-                color={employeeDetails?.profile?.padrinoColor || 'yellow'}
+                color={employeeDetails?.profile?.padrinoColorCode || 'yellow'}
                 progress={null}
               />
             </div>
@@ -587,7 +592,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
       {/* Welcome Header */}
       <div className="glass-panel profile-header mb-6">
         <div className="profile-info">
-          <div className={`avatar ${employeeDetails?.profile?.padrino ? `border-${employeeDetails.profile.padrinoColor}-500/50` : ''}`}>
+          <div className={`avatar ${employeeDetails?.profile?.padrino ? `border-${employeeDetails.profile.padrinoColorCode}-500/50` : ''}`}>
             {formData.name ? formData.name.charAt(0).toUpperCase() : 'U'}
           </div>
           <div>

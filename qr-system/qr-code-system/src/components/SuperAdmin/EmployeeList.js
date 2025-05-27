@@ -166,13 +166,9 @@ const EmployeeList = () => {
 
   const getScoreClass = (score) => {
     const numScore = parseFloat(score);
-    if (numScore >= 95) return 'bg-emerald-400';
-    if (numScore >= 85) return 'bg-green-400';
-    if (numScore >= 75) return 'bg-teal-400';
-    if (numScore >= 65) return 'bg-yellow-400';
-    if (numScore >= 55) return 'bg-orange-400';
-    if (numScore >= 45) return 'bg-red-400';
-    return 'bg-red-600';
+    if (numScore >= 0) return 'bg-emerald-400';
+ 
+    
   };
 
   // Get color for padrino rank

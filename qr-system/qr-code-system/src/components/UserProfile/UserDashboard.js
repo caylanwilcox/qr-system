@@ -70,7 +70,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
     emergencyContact: '',
     emergencyPhone: '',
     padrino: false,
-    padrinoColor: 'red',
+    padrinoColor: 'blue',
     service: '',
   });
   const [scheduledDates, setScheduledDates] = useState([]);
@@ -140,7 +140,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
         emergencyContact: data.profile?.emergencyContact || '',
         emergencyPhone: data.profile?.emergencyPhone || '',
         padrino: data.profile?.padrino ?? false,
-        padrinoColor: data.profile?.padrinoColor || 'red',
+        padrinoColor: data.profile?.padrinoColor || 'blue',
         service: data.profile?.service || '',
       });
       

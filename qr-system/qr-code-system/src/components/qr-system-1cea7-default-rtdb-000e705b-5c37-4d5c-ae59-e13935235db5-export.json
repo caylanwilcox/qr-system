@@ -1,0 +1,30 @@
+{
+  "location": "joliet",
+  "name": "Shirley Rico",
+  "profile": {
+    "department": "",
+    "email": "shirley.rico@avjoliet.com",
+    "emergencyContact": {
+      "name": "",
+      "phone": ""
+    },
+    "emergencyPhone": "",
+    "joinDate": "2025-03-29T03:22:03.586Z",
+    "location": "Joliet",
+    "locationKey": "joliet",
+    "managedBy": "",
+    "manualColorOverride": false,
+    "name": "Shirley Rico",
+    "notes": "",
+    "padrino": true,
+    "padrinoColor": "red",
+    "padrinoColorCode": "red",
+    "password": "AV2025!",
+    "phone": "(872) 477 2574",
+    "position": "Member",
+    "role": "employee",
+    "service": "",
+    "status": "active"
+  },
+  "status": "active"
+}

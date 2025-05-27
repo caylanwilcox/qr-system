@@ -47,10 +47,10 @@ const ProfileHeader = ({
             {formData?.status || 'inactive'}
           </div>
           <div className="flex items-center gap-2">
-            <Award className={`w-4 h-4 ${getRankColor(formData?.padrinoColor)}`} />
-            <span className={`text-sm ${getRankColor(formData?.padrinoColor)}`}>
-              {formData?.padrinoColor ? 
-                `${formData.padrinoColor.charAt(0).toUpperCase()}${formData.padrinoColor.slice(1)} Rank` : 
+            <Award className={`w-4 h-4 ${getRankColor(formData?.padrinoColorCode)}`} />
+            <span className={`text-sm ${getRankColor(formData?.padrinoColorCode)}`}>
+              {formData?.padrinoColorCode ? 
+                `${formData.padrinoColorCode.charAt(0).toUpperCase()}${formData.padrinoColorCode.slice(1)} Rank` : 
                 'No Rank'
               }
             </span>

@@ -186,7 +186,7 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
                       key={color}
                       onClick={() => !autoCalculate && onPadrinoColorChange({ target: { value: color } })}
                       className={`border rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer
-                        ${color === formData.padrinoColor ? 'ring-2 ring-white/30' : ''}
+                        ${color === formData.padrinoColorCode ? 'ring-2 ring-white/30' : ''}
                         ${getColorClasses(color)}
                         ${autoCalculate ? 'opacity-50 cursor-not-allowed' : 'hover:ring-2 hover:ring-white/30'}`}
                     >
@@ -196,9 +196,9 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
                   ))}
                 </div>
               ) : (
-                <div className={`border rounded-lg p-3 flex items-center ${getColorClasses(formData.padrinoColor)}`}>
+                <div className={`border rounded-lg p-3 flex items-center ${getColorClasses(formData.padrinoColorCode)}`}>
                   <Award className="w-6 h-6 mr-2" />
-                  <span className="text-lg font-semibold">{getColorDisplayName(formData.padrinoColor || PADRINO_COLORS.BLUE)}</span>
+                  <span className="text-lg font-semibold">{getColorDisplayName(formData.padrinoColorCode || PADRINO_COLORS.BLUE)}</span>
                 </div>
               )}
             </div>

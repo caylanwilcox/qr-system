@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
-import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { eventBus, EVENTS } from '../../services/eventBus';
 import './SuperAdminDashboard.css';
 import moment from 'moment-timezone';
@@ -57,11 +57,11 @@ const SuperAdminDashboard = () => {
     const attendanceRate = stats?.attendanceRate || 0;
     const daysPresent = stats?.daysPresent || 0;
 
-    if (daysPresent === 0) return 'red';
+    if (daysPresent === 0) return 'blue';
     if (attendanceRate >= 90) return 'blue';
     if (attendanceRate >= 75) return 'green';
     if (attendanceRate >= 60) return 'orange';
-    return 'red';
+    return 'blue';
   }, []);
 
   // Helper function to check if a user has clocked in with the correct date
@@ -236,7 +236,7 @@ const SuperAdminDashboard = () => {
         // Match color filter if one is active
         const colorMatch = 
           !colorFilter || 
-          (user.profile?.padrinoColor?.toLowerCase() === colorFilter && user.profile?.padrino);
+          (user.profile?.padrinoColorCode?.toLowerCase() === colorFilter && user.profile?.padrino);
         
         return locationMatch && colorMatch;
       })
@@ -307,7 +307,7 @@ const SuperAdminDashboard = () => {
 
       // Get location from various possible fields
       const loc = user.location || profile?.locationKey || profile?.primaryLocation || 'Unknown';
-      const color = profile?.padrinoColor?.toLowerCase?.();
+      const color = profile?.padrinoColorCode?.toLowerCase?.();
       const isPadrino = profile?.padrino;
 
       // Initialize location in metrics if not exists
@@ -446,14 +446,16 @@ const SuperAdminDashboard = () => {
         ? calculateUserColor(profile, stats)
         : null;
 
-      if (newColor !== null && profile.padrinoColor !== newColor) {
+      if (newColor !== null && profile.padrinoColorCode !== newColor) {
         updates[`users/${id}/profile/padrinoColor`] = newColor;
+        updates[`users/${id}/profile/padrinoColorCode`] = newColor;
         updateCount++;
-        console.log(`${DEBUG_PREFIX} User ${id} color update: ${profile.padrinoColor} -> ${newColor}`);
-      } else if (!profile.padrino && profile.padrinoColor) {
+        console.log(`${DEBUG_PREFIX} User ${id} color update: ${profile.padrinoColorCode} -> ${newColor}`);
+      } else if (!profile.padrino && profile.padrinoColorCode) {
         updates[`users/${id}/profile/padrinoColor`] = null;
+        updates[`users/${id}/profile/padrinoColorCode`] = null;
         updateCount++;
-        console.log(`${DEBUG_PREFIX} User ${id} color reset: ${profile.padrinoColor} -> null`);
+        console.log(`${DEBUG_PREFIX} User ${id} color reset: ${profile.padrinoColorCode} -> null`);
       }
     });
 
@@ -665,6 +667,32 @@ const SuperAdminDashboard = () => {
     fetchDashboardData(true);
   };
 
+  // Handler to reset all padrinos to red and clear manualColorOverride
+  const handleResetAllPadrinos = async () => {
+    try {
+      setColorUpdateStatus('updating');
+      const usersRef = ref(database, 'users');
+      const snapshot = await new Promise((resolve, reject) => {
+        onValue(usersRef, resolve, { onlyOnce: true });
+      });
+      const users = snapshot.val();
+      const updates = {};
+      Object.entries(users || {}).forEach(([userId, user]) => {
+        if (user.profile && user.profile.padrino) {
+          updates[`users/${userId}/profile/padrinoColor`] = 'blue';
+          updates[`users/${userId}/profile/padrinoColorCode`] = 'blue';
+          updates[`users/${userId}/profile/manualColorOverride`] = false;
+        }
+      });
+      await update(ref(database), updates);
+      setColorUpdateStatus('success');
+      fetchDashboardData(true);
+    } catch (err) {
+      setColorUpdateStatus('error');
+      setError('Failed to reset padrinos: ' + err.message);
+    }
+  };
+
   // Show loading state
   if (loading) return (
     <div className="loading-overlay">
@@ -694,18 +722,6 @@ const SuperAdminDashboard = () => {
           Error updating padrino colors
         </div>
       )}
-      
-      {/* Refresh button */}
-      <div className="absolute top-0 right-0 m-4 z-10">
-        <button
-          onClick={handleManualRefresh}
-          disabled={isManualRefreshing}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          <RefreshCw size={16} className={isManualRefreshing ? "animate-spin" : ""} />
-          Refresh Data
-        </button>
-      </div>
       
       {/* Main dashboard layout */}
       <div className="dashboard-grid">

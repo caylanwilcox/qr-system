@@ -9,8 +9,8 @@ const getScoreClass = (score) => {
   if (numScore >= 75) return 'text-teal-400';
   if (numScore >= 65) return 'text-yellow-400';
   if (numScore >= 55) return 'text-orange-400';
-  if (numScore >= 45) return 'text-red-400';
-  return 'text-red-600';
+  if (numScore >= 45) return 'text-blue-400';
+  return 'text-blue-600';
 };
 // src/components/StatsSection.js
 // Add this at the top of the file

@@ -22,7 +22,7 @@
                       <div className={`text-sm font-bold ${
                         Number(employee.stats.attendanceRate) >= 90 ? 'text-green-400' :
                         Number(employee.stats.attendanceRate) >= 75 ? 'text-yellow-400' :
-                        'text-red-400'
+                        'text-blue-400'
                       }`}>
                         {employee.stats.attendanceRate}%
                       </div>
@@ -32,7 +32,7 @@
                       <div className={`text-sm font-bold ${
                         Number(employee.stats.onTimeRate) >= 90 ? 'text-green-400' :
                         Number(employee.stats.onTimeRate) >= 75 ? 'text-yellow-400' :
-                        'text-red-400'
+                        'text-blue-400'
                       }`}>
                         {employee.stats.onTimeRate}%
                       </div>
