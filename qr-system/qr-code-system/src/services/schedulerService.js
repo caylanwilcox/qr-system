@@ -275,6 +275,18 @@ export const assignEventParticipants = async (eventId, participantIds, userId) =
       action: 'assign',
       participants: participantIds
     });
+    
+    // --- EMAIL NOTIFICATION ---
+    // Fetch event details
+    const eventRef = ref(database, `events/${eventId}`);
+    const eventSnapshot = await get(eventRef);
+    if (eventSnapshot.exists()) {
+      const eventData = eventSnapshot.val();
+      // Dynamically import email service to avoid circular deps
+      const { sendEventNotifications } = await import('./emailService');
+      sendEventNotifications(eventData, participantIds);
+    }
+    // --- END EMAIL NOTIFICATION ---
   } catch (error) {
     console.error('Error assigning participants:', error);
     throw error;
