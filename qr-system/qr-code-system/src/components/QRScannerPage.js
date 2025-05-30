@@ -140,7 +140,7 @@ const QRScannerPage = () => {
       const locationKey = location.toLowerCase();
       const attendanceRef = ref(database, `attendance/${locationKey}/${currentDate}/${userId}`);
       
-      await set(attendanceRef, clockInData);
+      await set(attendanceRef, clockInData); 
       
       // Update employee summary
       updateEmployeeSummary(userId, userData, locationKey);

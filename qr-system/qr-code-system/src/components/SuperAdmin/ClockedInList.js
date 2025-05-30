@@ -413,7 +413,7 @@ const ClockedInList = ({ data = [], date }) => {
         const name = user.profile.name || user.name || 'Unknown';
         const location = user.profile?.primaryLocation || user.location || 'Unknown';
         const position = user.profile?.position || 'Member';
-        const padrinoColor = user.profile?.padrinoColor || null;
+        const padrinoColor = user.profile?.padrinoColorCode || null;
         
         clockedInList.push({
           id,

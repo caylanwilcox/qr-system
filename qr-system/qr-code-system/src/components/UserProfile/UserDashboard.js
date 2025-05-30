@@ -139,8 +139,8 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
         joinDate: data.profile?.joinDate || '',
         emergencyContact: data.profile?.emergencyContact || '',
         emergencyPhone: data.profile?.emergencyPhone || '',
-        padrino: data.profile?.padrino ?? false,
-        padrinoColor: data.profile?.padrinoColor || 'blue',
+        padrino: data.profile?.padrino || false,
+        padrinoColor: data.profile?.padrinoColorCode || 'blue',
         service: data.profile?.service || '',
       });
       

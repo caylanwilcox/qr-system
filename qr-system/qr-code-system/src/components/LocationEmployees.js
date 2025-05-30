@@ -105,7 +105,7 @@ const LocationEmployees = ({ locationFiltered = false }) => {
 
               // Check for padrino status and color
               const isPadrino = profile.padrino || false;
-              const padrinoColor = profile.padrinoColor || '';
+              const padrinoColor = profile.padrinoColorCode || '';
 
               const daysPresent = stats.daysPresent || 0;
               const daysAbsent = stats.daysAbsent || 0;

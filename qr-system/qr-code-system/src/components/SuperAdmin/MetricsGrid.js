@@ -25,13 +25,13 @@ const MetricsGrid = ({ metrics, activeFilter, onColorClick, activeTab, locationM
     // Match the exact format that EmployeeList expects
     navigate('/employee-list', { 
       state: { 
-        filter: activeFilter ? `padrinos${activeFilter}` : 'all',
+        filter: activeFilter ? `padrinos${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}` : 'all',
         location: locationParam
       } 
     });
     
     console.log("Navigating to employee list with:", {
-      filter: activeFilter ? `padrinos${activeFilter}` : 'all',
+      filter: activeFilter ? `padrinos${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}` : 'all',
       location: locationParam
     });
   };

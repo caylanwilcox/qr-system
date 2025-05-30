@@ -133,7 +133,7 @@ const EmployeeList = () => {
             name: getUserFullName(user),
             position: user.profile?.position || 'N/A',
             location: userLocation,
-            padrinoColor: user.profile?.padrinoColor || null,
+            padrinoColor: user.profile?.padrinoColorCode || null,
             service: user.profile?.service || '',
             isPadrino: user.profile?.padrino === true,
             stats: {

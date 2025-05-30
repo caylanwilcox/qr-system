@@ -424,8 +424,8 @@ const EmployeeProfile = () => {
         emergencyContact: data.profile?.emergencyContact || '',
         emergencyPhone: data.profile?.emergencyPhone || '',
         notes: data.profile?.notes || '',
-        padrino: data.profile?.padrino ?? false,
-        padrinoColor: data.profile?.padrinoColor || 'blue',
+        padrino: data.profile?.padrino || false,
+        padrinoColor: data.profile?.padrinoColorCode || 'blue',
         padrinoColorCode: data.profile?.padrinoColorCode || 'blue',
         service: data.profile?.service || '',
         password: '', // Always start with empty password

@@ -119,7 +119,7 @@ const UserDashboard = () => {
         emergencyPhone: profile.emergencyContact?.phone || '',
         notes: profile.notes || '',
         padrino: profile.padrino ?? false,
-        padrinoColor: profile.padrinoColor || null,
+        padrinoColor: profile.padrinoColorCode || null,
         service: profile.service || '',
       });
 
