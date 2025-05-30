@@ -60,8 +60,7 @@ const SchedulerContainer = () => {
       
       {showEventDialog && <EventDialog />}
       
-      // In your SchedulerContainer.jsx
-      // In your SchedulerContainer.js
+   
       {showAssignmentDialog && selectedEvent && (
   <ParticipantSelectionDialog 
     eventId={selectedEvent.id} // CORRECT: This is passing a string ID
