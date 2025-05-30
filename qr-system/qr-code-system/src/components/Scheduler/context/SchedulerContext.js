@@ -68,14 +68,14 @@ export const SchedulerProvider = ({ children }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   
-  // Use standardized locations list with All Locations option
-  const [locations, setLocations] = useState(['All Locations', ...LOCATIONS]);
+  // Use standardized locations list - will be updated based on user permissions
+  const [locations, setLocations] = useState([]);
 
   // Define canManageLocation as a regular function declaration that gets hoisted
   function canManageLocation(locationName) {
     if (!locationName || !userProfile) return false;
     
-    // "All Locations" is handled specially - accessible to super admins only by default
+    // "All Locations" is handled specially - accessible to super admins only
     if (locationName === "All Locations") {
       return userProfile.role === 'super_admin';
     }
@@ -123,21 +123,99 @@ export const SchedulerProvider = ({ children }) => {
     }
   }, [user, includeManaged]);
 
-  // Get managed locations - using the same name as in the other implementation
+  // Get managed locations - updated to properly filter based on user role
   const fetchLocations = useCallback(async () => {
     if (!user) {
-      setLocations(['All Locations', ...LOCATIONS]);
+      setLocations([]);
       return;
     }
 
     try {
-      const managedLocations = await getManagedLocations(user.uid);
-      setLocations(['All Locations', ...managedLocations]);
+      console.log('🔍 SchedulerContext: Fetching locations for user:', user.uid, 'role:', userProfile?.role);
+      
+      // Load locations from database
+      const locationsRef = ref(database, 'locations');
+      const locationsSnapshot = await get(locationsRef);
+      let locationsList = [];
+      
+      if (locationsSnapshot.exists()) {
+        const locationsData = locationsSnapshot.val();
+        console.log('🔍 SchedulerContext: Raw locations data:', locationsData);
+        
+        // Extract location names from database
+        locationsList = Object.entries(locationsData).map(([key, value]) => {
+          if (typeof value === 'object' && value !== null && value.name) {
+            return value.name;
+          }
+          if (typeof value === 'string') {
+            return value;
+          }
+          return key;
+        }).filter(loc => loc && typeof loc === 'string');
+        
+        console.log('🔍 SchedulerContext: Extracted locations:', locationsList);
+      } else {
+        console.log('🔍 SchedulerContext: No locations in database, using defaults');
+        locationsList = [...LOCATIONS];
+      }
+
+      // Get user's own location
+      const userLocation = userProfile?.primaryLocation || 
+                         userProfile?.locationKey || 
+                         userProfile?.location ||
+                         user?.location;
+
+      // Filter locations based on user permissions
+      if (userProfile?.role === 'super_admin') {
+        // Super admins can see all locations including "All Locations"
+        locationsList.unshift('All Locations');
+        console.log('🔍 SchedulerContext: Super admin gets all locations with "All Locations"');
+      } else if (userProfile?.role === 'admin') {
+        // Location admins only see their managed locations (no "All Locations")
+        const managedLocations = adminPermissions?.managedLocations || {};
+        console.log('🔍 SchedulerContext: Admin managed locations:', managedLocations);
+        
+        const filteredLocations = locationsList.filter(location => {
+          // Check if location is in managed locations or is the user's own location
+          const isManaged = managedLocations[location] === true;
+          const isUserLocation = userLocation && location === userLocation;
+          return isManaged || isUserLocation;
+        });
+        
+        console.log('🔍 SchedulerContext: Filtered locations for admin:', filteredLocations);
+        
+        // If no locations are allowed but user has a location, include it
+        if (filteredLocations.length === 0 && userLocation) {
+          locationsList = [userLocation];
+        } else if (filteredLocations.length === 0) {
+          locationsList = [...LOCATIONS]; // Fallback to defaults
+        } else {
+          locationsList = filteredLocations;
+        }
+      } else {
+        // Regular users only see their own location if they have one
+        if (userLocation && locationsList.includes(userLocation)) {
+          locationsList = [userLocation];
+          console.log('🔍 SchedulerContext: Regular user filtered to their location:', userLocation);
+        } else {
+          // If no user location or location not in list, use defaults
+          locationsList = [...LOCATIONS];
+        }
+      }
+
+      console.log('🔍 SchedulerContext: Final locations list:', locationsList);
+      setLocations(locationsList);
     } catch (err) {
-      console.error('Error fetching managed locations:', err);
-      setLocations(['All Locations', ...LOCATIONS]);
+      console.error('Error fetching locations:', err);
+      // Fallback to user location or defaults
+      const userLocation = userProfile?.primaryLocation || userProfile?.locationKey || user?.location;
+      if (userLocation) {
+        setLocations([userLocation]);
+      } else {
+        setLocations([...LOCATIONS]);
+      }
     }
-  }, [user]);
+  }, [user, userProfile, adminPermissions]);
 
   // Initialize data when user changes
   useEffect(() => {

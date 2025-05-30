@@ -113,34 +113,56 @@ const EventDialog = () => {
 
         console.log('🔍 EventDialog: Before permission filtering:', locationsList);
         console.log('🔍 EventDialog: Current user:', currentUser);
-        console.log('🔍 EventDialog: User role:', currentUser?.role);
+        console.log('🔍 EventDialog: User role:', currentUser?.profile?.role);
         console.log('🔍 EventDialog: Management permissions:', currentUser?.managementPermissions);
 
-        // Add "All Locations" option for admins
-        if (currentUser?.role === 'super_admin' || currentUser?.role === 'admin') {
-          locationsList.unshift('All Locations');
-          console.log('🔍 EventDialog: Added "All Locations" for admin');
-        }
+        // Get user's own location
+        const userLocation = currentUser?.profile?.primaryLocation || 
+                           currentUser?.profile?.locationKey || 
+                           currentUser?.profile?.location ||
+                           currentUser?.location;
 
         // Filter locations based on user permissions
-        if (currentUser?.role !== 'super_admin') {
+        if (currentUser?.profile?.role === 'super_admin') {
+          // Super admins can see all locations including "All Locations"
+          locationsList.unshift('All Locations');
+          console.log('🔍 EventDialog: Added "All Locations" for super admin');
+        } else if (currentUser?.profile?.role === 'admin') {
+          // Location admins only see their managed locations (no "All Locations")
           const managedLocations = currentUser?.managementPermissions?.managedLocations || {};
           console.log('🔍 EventDialog: Managed locations:', managedLocations);
+          console.log('🔍 EventDialog: User location:', userLocation);
           
           const filteredLocations = locationsList.filter(location => {
-            const isAllowed = location === 'All Locations' || managedLocations[location] === true;
-            console.log(`🔍 EventDialog: Location "${location}" allowed?`, isAllowed);
+            // Check if location is in managed locations or is the user's own location
+            const isManaged = managedLocations[location] === true;
+            const isUserLocation = userLocation && location === userLocation;
+            const isAllowed = isManaged || isUserLocation;
+            
+            console.log(`🔍 EventDialog: Location "${location}" - managed: ${isManaged}, userLocation: ${isUserLocation}, allowed: ${isAllowed}`);
             return isAllowed;
           });
           
-          console.log('🔍 EventDialog: Filtered locations:', filteredLocations);
+          console.log('🔍 EventDialog: Filtered locations for admin:', filteredLocations);
           
-          // If no locations are allowed, show all locations (fallback)
-          if (filteredLocations.length === 0) {
+          // If no locations are allowed but user has a location, include it
+          if (filteredLocations.length === 0 && userLocation) {
+            console.log('🔍 EventDialog: No managed locations found, using user location as fallback');
+            locationsList = [userLocation];
+          } else if (filteredLocations.length === 0) {
             console.log('🔍 EventDialog: No locations allowed, using all locations as fallback');
-            locationsList = locationsList;
+            locationsList = locationsList; // Keep original list as fallback
           } else {
             locationsList = filteredLocations;
+          }
+        } else {
+          // Regular users only see their own location if they have one
+          if (userLocation && locationsList.includes(userLocation)) {
+            locationsList = [userLocation];
+            console.log('🔍 EventDialog: Regular user filtered to their location:', userLocation);
+          } else {
+            // If no user location or location not in list, allow all (fallback)
+            console.log('🔍 EventDialog: Regular user with no valid location, keeping all locations');
           }
         }
 
