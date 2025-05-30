@@ -640,7 +640,7 @@ const LocationAdminDashboard = () => {
         padrinoCount++;
         
         // Count by color
-        const color = profile.padrinoColor?.toLowerCase?.();
+        const color = profile.padrinoColorCode?.toLowerCase?.();
         if (color === 'blue') padrinosBlue++;
         else if (color === 'green') padrinosGreen++;
         else if (color === 'orange') padrinosOrange++;
