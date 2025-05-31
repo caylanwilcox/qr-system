@@ -537,48 +537,25 @@ const ManageAdmins = () => {
     try {
       setLoading(true);
       
-      // FIXED: Normalize role format to match system expectations
-      let normalizedRole = quickAssignRole;
-      if (quickAssignRole === 'super-admin') {
-        normalizedRole = 'super_admin'; // Use underscore format for consistency with auth system
-      }
-      
       // First update the user's role if needed
-      if (!userToPromote.role || userToPromote.role.toLowerCase() !== normalizedRole.toLowerCase()) {
-        const updates = {};
-        updates[`users/${userToPromote.id}/profile/role`] = normalizedRole;
-        
-        // For super admin, also ensure they have proper permissions
-        if (normalizedRole === 'super_admin') {
-          updates[`managementStructure/${userToPromote.id}/role`] = 'super_admin';
-          updates[`managementStructure/${userToPromote.id}/canManageAll`] = true;
-          
-          // Grant access to all locations
-          if (locations && locations.length > 0) {
-            locations.forEach(location => {
-              updates[`managementStructure/${userToPromote.id}/managedLocations/${location}`] = true;
-            });
-          }
-        } else if (normalizedRole === 'admin') {
-          updates[`managementStructure/${userToPromote.id}/role`] = 'admin';
-          updates[`managementStructure/${userToPromote.id}/canManageAll`] = false;
-        }
-        
-        await update(ref(database), updates);
+      if (!userToPromote.role || userToPromote.role.toLowerCase() !== quickAssignRole.toLowerCase()) {
+        await update(ref(database, `users/${userToPromote.id}/profile`), {
+          role: quickAssignRole
+        });
       }
       
       // Then assign them to the location
-      const locationUpdates = {};
+      const updates = {};
       
       // Add location to this admin's managed locations
-      locationUpdates[`managementStructure/${userToPromote.id}/managedLocations/${quickAssignLocation}`] = true;
-      locationUpdates[`managementStructure/${userToPromote.id}/role`] = normalizedRole;
+      updates[`managementStructure/${userToPromote.id}/managedLocations/${quickAssignLocation}`] = true;
+      updates[`managementStructure/${userToPromote.id}/role`] = quickAssignRole;
       
       // Update local state to include this new admin
-      await update(ref(database), locationUpdates);
+      await update(ref(database), updates);
       
       // Reset form
-      setSuccessMessage(`Successfully assigned ${userToPromote.name} as ${normalizedRole === 'super_admin' ? 'Super Administrator' : 'Administrator'} to ${quickAssignLocation}`);
+      setSuccessMessage(`Successfully assigned ${userToPromote.name} as ${quickAssignRole} to ${quickAssignLocation}`);
       setShowQuickAssignModal(false);
       setUserToPromote(null);
       
@@ -599,7 +576,7 @@ const ManageAdmins = () => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError('Failed to assign admin to location');
+      setError('Failed to assign admin');
       console.error('Error:', err);
     } finally {
       setLoading(false);
@@ -648,47 +625,22 @@ const ManageAdmins = () => {
     try {
       setLoading(true);
       
-      // FIXED: Normalize role format to match system expectations
-      let normalizedRole = selectedRole;
-      if (selectedRole === 'super-admin') {
-        normalizedRole = 'super_admin'; // Use underscore format for consistency with auth system
-      }
-      
-      // Update user role in database - update both the role field and ensure proper format
-      const updates = {};
-      updates[`users/${userToPromote.id}/profile/role`] = normalizedRole;
-      
-      // For super admin, also ensure they have proper permissions
-      if (normalizedRole === 'super_admin') {
-        // Ensure super admin has management structure entry with full permissions
-        updates[`managementStructure/${userToPromote.id}/role`] = 'super_admin';
-        updates[`managementStructure/${userToPromote.id}/canManageAll`] = true;
-        
-        // Grant access to all locations if any exist
-        if (locations && locations.length > 0) {
-          locations.forEach(location => {
-            updates[`managementStructure/${userToPromote.id}/managedLocations/${location}`] = true;
-          });
-        }
-      } else if (normalizedRole === 'admin') {
-        // For regular admin, create basic management structure entry
-        updates[`managementStructure/${userToPromote.id}/role`] = 'admin';
-        updates[`managementStructure/${userToPromote.id}/canManageAll`] = false;
-      }
-      
-      await update(ref(database), updates);
+      // Update user role in database
+      await update(ref(database, `users/${userToPromote.id}/profile`), {
+        role: selectedRole
+      });
       
       // Update local state
-      if (normalizedRole === 'admin' || normalizedRole === 'super_admin') {
+      if (selectedRole === 'admin' || selectedRole === 'super-admin') {
         // Move from regular users to admins
         const updatedRegularUsers = regularUsers.filter(u => u.id !== userToPromote.id);
-        const updatedAdmins = [...admins, { ...userToPromote, role: normalizedRole }];
+        const updatedAdmins = [...admins, { ...userToPromote, role: selectedRole }];
         
         setRegularUsers(updatedRegularUsers);
         setAdmins(updatedAdmins);
       }
       
-      setSuccessMessage(`Successfully updated ${userToPromote.name}'s role to ${normalizedRole === 'super_admin' ? 'Super Administrator' : 'Administrator'}`);
+      setSuccessMessage(`Successfully updated ${userToPromote.name}'s role to ${selectedRole}`);
       setShowRoleModal(false);
       setUserToPromote(null);
       setSelectedRole('');
@@ -707,11 +659,11 @@ const ManageAdmins = () => {
   const handlePromoteClick = (user) => {
     setUserToPromote(user);
     
-    // Set default role based on current role - FIXED: Use consistent format
+    // Set default role based on current role
     if (!user.role || user.role.toLowerCase() === 'regular') {
       setSelectedRole('admin');
     } else if (user.role.toLowerCase() === 'admin') {
-      setSelectedRole('super_admin'); // Use underscore format for consistency
+      setSelectedRole('super-admin');
     }
     
     setShowRoleModal(true);
@@ -1665,7 +1617,7 @@ const ManageAdmins = () => {
                 className="bg-gray-800 bg-opacity-60 border border-gray-600 rounded-lg p-3 text-white w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
               >
                 <option value="admin">Administrator</option>
-                <option value="super_admin">Super Administrator</option>
+                <option value="super-admin">Super Administrator</option>
               </select>
             </div>
             
@@ -1783,7 +1735,7 @@ const ManageAdmins = () => {
                 className="bg-gray-800 bg-opacity-60 border border-gray-600 rounded-lg p-3 text-white w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
               >
                 <option value="admin">Administrator</option>
-                <option value="super_admin">Super Administrator</option>
+                <option value="super-admin">Super Administrator</option>
               </select>
             </div>
             

@@ -1,0 +1,29 @@
+{
+  "deletedAt": "2025-05-31T02:11:39.811Z",
+  "deletedBy": "QImMxBxXUbTZJcrJyjtLnMuFMmQ2",
+  "location": "joliet",
+  "name": "Victoria Alvarado",
+  "profile": {
+    "authUid": "lz95qXIZpITL3hUg2gaqYdDyko33",
+    "department": "",
+    "email": "valvarado1277@gmail.com",
+    "emergencyContact": {
+      "name": "",
+      "phone": ""
+    },
+    "emergencyPhone": "caylan45@yahoo.com",
+    "joinDate": "2025-03-29T03:22:05.191Z",
+    "location": "Joliet",
+    "locationKey": "joliet",
+    "managedBy": "",
+    "name": "Victoria Alvarado",
+    "notes": "",
+    "padrino": false,
+    "password": "AV2025!",
+    "phone": "(609) 145 9757",
+    "position": "Member",
+    "service": "",
+    "status": "active"
+  },
+  "status": "active"
+}
