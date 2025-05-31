@@ -34,7 +34,21 @@ const AssignUsersToAdmins = () => {
       
       if (snapshot.exists()) {
         const usersData = snapshot.val();
-        const adminsArray = [];
+        const adminsArray = Object.entries(usersData)
+          .filter(([_, data]) => {
+            const profile = data.profile;
+            if (!profile || !profile.role) return false;
+            
+            // Check for all possible admin role formats for backward compatibility
+            const role = profile.role.toLowerCase();
+            return role === 'admin' || 
+                   role === 'super-admin' || 
+                   role === 'super_admin' ||
+                   role === 'ADMIN' || 
+                   role === 'SUPER_ADMIN';
+          })
+          .map(([id, data]) => ({ id, ...data.profile }));
+        
         const usersArray = [];
         
         // Sort users into admins and regular users
@@ -122,7 +136,7 @@ const AssignUsersToAdmins = () => {
   // Handle opening the role promotion modal
   const handlePromoteClick = (user) => {
     setUserToPromote(user);
-    setSelectedRole(user.role === 'admin' ? 'super-admin' : 'admin');
+    setSelectedRole(user.role === 'admin' ? 'super_admin' : 'admin');
     setShowRoleModal(true);
   };
 
@@ -134,13 +148,28 @@ const AssignUsersToAdmins = () => {
     }
 
     try {
+      // FIXED: Normalize role format to match system expectations
+      let normalizedRole = selectedRole;
+      if (selectedRole === 'super-admin') {
+        normalizedRole = 'super_admin'; // Use underscore format for consistency with auth system
+      }
+      
       // Update the user's role in Firebase
       const updates = {};
-      updates[`users/${userToPromote.id}/profile/role`] = selectedRole;
+      updates[`users/${userToPromote.id}/profile/role`] = normalizedRole;
+      
+      // For super admin, also ensure they have proper permissions
+      if (normalizedRole === 'super_admin') {
+        updates[`managementStructure/${userToPromote.id}/role`] = 'super_admin';
+        updates[`managementStructure/${userToPromote.id}/canManageAll`] = true;
+      } else if (normalizedRole === 'admin') {
+        updates[`managementStructure/${userToPromote.id}/role`] = 'admin';
+        updates[`managementStructure/${userToPromote.id}/canManageAll`] = false;
+      }
       
       await update(ref(database), updates);
       
-      setSuccessMessage(`Successfully updated ${userToPromote.name}'s role to ${selectedRole}`);
+      setSuccessMessage(`Successfully updated ${userToPromote.name}'s role to ${normalizedRole === 'super_admin' ? 'Super Administrator' : 'Administrator'}`);
       setShowRoleModal(false);
       setUserToPromote(null);
       
@@ -220,16 +249,31 @@ const AssignUsersToAdmins = () => {
     setError(null);
 
     try {
+      // FIXED: Normalize role format to match system expectations
+      let normalizedRole = promotionRole;
+      if (promotionRole === 'super-admin') {
+        normalizedRole = 'super_admin'; // Use underscore format for consistency with auth system
+      }
+      
       // Update the user's role in Firebase
       const updates = {};
-      updates[`users/${selectedUserForPromotion}/profile/role`] = promotionRole;
+      updates[`users/${selectedUserForPromotion}/profile/role`] = normalizedRole;
+      
+      // For super admin, also ensure they have proper permissions
+      if (normalizedRole === 'super_admin') {
+        updates[`managementStructure/${selectedUserForPromotion}/role`] = 'super_admin';
+        updates[`managementStructure/${selectedUserForPromotion}/canManageAll`] = true;
+      } else if (normalizedRole === 'admin') {
+        updates[`managementStructure/${selectedUserForPromotion}/role`] = 'admin';
+        updates[`managementStructure/${selectedUserForPromotion}/canManageAll`] = false;
+      }
       
       await update(ref(database), updates);
       
       // Find the user's name from the regularUsers array
       const userName = regularUsers.find(user => user.id === selectedUserForPromotion)?.name || 'User';
       
-      setSuccessMessage(`Successfully promoted ${userName} to ${promotionRole}`);
+      setSuccessMessage(`Successfully promoted ${userName} to ${normalizedRole === 'super_admin' ? 'Super Administrator' : 'Administrator'}`);
       
       // Reset selection
       setSelectedUserForPromotion('');
@@ -304,9 +348,9 @@ const AssignUsersToAdmins = () => {
               </div>
               
               <div 
-                onClick={() => setPromotionRole('super-admin')}
+                onClick={() => setPromotionRole('super_admin')}
                 className={`flex-1 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
-                  promotionRole === 'super-admin'
+                  promotionRole === 'super_admin'
                     ? 'bg-indigo-900 bg-opacity-20 border-indigo-500 text-indigo-400'
                     : 'border-gray-700 text-gray-400 hover:bg-gray-700 hover:bg-opacity-20'
                 }`}
@@ -513,7 +557,7 @@ const AssignUsersToAdmins = () => {
                     className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700 hover:bg-opacity-20"
                   >
                     <div className="flex items-center gap-3">
-                      {admin.role === 'super-admin' ? (
+                      {(admin.role === 'super-admin' || admin.role === 'super_admin') ? (
                         <ShieldCheck size={20} className="text-indigo-400" />
                       ) : (
                         <Shield size={20} className="text-blue-400" />
@@ -569,7 +613,7 @@ const AssignUsersToAdmins = () => {
             return (
               <div key={admin.id} className="border border-gray-700 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-4">
-                  {admin.role === 'super-admin' ? (
+                  {(admin.role === 'super-admin' || admin.role === 'super_admin') ? (
                     <ShieldCheck size={20} className="text-indigo-400" />
                   ) : (
                     <Shield size={20} className="text-blue-400" />
@@ -614,7 +658,7 @@ const AssignUsersToAdmins = () => {
                 className="bg-opacity-20 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="admin">Administrator</option>
-                <option value="super-admin">Super Administrator</option>
+                <option value="super_admin">Super Administrator</option>
               </select>
             </div>
             
