@@ -210,7 +210,34 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
               const time = moment(attendedDate).format('hh:mm A');
               const hour = attendedDate.getHours();
               const minute = attendedDate.getMinutes();
-              const isLate = hour > 9 || (hour === 9 && minute > 0);
+              
+              // FIXED: Only calculate late status if user has scheduled events
+              let isLate = false;
+              
+              // Check if user has scheduled events for this date
+              if (employeeData && employeeData.events) {
+                const eventDateStr = date;
+                let hasScheduledEvents = false;
+                
+                // Check for scheduled events on this date
+                Object.values(employeeData.events).forEach(eventTypeData => {
+                  if (eventTypeData && typeof eventTypeData === 'object') {
+                    Object.values(eventTypeData).forEach(eventData => {
+                      if (eventData && eventData.scheduled && eventData.date) {
+                        const eventDate = moment(eventData.date).format('YYYY-MM-DD');
+                        if (eventDate === eventDateStr) {
+                          hasScheduledEvents = true;
+                        }
+                      }
+                    });
+                  }
+                });
+                
+                // Only apply late logic if there are scheduled events
+                if (hasScheduledEvents) {
+                  isLate = hour > 9 || (hour === 9 && minute > 0);
+                }
+              }
               
               clockIns.push({
                 date,

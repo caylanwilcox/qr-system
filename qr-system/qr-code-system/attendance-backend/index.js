@@ -247,27 +247,99 @@ app.post('/clock-in', async (req, res) => {
         barcodeData: barcodeData || null
       };
       
-      // Increment days present if this is the first clock-in today
-      const lastClockInDate = employeeData.stats?.lastClockIn
-        ? moment.tz(employeeData.stats.lastClockIn, 'America/Chicago').format('YYYY-MM-DD')
-        : null;
+      // Increment days present counter
+      const daysPresent = (employeeData.stats?.daysPresent || 0) + 1;
+      updates[`users/${employeeId}/stats/daysPresent`] = daysPresent;
+      
+      // FIXED: Check if late only if user has scheduled events for today
+      let isLate = false;
+      
+      // Check if user has any scheduled events for today
+      const hasScheduledEventsToday = checkUserHasScheduledEventsToday(employeeData, today);
+      
+      if (hasScheduledEventsToday) {
+        // Get earliest scheduled event time for comparison
+        let earliestEventTime = null;
         
-      // Only count as a new day if last clock-in wasn't today
-      if (lastClockInDate !== today) {
-        const daysPresent = (employeeData.stats?.daysPresent || 0) + 1;
-        updates[`users/${employeeId}/stats/daysPresent`] = daysPresent;
-        
-        // Check if late (after 9:00 AM)
-        const currentHour = now.hour();
-        const currentMinute = now.minute();
-        const isLate = currentHour >= 9 && currentMinute > 0;
-        
-        if (isLate) {
-          // Increment days late counter
-          const daysLate = (employeeData.stats?.daysLate || 0) + 1;
-          updates[`users/${employeeId}/stats/daysLate`] = daysLate;
-          updates[`users/${employeeId}/activityLog/clockIns/${timestamp}/isLate`] = true;
+        // Check employee's events for scheduled times
+        if (employeeData.events) {
+          const eventTypes = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+          
+          for (const eventType of eventTypes) {
+            if (employeeData.events[eventType]) {
+              const events = employeeData.events[eventType];
+              
+              for (const [eventId, eventData] of Object.entries(events)) {
+                if (eventData && eventData.scheduled) {
+                  // Check if event is for today
+                  if (eventData.date) {
+                    const eventDate = moment.tz(eventData.date, 'America/Chicago').format('YYYY-MM-DD');
+                    if (eventDate === today) {
+                      // Get the scheduled time for this event
+                      const eventTime = moment.tz(eventData.date, 'America/Chicago');
+                      
+                      if (!earliestEventTime || eventTime.isBefore(earliestEventTime)) {
+                        earliestEventTime = eventTime;
+                      }
+                    }
+                  }
+                  
+                  // Check for multi-day events (like haciendas)
+                  if (eventData.endDate) {
+                    const startDate = moment.tz(eventData.date, 'America/Chicago');
+                    const endDate = moment.tz(eventData.endDate, 'America/Chicago');
+                    const checkDate = moment.tz(today, 'America/Chicago');
+                    
+                    if (checkDate.isBetween(startDate, endDate, 'day', '[]')) {
+                      // For multi-day events, use the start time
+                      if (!earliestEventTime || startDate.isBefore(earliestEventTime)) {
+                        earliestEventTime = startDate;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
+        
+        // Check statistics for assigned events
+        if (employeeData.statistics) {
+          for (const [eventId, statEntry] of Object.entries(employeeData.statistics)) {
+            if (statEntry && statEntry.date === today && statEntry.status === 'assigned') {
+              // If we have event data with scheduled time, use it
+              if (statEntry.eventTime) {
+                const eventTime = moment.tz(`${today} ${statEntry.eventTime}`, 'America/Chicago');
+                if (!earliestEventTime || eventTime.isBefore(earliestEventTime)) {
+                  earliestEventTime = eventTime;
+                }
+              }
+            }
+          }
+        }
+        
+        // Compare clock-in time to earliest event time
+        if (earliestEventTime) {
+          isLate = now.isAfter(earliestEventTime);
+          console.log(`Employee ${employeeId} comparing clock-in ${now.format('HH:mm')} to earliest event ${earliestEventTime.format('HH:mm')}: ${isLate ? 'LATE' : 'ON TIME'}`);
+        } else {
+          // Fallback to 9:00 AM if no specific event times found
+          const currentHour = now.hour();
+          const currentMinute = now.minute();
+          isLate = currentHour >= 9 && currentMinute > 0;
+          console.log(`Employee ${employeeId} no specific event times found, using 9:00 AM fallback: ${isLate ? 'LATE' : 'ON TIME'}`);
+        }
+      } else {
+        // No scheduled events, user cannot be late
+        isLate = false;
+        console.log(`Employee ${employeeId} has no scheduled events today, marking as on time`);
+      }
+      
+      if (isLate) {
+        // Increment days late counter
+        const daysLate = (employeeData.stats?.daysLate || 0) + 1;
+        updates[`users/${employeeId}/stats/daysLate`] = daysLate;
+        updates[`users/${employeeId}/activityLog/clockIns/${timestamp}/isLate`] = true;
       }
       
       // Add to location history if location changed
@@ -752,6 +824,61 @@ app.post('/api/admin/update-user-auth', async (req, res) => {
     });
   }
 });
+
+// Helper function to check if user has scheduled events for a given date
+const checkUserHasScheduledEventsToday = (employeeData, dateStr) => {
+  if (!employeeData || !dateStr) return false;
+  
+  // Check employee's events structure
+  if (employeeData.events) {
+    const eventTypes = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+    
+    for (const eventType of eventTypes) {
+      if (employeeData.events[eventType]) {
+        const events = employeeData.events[eventType];
+        
+        for (const [eventId, eventData] of Object.entries(events)) {
+          if (eventData && eventData.scheduled) {
+            // Check if event is for today
+            if (eventData.date) {
+              const eventDate = moment.tz(eventData.date, 'America/Chicago').format('YYYY-MM-DD');
+              if (eventDate === dateStr) {
+                return true;
+              }
+            }
+            
+            // Check for multi-day events (like haciendas)
+            if (eventData.endDate) {
+              const startDate = moment.tz(eventData.date, 'America/Chicago');
+              const endDate = moment.tz(eventData.endDate, 'America/Chicago');
+              const checkDate = moment.tz(dateStr, 'America/Chicago');
+              
+              if (checkDate.isBetween(startDate, endDate, 'day', '[]')) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Check employee's statistics for assigned events on this specific date
+  if (employeeData.statistics) {
+    for (const [eventId, statEntry] of Object.entries(employeeData.statistics)) {
+      if (statEntry && statEntry.date === dateStr && statEntry.status === 'assigned') {
+        console.log(`Employee has assigned event for ${dateStr}: ${eventId}`);
+        return true;
+      }
+    }
+  }
+  
+  // FIXED: Remove the problematic schedule check that was always returning true
+  // The schedule object should be checked more carefully with actual event data
+  // For now, we only check events and statistics which have proper date information
+  
+  return false;
+};
 
 // Start the server
 app.listen(PORT, () => {

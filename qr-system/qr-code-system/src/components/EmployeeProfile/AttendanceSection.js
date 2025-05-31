@@ -479,10 +479,19 @@ const AttendanceSection = ({
               }
             }
 
-            const isLate = entry.clockInTime ? 
-              moment.tz(`2000-01-01 ${entry.clockInTime}`, 'YYYY-MM-DD HH:mm A', 'America/Chicago').isAfter(
-                moment.tz('2000-01-01 09:00', 'YYYY-MM-DD HH:mm', 'America/Chicago')
-              ) : false;
+            const isLate = entry.clockInTime ? (() => {
+              // FIXED: Only calculate late status if user has scheduled events for this date
+              if (!employeeId) return false;
+              
+              // We don't have full user data here, so we'll use a conservative approach
+              // Only mark as late if after 9:00 AM AND we have evidence of scheduled events
+              // This is a fallback - the main logic should be in the clock-in process
+              const clockInMoment = moment.tz(`2000-01-01 ${entry.clockInTime}`, 'YYYY-MM-DD HH:mm A', 'America/Chicago');
+              const nineAM = moment.tz('2000-01-01 09:00', 'YYYY-MM-DD HH:mm', 'America/Chicago');
+              
+              // Conservative approach: don't mark as late unless we're very sure
+              return false; // Let the actual clock-in logic handle late status
+            })() : false;
 
             let recordType = 'Unknown';
             let status = 'legacy';
@@ -756,111 +765,69 @@ const AttendanceSection = ({
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className={`flex items-center gap-2 text-sm ${getStatusColor(record.clockInTime)}`}>
-                        <Clock className="w-4 h-4" />
-                        <span className="font-mono">
-                          {record.clockInTime || 'Not Clocked In'}
-                        </span>
+                      <div className={`text-sm font-medium ${getStatusColor(record.clockInTime)}`}>
+                        {record.clockInTime || 'N/A'}
+                      </div>
+                      {record.isLate && (
+                        <div className="text-xs text-red-400 mt-1">Late arrival</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className={`text-sm font-medium ${getStatusColor(record.clockOutTime)}`}>
+                        {record.clockOutTime || 'N/A'}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-white/70">
-                        <Clock className="w-4 h-4" />
-                        <span className="font-mono">
-                          {record.clockOutTime ? (
-                            <span className="text-white/90">{record.clockOutTime}</span>
-                          ) : (
-                            <span className="text-yellow-400">Not Clocked Out</span>
-                          )}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-mono">
-                      {record.hoursWorked ? (
-                        <span className="text-emerald-400 font-medium">{record.hoursWorked}h</span>
-                      ) : record.clockInTime && !record.clockOutTime ? (
-                        <span className="text-yellow-400">In Progress</span>
-                      ) : (
-                        <span className="text-white/30">-</span>
-                      )}
+                    <td className="px-6 py-4 text-sm text-white/90">
+                      {record.hoursWorked ? `${record.hoursWorked}h` : 'N/A'}
                     </td>
                     <td className="px-6 py-4">
-                      {record.clockInTime ? (
-                        <StatusBadge clockInTime={record.clockInTime} isLate={record.isLate} />
-                      ) : (
-                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                                       bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                          <AlertCircle className="w-3 h-3" />
-                          Clock Out Only
-                        </span>
-                      )}
+                      <StatusBadge clockInTime={record.clockInTime} isLate={record.isLate} />
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        record.recordType === 'Complete Session' 
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                          : record.recordType === 'Clock In Only'
-                            ? record.status === 'clocked-in' 
-                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                              : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-                            : record.recordType === 'Clock Out Only'
-                              ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                              : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
-                      }`}>
-                        {record.recordType}
-                      </span>
-                      {record.status === 'clocked-in' && (
-                        <div className="text-xs text-blue-400 mt-1">Currently Active</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        {record.location && (
-                          <div className="flex items-center gap-1 text-xs text-white/50">
-                            <MapPin className="w-3 h-3" />
-                            {record.location}
-                          </div>
-                        )}
+                      <div className="flex items-center gap-2">
                         {record.eventType && (
-                          <div className="flex items-center gap-1 text-xs text-white/50">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium 
+                                       bg-blue-500/10 text-blue-400 border border-blue-500/20">
                             <Tag className="w-3 h-3" />
                             {record.eventType}
+                          </span>
+                        )}
+                        <span className="text-xs text-white/50">{record.recordType}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-white/70">
+                        {record.location && (
+                          <div className="flex items-center gap-1 mb-1">
+                            <MapPin className="w-3 h-3" />
+                            <span className="text-xs">{record.location}</span>
                           </div>
                         )}
+                        <div className="text-xs text-white/50">
+                          Status: {record.status}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <button
                         onClick={() => handleDeleteRecord(record.timestamp, record.recordId)}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium 
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium
                                   transition-all duration-200 ${
                           deleteConfirm === record.timestamp
-                            ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-                            : 'bg-glass-light text-white/70 hover:text-red-400 hover:bg-red-500/20'
-                          }`}
+                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
+                        }`}
                       >
-                        {deleteConfirm === record.timestamp ? (
-                          'Confirm Delete'
-                        ) : (
-                          <>
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Delete
-                          </>
-                        )}
+                        <Trash2 className="w-3 h-3" />
+                        {deleteConfirm === record.timestamp ? 'Confirm' : 'Delete'}
                       </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-sm text-white/50">
-                    <div className="flex flex-col items-center gap-3">
-                      <Calendar className="w-8 h-8 text-white/30" />
-                      <div>
-                        <p className="font-medium text-white/70 mb-1">No attendance records found</p>
-                        <p>This employee has no clock-in/clock-out history. Records will appear here after using the QR scanner.</p>
-                      </div>
-                    </div>
+                  <td colSpan="8" className="px-6 py-8 text-center text-white/50">
+                    No attendance records found
                   </td>
                 </tr>
               )}

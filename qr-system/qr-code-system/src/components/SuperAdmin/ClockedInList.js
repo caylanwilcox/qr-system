@@ -5,8 +5,8 @@ import { Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import moment from 'moment-timezone';
 import { eventBus, EVENTS } from '../../services/eventBus';
 
-// Status badge component with consistent styling
-const StatusBadge = ({ clockInTime }) => {
+// Status badge with on-time/late indication
+const StatusBadge = ({ clockInTime, userData, date }) => {
   if (!clockInTime) {
     return (
       <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
@@ -17,49 +17,62 @@ const StatusBadge = ({ clockInTime }) => {
     );
   }
 
-  // Parse times for comparison (fallback gracefully if parsing fails)
-  try {
-    const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-    const expectedTime = new Date(`2000-01-01 09:00`);
-    const lateTime = new Date(`2000-01-01 09:15`);
-
-    if (clockInTime9AM > lateTime) {
-      return (
-        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                      bg-red-500/10 text-red-400 border border-red-500/20">
-          <Clock className="w-3 h-3" />
-          Late
-        </span>
-      );
+  // FIXED: Only calculate late status if user has scheduled events for this date
+  let isLate = false;
+  
+  if (userData && date) {
+    // Check if user has scheduled events for this date
+    let hasScheduledEvents = false;
+    
+    if (userData.events) {
+      Object.values(userData.events).forEach(eventTypeData => {
+        if (eventTypeData && typeof eventTypeData === 'object') {
+          Object.values(eventTypeData).forEach(eventData => {
+            if (eventData && eventData.scheduled && eventData.date === date) {
+              hasScheduledEvents = true;
+            }
+          });
+        }
+      });
     }
+    
+    // Only apply late logic if there are scheduled events
+    if (hasScheduledEvents) {
+      try {
+        // Use the original 9:00 AM logic as fallback when events are scheduled
+        // TODO: In the future, compare against actual event start times
+        const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
+        const expectedTime = new Date(`2000-01-01 09:00`);
+        const lateTime = new Date(`2000-01-01 09:15`);
 
-    if (clockInTime9AM > expectedTime) {
-      return (
-        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                      bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-          <Clock className="w-3 h-3" />
-          Slightly Late
-        </span>
-      );
+        if (clockInTime9AM > lateTime) {
+          isLate = true;
+        }
+      } catch (e) {
+        // If time parsing fails, don't mark as late
+        isLate = false;
+      }
     }
+  }
 
+  // Return status based on calculation
+  if (isLate) {
     return (
       <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                    bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        <CheckCircle className="w-3 h-3" />
-        On Time
-      </span>
-    );
-  } catch (e) {
-    // If time parsing fails, just show a generic status
-    return (
-      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                    bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                     bg-red-500/10 text-red-400 border border-red-500/20">
         <Clock className="w-3 h-3" />
-        Present
+        Late
       </span>
     );
   }
+
+  return (
+    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                   bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+      <CheckCircle className="w-3 h-3" />
+      On Time
+    </span>
+  );
 };
 
 // Helper to format date in different formats
@@ -349,14 +362,34 @@ const ClockedInList = ({ data = [], date }) => {
               clockOutTime = user.clockOutTimes?.[ts] || null;
               timestamp = ts;
               
-              // Determine if on time (before 9am)
-              try {
-              const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-              const expectedTime = new Date(`2000-01-01 09:00`);
-              onTime = clockInTime9AM <= expectedTime;
-              } catch (e) {
-                console.error(`${DEBUG_PREFIX} Error parsing time:`, e);
-                onTime = false;
+              // FIXED: Only determine late status if user has scheduled events for this date
+              let hasScheduledEvents = false;
+              
+              if (user.events) {
+                Object.values(user.events).forEach(eventTypeData => {
+                  if (eventTypeData && typeof eventTypeData === 'object') {
+                    Object.values(eventTypeData).forEach(eventData => {
+                      if (eventData && eventData.scheduled && eventData.date === effectiveDate) {
+                        hasScheduledEvents = true;
+                      }
+                    });
+                  }
+                });
+              }
+              
+              // Only apply late logic if there are scheduled events
+              if (hasScheduledEvents) {
+                try {
+                  const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
+                  const expectedTime = new Date(`2000-01-01 09:00`);
+                  onTime = clockInTime9AM <= expectedTime;
+                } catch (e) {
+                  console.error(`${DEBUG_PREFIX} Error parsing time:`, e);
+                  onTime = true; // Default to on time if parsing fails and events are scheduled
+                }
+              } else {
+                // No scheduled events, user is always on time
+                onTime = true;
               }
               
               console.log(`${DEBUG_PREFIX} User ${id} is clocked in via clockInTimes with timestamp ${ts} (Chicago timezone match)`);
@@ -426,7 +459,9 @@ const ClockedInList = ({ data = [], date }) => {
           timestamp,
           profile: user.profile,
           padrinoColor,
-          time: clockInTime // Add time property for consistency
+          time: clockInTime, // Add time property for consistency
+          events: user.events, // Include events for scheduled event checking
+          fullUserData: user // Include full user data for comprehensive checking
         });
       }
     });
@@ -546,7 +581,7 @@ const ClockedInList = ({ data = [], date }) => {
                 <div className={`clock-time ${user.colorClass || ''}`}>
                   {user.clockInTime || '(No time)'}
                 </div>
-                <StatusBadge clockInTime={user.clockInTime} />
+                <StatusBadge clockInTime={user.clockInTime} userData={user} date={effectiveDate} />
               </div>
             </div>
           ))}

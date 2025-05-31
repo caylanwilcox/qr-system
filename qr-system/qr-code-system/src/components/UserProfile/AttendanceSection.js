@@ -16,9 +16,14 @@ const AttendanceSection = ({ employeeId, viewOnly = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Function to determine status color based on clock in time
-  const getStatusColor = (clockIn, expectedTime = '09:00') => {
+  // FIXED: Get status color - only apply late logic if user has scheduled events
+  const getStatusColor = (clockIn, expectedTime = '09:00', hasScheduledEvents = false) => {
     if (!clockIn) return 'text-blue-400';
+    
+    // FIXED: Only apply late logic if user had scheduled events
+    if (!hasScheduledEvents) {
+      return 'text-emerald-400'; // Always on time if no scheduled events
+    }
     
     // Parse times for comparison
     const clockInTime = new Date(`2000-01-01 ${clockIn}`);
@@ -31,14 +36,25 @@ const AttendanceSection = ({ employeeId, viewOnly = false }) => {
     return 'text-blue-400';
   };
 
-  // Status badge component with consistent styling
-  const StatusBadge = ({ clockInTime }) => {
+  // FIXED: Status badge component - only show late status if user has scheduled events
+  const StatusBadge = ({ clockInTime, hasScheduledEvents = false }) => {
     if (!clockInTime) {
       return (
         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
                        bg-red-500/10 text-red-400 border border-red-500/20">
           <AlertCircle className="w-3 h-3" />
           Absent
+        </span>
+      );
+    }
+
+    // FIXED: Only apply late logic if user had scheduled events for the day
+    if (!hasScheduledEvents) {
+      return (
+        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                       bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <CheckCircle className="w-3 h-3" />
+          On Time
         </span>
       );
     }
@@ -663,7 +679,7 @@ const AttendanceSection = ({ employeeId, viewOnly = false }) => {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className={`flex items-center gap-2 text-sm ${getStatusColor(record.clockInTime)}`}>
+                      <div className={`flex items-center gap-2 text-sm ${getStatusColor(record.clockInTime, '09:00', record.hasScheduledEvents)}`}>
                         <Clock className="w-4 h-4" />
                         <span className="font-mono">
                           {record.clockInTime || 'Not Clocked In'}
@@ -686,7 +702,7 @@ const AttendanceSection = ({ employeeId, viewOnly = false }) => {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge clockInTime={record.clockInTime} />
+                      <StatusBadge clockInTime={record.clockInTime} hasScheduledEvents={record.hasScheduledEvents} />
                     </td>
                   </tr>
                 ))

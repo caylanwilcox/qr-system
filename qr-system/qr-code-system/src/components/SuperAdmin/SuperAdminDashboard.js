@@ -372,14 +372,34 @@ const SuperAdminDashboard = () => {
         // Check if on time
         let isOnTime = todayAttendanceRecord?.onTime;
         if (isOnTime === undefined && todayAttendanceRecord?.clockInTime) {
-          // Determine on-time status from clockInTime
-          try {
-            const clockInTime9AM = new Date(`2000-01-01 ${todayAttendanceRecord.clockInTime}`);
-            const expectedTime = new Date(`2000-01-01 09:00`);
-            isOnTime = clockInTime9AM <= expectedTime;
-          } catch (e) {
-            console.warn(`${DEBUG_PREFIX} Error parsing time for ${userId}:`, e);
-            isOnTime = false;
+          // FIXED: Only determine late status if user has scheduled events for this date
+          let hasScheduledEvents = false;
+          
+          if (user.events) {
+            Object.values(user.events).forEach(eventTypeData => {
+              if (eventTypeData && typeof eventTypeData === 'object') {
+                Object.values(eventTypeData).forEach(eventData => {
+                  if (eventData && eventData.scheduled && eventData.date === today) {
+                    hasScheduledEvents = true;
+                  }
+                });
+              }
+            });
+          }
+          
+          // Only apply late logic if there are scheduled events
+          if (hasScheduledEvents) {
+            try {
+              const clockInTime9AM = new Date(`2000-01-01 ${todayAttendanceRecord.clockInTime}`);
+              const expectedTime = new Date(`2000-01-01 09:00`);
+              isOnTime = clockInTime9AM <= expectedTime;
+            } catch (e) {
+              console.warn(`${DEBUG_PREFIX} Error parsing time for ${userId}:`, e);
+              isOnTime = true; // Default to on time if parsing fails
+            }
+          } else {
+            // No scheduled events, user is always on time
+            isOnTime = true;
           }
         }
         

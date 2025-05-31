@@ -154,10 +154,44 @@ class AttendanceService {
       const name = user.profile?.name || 'Unknown';
       const position = user.profile?.position || 'Member';
       
-      // Determine if the user is late (after 9:00 AM)
-      const clockInHour = now.getHours();
-      const clockInMinute = now.getMinutes();
-      const isLate = clockInHour > 9 || (clockInHour === 9 && clockInMinute > 0);
+      // FIXED: Determine if the user is late based on scheduled events for today
+      let isLate = false;
+      
+      // Check if user has any scheduled events for today
+      const hasScheduledEventsToday = this.checkUserHasScheduledEventsToday(user, today);
+      
+      if (hasScheduledEventsToday) {
+        // Get actual scheduled events for today to compare times
+        try {
+          const scheduledEvents = await this.fetchScheduledEvents(locationKey, eventData?.type || '');
+          
+          if (scheduledEvents.length > 0) {
+            // Find the earliest scheduled event for today
+            const earliestEvent = scheduledEvents.reduce((earliest, current) => {
+              return moment(current.start).isBefore(moment(earliest.start)) ? current : earliest;
+            });
+            
+            const scheduledTime = moment(earliestEvent.start).tz(this.timezone);
+            const clockInTime = moment(now).tz(this.timezone);
+            
+            // Consider late if clocked in after the scheduled start time
+            isLate = clockInTime.isAfter(scheduledTime);
+            
+            console.log(`${this.DEBUG_PREFIX} Comparing clock-in ${clockInTime.format('HH:mm')} to scheduled time ${scheduledTime.format('HH:mm')}: ${isLate ? 'LATE' : 'ON TIME'}`);
+          } else {
+            // Fallback to checking user's personal events with times
+            isLate = this.checkLateBasedOnUserEvents(user, today, moment(now).tz(this.timezone));
+          }
+        } catch (error) {
+          console.warn(`${this.DEBUG_PREFIX} Error fetching scheduled events, using fallback logic:`, error);
+          // Fallback to checking user's personal events
+          isLate = this.checkLateBasedOnUserEvents(user, today, moment(now).tz(this.timezone));
+        }
+      } else {
+        // No scheduled events, user cannot be late
+        isLate = false;
+        console.log(`${this.DEBUG_PREFIX} User has no scheduled events today, marking as on time`);
+      }
       
       // Create attendance record
       const attendanceRecord = {
@@ -766,6 +800,121 @@ class AttendanceService {
       console.error(`${this.DEBUG_PREFIX} Error fetching scheduled events:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Check if user has scheduled events for a given date
+   * @param {Object} user - User data
+   * @param {string} dateStr - Date string in YYYY-MM-DD format
+   * @returns {boolean} - True if user has scheduled events for the date
+   */
+  checkUserHasScheduledEventsToday(user, dateStr) {
+    if (!user || !dateStr) return false;
+    
+    // Check user's events structure
+    if (user.events) {
+      const eventTypes = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+      
+      for (const eventType of eventTypes) {
+        if (user.events[eventType]) {
+          const events = user.events[eventType];
+          
+          for (const [eventId, eventData] of Object.entries(events)) {
+            if (eventData && eventData.scheduled) {
+              // Check if event is for today
+              if (eventData.date) {
+                const eventDate = moment(eventData.date).tz(this.timezone).format('YYYY-MM-DD');
+                if (eventDate === dateStr) {
+                  return true;
+                }
+              }
+              
+              // Check for multi-day events (like haciendas)
+              if (eventData.endDate) {
+                const startDate = moment(eventData.date).tz(this.timezone);
+                const endDate = moment(eventData.endDate).tz(this.timezone);
+                const checkDate = moment(dateStr).tz(this.timezone);
+                
+                if (checkDate.isBetween(startDate, endDate, 'day', '[]')) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Check user's statistics for assigned events on this specific date
+    if (user.statistics) {
+      for (const [eventId, statEntry] of Object.entries(user.statistics)) {
+        if (statEntry && statEntry.date === dateStr && statEntry.status === 'assigned') {
+          console.log(`${this.DEBUG_PREFIX} User has assigned event for ${dateStr}: ${eventId}`);
+          return true;
+        }
+      }
+    }
+    
+    // FIXED: Remove the problematic schedule check that was always returning true
+    // The schedule object should be checked more carefully with actual event data
+    // For now, we only check events and statistics which have proper date information
+    
+    return false;
+  }
+
+  // New method to check late based on user's personal events
+  checkLateBasedOnUserEvents(user, dateStr, now) {
+    if (!user || !dateStr || !now) return false;
+    
+    // Check user's events structure
+    if (user.events) {
+      const eventTypes = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+      
+      for (const eventType of eventTypes) {
+        if (user.events[eventType]) {
+          const events = user.events[eventType];
+          
+          for (const [eventId, eventData] of Object.entries(events)) {
+            if (eventData && eventData.scheduled) {
+              // Check if event is for today
+              if (eventData.date) {
+                const eventDate = moment(eventData.date).tz(this.timezone).format('YYYY-MM-DD');
+                if (eventDate === dateStr) {
+                  // Get scheduled time for the event
+                  const scheduledTime = moment(eventData.date).tz(this.timezone);
+                  
+                  // Compare now with scheduled time
+                  if (now.isAfter(scheduledTime)) {
+                    console.log(`${this.DEBUG_PREFIX} User has event ${eventId} scheduled for today, marked as late`);
+                    return true;
+                  }
+                }
+              }
+              
+              // Check for multi-day events (like haciendas)
+              if (eventData.endDate) {
+                const startDate = moment(eventData.date).tz(this.timezone);
+                const endDate = moment(eventData.endDate).tz(this.timezone);
+                const checkDate = moment(dateStr).tz(this.timezone);
+                
+                if (checkDate.isBetween(startDate, endDate, 'day', '[]')) {
+                  // Get scheduled time for the event
+                  const scheduledTime = moment(eventData.date).tz(this.timezone);
+                  
+                  // Compare now with scheduled time
+                  if (now.isAfter(scheduledTime)) {
+                    console.log(`${this.DEBUG_PREFIX} User has event ${eventId} scheduled for today, marked as late`);
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return false;
   }
 }
 

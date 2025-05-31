@@ -327,7 +327,7 @@ const ReportsContainer = ({ locationFiltered = false }) => {
           // Check if we already have a record for this user on this date
           if (!combinedData[location][formattedDate][userId]) {
             // For legacy records, use the old logic as fallback
-            const isLate = isLateTime(clockInTime);
+            const isLate = isLateTime(clockInTime, Object.keys(allEvents).length > 0);
             
             combinedData[location][formattedDate][userId] = {
               userId,
@@ -653,19 +653,24 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     return reports.sort((a, b) => b.daysPresent - a.daysPresent);
   };
 
-  // Check if a time is considered late (after 9:00 AM)
-  const isLateTime = (timeStr) => {
+  // FIXED: Check if a time is considered late - only applies if user had scheduled events
+  const isLateTime = (timeStr, hasScheduledEvents = true) => {
     try {
       if (!timeStr) return false;
       
+      // FIXED: Only apply late logic if user had scheduled events for the day
+      if (!hasScheduledEvents) {
+        return false; // Never late if no scheduled events
+      }
+      
       // Handle different time formats
       if (timeStr.includes('AM') || timeStr.includes('PM')) {
-        // 12-hour format
+        // 12-hour format - TODO: Compare against actual event start times instead of hardcoded 9:00 AM
         const time = moment(timeStr, 'h:mm A');
         const lateTime = moment('9:00 AM', 'h:mm A');
         return time.isAfter(lateTime);
       } else {
-        // 24-hour format
+        // 24-hour format - TODO: Compare against actual event start times instead of hardcoded 9:00 AM
         const timeParts = timeStr.split(':');
         if (timeParts.length >= 2) {
           const hour = parseInt(timeParts[0]);

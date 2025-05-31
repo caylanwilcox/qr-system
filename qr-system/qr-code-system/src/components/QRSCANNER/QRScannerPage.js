@@ -166,9 +166,23 @@ const QRScannerPage = () => {
     
     // FIXED: Use Chicago timezone for time calculations
     const chicagoNow = moment().tz('America/Chicago');
-    const currentHour = chicagoNow.hour();
-    const currentMinute = chicagoNow.minute();
-    const isLate = currentHour > 9 || (currentHour === 9 && currentMinute > 0);
+    
+    // FIXED: Determine if the user is late based on scheduled events for today
+    let isLate = false;
+    
+    // Check if user has any scheduled events for today
+    const hasScheduledEventsToday = checkUserHasScheduledEventsToday(userData, currentDate);
+    
+    if (hasScheduledEventsToday) {
+      // Check user's personal events for scheduled times
+      isLate = checkLateBasedOnUserEvents(userData, currentDate, chicagoNow);
+      
+      console.log('🔍 User has scheduled events today, late status:', isLate);
+    } else {
+      // No scheduled events, user cannot be late
+      isLate = false;
+      console.log('🔍 User has no scheduled events today, marking as on time');
+    }
     
     const locationValue = typeof currentLocation === 'object' ? (currentLocation.name || currentLocation.key || 'Unknown') : currentLocation;
     const locationKey = locationValue.toLowerCase().replace(/\s+/g, '');
@@ -709,6 +723,186 @@ const QRScannerPage = () => {
         setMessage(`Ready to ${modeText} at location: ${currentLocation}${eventText}`);
       }
     }, 100);
+  };
+
+  // Helper function to check if user has scheduled events for a given date
+  const checkUserHasScheduledEventsToday = (userData, dateStr) => {
+    if (!userData || !dateStr) return false;
+    
+    // Check user's events structure
+    if (userData.events) {
+      const eventTypes = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+      
+      for (const eventType of eventTypes) {
+        if (userData.events[eventType]) {
+          const events = userData.events[eventType];
+          
+          for (const [eventId, eventData] of Object.entries(events)) {
+            if (eventData && eventData.scheduled) {
+              // Check if event is for today
+              if (eventData.date) {
+                const eventDate = moment(eventData.date).tz('America/Chicago').format('YYYY-MM-DD');
+                if (eventDate === dateStr) {
+                  return true;
+                }
+              }
+              
+              // Check for multi-day events (like haciendas)
+              if (eventData.endDate) {
+                const startDate = moment(eventData.date).tz('America/Chicago');
+                const endDate = moment(eventData.endDate).tz('America/Chicago');
+                const checkDate = moment(dateStr).tz('America/Chicago');
+                
+                if (checkDate.isBetween(startDate, endDate, 'day', '[]')) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Check user's statistics for assigned events on this specific date
+    if (userData.statistics) {
+      for (const [eventId, statEntry] of Object.entries(userData.statistics)) {
+        if (statEntry && statEntry.date === dateStr && statEntry.status === 'assigned') {
+          console.log(`🔍 User has assigned event for ${dateStr}: ${eventId}`);
+          return true;
+        }
+      }
+    }
+    
+    // FIXED: Remove the problematic schedule check that was always returning true
+    // The schedule object should be checked more carefully with actual event data
+    // For now, we only check events and statistics which have proper date information
+    
+    return false;
+  };
+
+  // Helper function to check if user is late based on their scheduled events
+  const checkLateBasedOnUserEvents = (userData, dateStr, clockInMoment) => {
+    if (!userData || !dateStr || !clockInMoment) return false;
+    
+    let earliestEventTime = null;
+    
+    // Check user's personal events for scheduled times
+    if (userData.events) {
+      const eventTypes = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+      
+      for (const eventType of eventTypes) {
+        if (userData.events[eventType]) {
+          const events = userData.events[eventType];
+          
+          for (const [eventId, eventData] of Object.entries(events)) {
+            if (eventData && eventData.scheduled) {
+              // Check if event is for today
+              if (eventData.date) {
+                const eventDate = moment(eventData.date).tz('America/Chicago').format('YYYY-MM-DD');
+                if (eventDate === dateStr) {
+                  
+                  // FIXED: Check if the event has a specific time component
+                  let eventTime = null;
+                  
+                  // Check if eventData has a specific start time
+                  if (eventData.start) {
+                    eventTime = moment(eventData.start).tz('America/Chicago');
+                  } else if (eventData.time) {
+                    // If there's a time field, combine it with the date
+                    eventTime = moment.tz(`${dateStr} ${eventData.time}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
+                  } else if (eventData.startTime) {
+                    // If there's a startTime field, combine it with the date
+                    eventTime = moment.tz(`${dateStr} ${eventData.startTime}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
+                  } else {
+                    // If only date is available, check if it contains time info
+                    const dateTime = moment(eventData.date).tz('America/Chicago');
+                    const timeComponent = dateTime.format('HH:mm');
+                    
+                    // Skip events that default to midnight (00:00) as they likely don't have real time info
+                    if (timeComponent === '00:00') {
+                      console.log(`🔍 Skipping event ${eventId} - no specific time (defaults to midnight)`);
+                      continue;
+                    }
+                    
+                    eventTime = dateTime;
+                  }
+                  
+                  // Only use events with meaningful times (not midnight unless explicitly set)
+                  if (eventTime && eventTime.isValid()) {
+                    const timeComponent = eventTime.format('HH:mm');
+                    if (timeComponent !== '00:00' || eventData.allDay === false) {
+                      if (!earliestEventTime || eventTime.isBefore(earliestEventTime)) {
+                        earliestEventTime = eventTime;
+                        console.log(`🔍 Found valid scheduled event at ${eventTime.format('HH:mm')} for event ${eventId}`);
+                      }
+                    } else {
+                      console.log(`🔍 Skipping event ${eventId} at midnight - likely missing time component`);
+                    }
+                  }
+                }
+              }
+              
+              // Check for multi-day events (like haciendas) - but only if they have meaningful times
+              if (eventData.endDate) {
+                const startDate = moment(eventData.date).tz('America/Chicago');
+                const endDate = moment(eventData.endDate).tz('America/Chicago');
+                const checkDate = moment(dateStr).tz('America/Chicago');
+                
+                if (checkDate.isBetween(startDate, endDate, 'day', '[]')) {
+                  // For multi-day events, check if start has a meaningful time
+                  const timeComponent = startDate.format('HH:mm');
+                  if (timeComponent !== '00:00' || eventData.allDay === false) {
+                    if (!earliestEventTime || startDate.isBefore(earliestEventTime)) {
+                      earliestEventTime = startDate;
+                      console.log(`🔍 Found valid multi-day event at ${startDate.format('HH:mm')}`);
+                    }
+                  } else {
+                    console.log(`🔍 Skipping multi-day event at midnight - likely missing time component`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Check statistics for assigned events
+    if (userData.statistics) {
+      for (const [eventId, statEntry] of Object.entries(userData.statistics)) {
+        if (statEntry && statEntry.date === dateStr && statEntry.status === 'assigned') {
+          // If we have event data with scheduled time, use it
+          if (statEntry.eventTime) {
+            const eventTime = moment.tz(`${dateStr} ${statEntry.eventTime}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
+            if (eventTime.isValid()) {
+              if (!earliestEventTime || eventTime.isBefore(earliestEventTime)) {
+                earliestEventTime = eventTime;
+                console.log(`🔍 Found valid statistics event at ${eventTime.format('HH:mm')}`);
+              }
+            }
+          } else if (statEntry.startTime) {
+            const eventTime = moment.tz(`${dateStr} ${statEntry.startTime}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
+            if (eventTime.isValid()) {
+              if (!earliestEventTime || eventTime.isBefore(earliestEventTime)) {
+                earliestEventTime = eventTime;
+                console.log(`🔍 Found valid statistics event with startTime at ${eventTime.format('HH:mm')}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // If we found scheduled events with specific times, compare clock-in time to earliest event time
+    if (earliestEventTime) {
+      const isLate = clockInMoment.isAfter(earliestEventTime);
+      console.log(`🔍 Comparing clock-in ${clockInMoment.format('HH:mm')} to earliest event ${earliestEventTime.format('HH:mm')}: ${isLate ? 'LATE' : 'ON TIME'}`);
+      return isLate;
+    }
+    
+    // No scheduled events with specific times found, default to not late
+    console.log(`🔍 No scheduled events with specific times found for ${dateStr}, marking as on time`);
+    return false;
   };
 
   return (
