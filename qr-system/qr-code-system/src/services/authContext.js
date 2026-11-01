@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { ref, get } from 'firebase/database';
 import { auth, database } from './firebaseConfig';
+import { resolveRole, hasRoleAtLeast } from '../utils/roles';
 
 export const AuthContext = createContext();
 
@@ -20,15 +21,6 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
-
-const ROLE_HIERARCHY = {
-  SUPER_ADMIN: 3,
-  super_admin: 3, // Support lowercase version
-  ADMIN: 2,
-  admin: 2, // Support lowercase version
-  EMPLOYEE: 1,
-  employee: 1 // Support lowercase version
 };
 
 export const AuthProvider = ({ children }) => {
@@ -48,7 +40,8 @@ export const AuthProvider = ({ children }) => {
       const userData = userSnapshot.val();
 
       // Get role from profile if it exists, otherwise from claims or default
-      const userRole = userData?.profile?.role || idTokenResult.claims.role || 'EMPLOYEE';
+      // Normalized so stored spellings like "super-admin" still match.
+      const userRole = resolveRole(userData?.profile?.role, idTokenResult.claims.role);
       
       // Get management permissions if admin or super_admin
       let permissions = null;
@@ -78,7 +71,8 @@ export const AuthProvider = ({ children }) => {
       const userWithRole = {
         ...userCredential.user,
         role: userRole,
-        profile: userData?.profile || {},
+        // Screens like the Scheduler read profile.role, so normalize it too.
+        profile: { ...(userData?.profile || {}), role: userRole },
         managementPermissions: permissions
       };
 
@@ -139,7 +133,7 @@ export const AuthProvider = ({ children }) => {
 
   // Check if user has required role
   const hasRequiredRole = (userRole, requiredRole) => {
-    return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
+    return hasRoleAtLeast(userRole, requiredRole);
   };
 
   // Check if user can manage a location
@@ -235,7 +229,8 @@ export const AuthProvider = ({ children }) => {
           ]);
 
           const userData = userSnapshot.val();
-          const role = userData?.profile?.role || tokenResult.claims.role || 'EMPLOYEE';
+          // Normalized so stored spellings like "super-admin" still match.
+          const role = resolveRole(userData?.profile?.role, tokenResult.claims.role);
           
           // Get management permissions if admin or super_admin
           let permissions = null;
@@ -265,7 +260,8 @@ export const AuthProvider = ({ children }) => {
           setUser({
             ...firebaseUser,
             role,
-            profile: userData?.profile || {},
+            // Screens like the Scheduler read profile.role, so normalize it too.
+            profile: { ...(userData?.profile || {}), role },
             managementPermissions: permissions
           });
         } else {

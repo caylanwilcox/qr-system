@@ -368,11 +368,12 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
           const participantData = eventData.participants[userId];
           
           userEvents.push({
-            id: eventId,
             ...eventData,
-            // Normalize participant data
-            assigned: participantData === true ? false : (participantData.assigned || false),
-            attended: participantData === true ? true : (participantData.attended || false),
+            id: eventId, // the database key wins over any stored id
+            // Normalize participant data. A bare `true` was written when
+            // someone was assigned, so it means assigned, not attended.
+            assigned: participantData === true ? true : (participantData.assigned || false),
+            attended: participantData === true ? false : (participantData.attended || false),
             assignedAt: participantData.assignedAt || null,
             attendedAt: participantData.attendedAt || null,
             // Parse dates
