@@ -52,6 +52,7 @@
     "start:dev": "concurrently \"npm run start:backend\" \"npm start\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:api": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/api/*.test.mjs",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

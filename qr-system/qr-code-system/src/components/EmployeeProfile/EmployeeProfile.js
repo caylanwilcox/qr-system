@@ -221,17 +221,7 @@ const EmployeeProfile = () => {
   // Control form input changes
   const handleInputChange = (e) => {
     const { name, type, checked, value } = e.target;
-    
-    // Debug logging for password changes
-    if (name === 'password') {
-      console.log('🔑 [EMPLOYEE_PROFILE] Password field changed:', {
-        name,
-        hasValue: !!value,
-        length: value?.length || 0,
-        preview: value ? value.substring(0, 3) + '***' : 'empty'
-      });
-    }
-    
+
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,

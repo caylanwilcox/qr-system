@@ -302,7 +302,7 @@ const PersonalInfoSection = ({
   // Reset functionality state
   const [isResetting, setIsResetting] = useState(false);
   const [showPasswordInput, setShowPasswordInput] = useState(false);
-  const [newPassword, setNewPassword] = useState('AV2025!');
+  const [newPassword, setNewPassword] = useState(''); // no shared default password
   
   // Track original values for change detection
   const [originalValues, setOriginalValues] = useState({
@@ -644,7 +644,7 @@ const PersonalInfoSection = ({
 
       const message = type === 'email' 
         ? `Email reset to: ${updates.email}` 
-        : `Password reset to: ${newPassword}`;
+        : 'Password updated.';
       
       setUpdateStatus({
         type: 'success',
@@ -654,9 +654,9 @@ const PersonalInfoSection = ({
       // Reset password input state
       if (type === 'password') {
         setShowPasswordInput(false);
-        setNewPassword('AV2025!');
+        setNewPassword('');
       }
-      
+
       if (fetchUserData) {
         await fetchUserData();
       }
@@ -817,7 +817,7 @@ const PersonalInfoSection = ({
                     <button
                       onClick={() => {
                         setShowPasswordInput(false);
-                        setNewPassword('AV2025!');
+                        setNewPassword('');
                       }}
                       className="px-2 py-1 rounded-md border border-white/20 text-white/70 hover:bg-white/10 text-xs"
                     >

@@ -61,7 +61,9 @@ function AppContent() {
         {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<Login />} />
-        <Route path="employee-list" element={<EmployeeListPage />} />
+
+        {/* Admin-only: shows every user's name, location and attendance */}
+        <Route path="/employee-list" element={<PrivateRoute requiredRole="ADMIN"><EmployeeListPage /></PrivateRoute>} />
 
         {/* Employee Routes */}
         <Route path="/dashboard" element={<PrivateRoute requiredRole="EMPLOYEE"><UserDashboard /></PrivateRoute>} />

@@ -28,7 +28,7 @@ const AddNewEmployee = () => {
       name: '',
       phone: ''
     },
-    password: 'AV2025!', // Set default password that matches existing pattern
+    password: '', // Admin sets a unique temporary password; it is never stored in the database
     role: 'employee',
     status: 'active',
     padrino: false, // Added based on user examples
@@ -337,7 +337,7 @@ const AddNewEmployee = () => {
           locationKey: formData.locationKey, // Store location key in profile
           managedBy: "",
           name: formData.name, // Store name in profile
-          password: password,
+          // Never store the password here: Firebase Auth already holds it securely.
           phone: formData.phone || "",
           position: formData.position || "Member",
           role: formData.role,
@@ -384,7 +384,7 @@ const AddNewEmployee = () => {
         });
       }
 
-      notify(`User created successfully! Login: ${email} / ${password}`);
+      notify(`User created successfully! Login email: ${email}`);
       setFormData({ ...INITIAL_FORM });
     } catch (err) {
       console.error(err);
@@ -706,7 +706,7 @@ const AddNewEmployee = () => {
                 </div>
               )}
               <div className="input-help-text">
-                Default password: AV2025! (must be at least 6 characters)
+                Choose a unique temporary password (at least 6 characters) and share it privately.
               </div>
             </div>
 
