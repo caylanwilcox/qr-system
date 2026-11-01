@@ -18,7 +18,11 @@ import {
   composeClockInUpdates,
   composeClockOutUpdates,
   MAX_SHIFT_MS,
+  hasScheduledEventsToday,
+  isLateForScheduledEvents,
+  TIMEZONE,
 } from '../../src/utils/attendanceRules.js';
+import moment from 'moment-timezone';
 import {
   profileToForm,
   locationOptions,
@@ -355,4 +359,45 @@ test('reset refuses a database from another project', () => {
   assert.equal(reset.databaseMatchesProject('https://other-default-rtdb.firebaseio.com', 'qr-system-1cea7'), false);
   assert.equal(reset.databaseMatchesProject('not a url', 'qr-system-1cea7'), false);
   assert.equal(reset.databaseMatchesProject(ok, ''), false);
+});
+
+// --- Late check (moved from the scanner page to run on the server) ---
+const chicago = (value) => moment.tz(value, 'YYYY-MM-DD HH:mm', TIMEZONE);
+const withEvents = (events) => ({ events: { workshops: events } });
+
+test('late check reads times without an offset as Chicago time, as the scanner did', () => {
+  const user = withEvents({ w1: { scheduled: true, date: '2026-11-02T09:00' } });
+  assert.equal(hasScheduledEventsToday(user, '2026-11-02'), true);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 08:50')), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 09:30')), true);
+});
+
+test('late check honors explicit offsets and uses the earliest start of the day', () => {
+  const user = withEvents({
+    w1: { scheduled: true, date: '2026-11-02T16:00:00.000Z' }, // 10:00 Chicago
+    w2: { scheduled: true, date: '2026-11-02T13:00' },
+  });
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 09:59')), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 10:01')), true);
+});
+
+test('a date-only event counts as scheduled but never makes anyone late', () => {
+  const user = withEvents({ w1: { scheduled: true, date: '2026-11-02' } });
+  assert.equal(hasScheduledEventsToday(user, '2026-11-02'), true);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 23:00')), false);
+});
+
+test('multi-day events count on every day they span; unscheduled entries are ignored', () => {
+  const user = withEvents({
+    h1: { scheduled: true, date: '2026-11-01T08:00', endDate: '2026-11-03T18:00' },
+    w2: { scheduled: false, date: '2026-11-02T07:00' },
+  });
+  assert.equal(hasScheduledEventsToday(user, '2026-11-02'), true);
+  assert.equal(hasScheduledEventsToday(user, '2026-11-04'), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-01', chicago('2026-11-01 07:30')), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-01', chicago('2026-11-01 08:30')), true);
+  // Existing behavior, kept unchanged by the move: on later days of a
+  // multi-day event the scanner compares with the first day's start, so any
+  // clock-in counts as late. Fixing that is a separate, deliberate change.
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 07:30')), true);
 });

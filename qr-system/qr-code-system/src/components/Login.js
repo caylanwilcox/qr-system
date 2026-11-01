@@ -27,11 +27,12 @@ const Login = () => {
       const snapshot = await get(userRef);
 
       if (!snapshot.exists()) {
-        // Create basic user data if it doesn't exist
+        // Create basic user data if it doesn't exist. No role is saved here:
+        // only the server sets roles, and with none stored the app uses the
+        // login claim (or employee).
         await set(userRef, {
           profile: {
             email: email,
-            role: user.role || 'EMPLOYEE', // Default to EMPLOYEE if no role
             status: 'active',
             name: user.email.split('@')[0],
             createdAt: new Date().toISOString(),

@@ -9,9 +9,9 @@ import {
   Building,
   AlertCircle
 } from 'lucide-react';
-import { ref, get, set, onValue } from 'firebase/database';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { database, auth } from '../services/firebaseConfig';
+import { ref, get, onValue } from 'firebase/database';
+import { database } from '../services/firebaseConfig';
+import { createMember } from '../services/adminApi';
 import SystemCodes from '../utils/SystemCodes';
 import './AddNewEmployee.css';
 
@@ -297,106 +297,30 @@ const AddNewEmployee = () => {
     }
     
     try {
-      const { email, password } = formData;
-      
-      // Create Firebase Auth user
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
-      const now = new Date().toISOString();
+      // The server creates the login and the record together, so the admin
+      // stays signed in and a failed step never leaves half a member behind.
+      // The password goes only to the login; it is never stored in the database.
+      await createMember({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        status: formData.status,
+        locationKey: formData.locationKey,
+        position: formData.position,
+        department: formData.department,
+        service: formData.service,
+        phone: formData.phone,
+        emergencyContact: formData.emergencyContact,
+        padrino: formData.padrino === true,
+        padrinoColor: formData.padrinoColor
+      });
 
-      // Look up location display name if location key exists
-      let locationName = '';
-      if (formData.locationKey) {
-        const selectedLocation = locations.find(loc => loc.value === formData.locationKey);
-        locationName = selectedLocation ? selectedLocation.label : '';
-      }
-
-      // *** Create user structure that matches successful examples ***
-      const userRecord = {
-        // Root level fields
-        location: formData.locationKey, // Store location key at root level
-        locationHistory: [
-          {
-            changedBy: "migration",
-            date: now,
-            locationKey: formData.locationKey,
-            locationName: locationName
-          }
-        ],
-        name: formData.name, // Store name at root level too
-        profile: {
-          // Profile fields
-          department: formData.department || "",
-          email: email,
-          emergencyContact: {
-            name: formData.emergencyContact.name || "",
-            phone: formData.emergencyContact.phone || ""
-          },
-          joinDate: now,
-          location: locationName, // Store display name in profile
-          locationKey: formData.locationKey, // Store location key in profile
-          managedBy: "",
-          name: formData.name, // Store name in profile
-          // Never store the password here: Firebase Auth already holds it securely.
-          phone: formData.phone || "",
-          position: formData.position || "Member",
-          role: formData.role,
-          service: formData.service || "",
-          status: formData.status,
-          notes: "",
-          // Only include padrino fields if padrino is true
-          ...(formData.padrino ? {
-            padrino: true,
-            padrinoColor: formData.padrinoColor || "blue"
-          } : {})
-        },
-        stats: {
-          // Initialize stats
-          attendanceRate: 0,
-          daysAbsent: 0,
-          daysLate: 0,
-          daysPresent: 0,
-          onTimeRate: 0,
-          totalHours: 0
-        },
-        status: formData.status // Root level status
-      };
-
-      // Set the complete user record
-      await set(ref(database, `users/${uid}`), userRecord);
-
-      // If role is admin, set up management structure
-      if (formData.role === 'admin' || formData.role === 'super_admin') {
-        await set(ref(database, `managementStructure/${uid}`), {
-          role: formData.role,
-          managedLocations: formData.role === 'super_admin' 
-            ? { "*": true } 
-            : { [formData.locationKey]: true },
-          managedDepartments: { "*": true }
-        });
-      }
-
-      // Add user to location's activeUsers if status is active
-      if (formData.status === 'active' && formData.locationKey) {
-        const locationUsersRef = ref(database, `locations/${formData.locationKey}/activeUsers/${uid}`);
-        await set(locationUsersRef, {
-          position: formData.position || "Member"
-        });
-      }
-
-      notify(`User created successfully! Login email: ${email}`);
+      notify(`User created successfully! Login email: ${formData.email}`);
       setFormData({ ...INITIAL_FORM });
     } catch (err) {
-      console.error(err);
-      if (err.code === 'auth/email-already-in-use') {
-        notify('This email is already registered. Please use a different email.', 'error');
-      } else if (err.code === 'auth/invalid-email') {
-        notify('Invalid email format.', 'error');
-      } else if (err.code === 'auth/weak-password') {
-        notify('Password is too weak. Use at least 6 characters.', 'error');
-      } else {
-        notify(err.message, 'error');
-      }
+      console.error('Create member failed:', err.message);
+      notify(err.message || 'Could not create the member. Please try again.', 'error');
     }
   };
 

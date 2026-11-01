@@ -224,7 +224,10 @@ export const AuthProvider = ({ children }) => {
         if (firebaseUser) {
           // Get custom claims and database data
           const [tokenResult, userSnapshot] = await Promise.all([
-            getIdTokenResult(firebaseUser),
+            // Fresh token on every load, so a role claim changed on the server
+            // reaches the database rules without waiting up to an hour.
+            // Offline, the cached token still works.
+            getIdTokenResult(firebaseUser, true).catch(() => getIdTokenResult(firebaseUser)),
             get(ref(database, `users/${firebaseUser.uid}`))
           ]);
 
