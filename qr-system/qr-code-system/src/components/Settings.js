@@ -4,10 +4,7 @@ import {
   Tag, 
   UserPlus, 
   Code, 
-  Mail,
-  Shield,
-  Bell,
-  Server
+  Bell
 } from 'lucide-react';
 import './Settings.css';
 import CodesEditor from './CodesEditor';

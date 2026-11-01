@@ -9,7 +9,7 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth';
-import { ref, get, set } from 'firebase/database';
+import { ref, get } from 'firebase/database';
 import { auth, database } from './firebaseConfig';
 
 export const AuthContext = createContext();

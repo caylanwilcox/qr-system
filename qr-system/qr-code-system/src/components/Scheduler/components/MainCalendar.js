@@ -122,7 +122,6 @@ const MainCalendar = () => {
     loading,
     error,
     isInitialLoad,
-    selectedEvent,
     setSelectedEvent,
     setShowEventDialog,
     view,

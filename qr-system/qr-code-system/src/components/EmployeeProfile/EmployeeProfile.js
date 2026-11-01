@@ -9,9 +9,6 @@ import {
 } from 'firebase/database';
 import {
   getAuth,
-  updatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import { database } from '../../services/firebaseConfig';
@@ -78,18 +75,6 @@ const INITIAL_FORM_DATA = {
   password: '',
 };
 
-const INITIAL_STATS = {
-  attendanceRate: 0,
-  punctualityRate: 0,
-  totalHours: 0,
-  avgHoursPerDay: 0,
-  previousMonthHours: 0,
-  hoursChange: 0,
-  perfectStreak: 0,
-  earlyArrivalRate: 0,
-  mostActiveDay: '',
-};
-
 const TabButton = ({ active, onClick, icon: Icon, label }) => (
   <button
     onClick={onClick}
@@ -117,10 +102,7 @@ const EmployeeProfile = () => {
   const [activeTab, setActiveTab] = useState('personal');
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
-  const [scheduledDates, setScheduledDates] = useState([]);
-  const [stats, setStats] = useState(INITIAL_STATS);
-  const [newScheduleDate, setNewScheduleDate] = useState('');
-  const [newScheduleTime, setNewScheduleTime] = useState('');
+  const [, setScheduledDates] = useState([]);
   const [activeSlide, setActiveSlide] = useState(0);
 
   // 🔥 CRITICAL: User permission states

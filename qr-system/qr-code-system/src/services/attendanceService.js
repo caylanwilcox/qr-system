@@ -819,7 +819,7 @@ class AttendanceService {
         if (user.events[eventType]) {
           const events = user.events[eventType];
           
-          for (const [eventId, eventData] of Object.entries(events)) {
+          for (const eventData of Object.values(events)) {
             if (eventData && eventData.scheduled) {
               // Check if event is for today
               if (eventData.date) {

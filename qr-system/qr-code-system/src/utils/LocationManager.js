@@ -64,20 +64,15 @@ export class LocationManager {
    * @returns {Promise<Array>} - Array of location objects
    */
   static async getAllLocations() {
-    try {
-      // Stub implementation - replace with actual database call
-      return [
-        { key: 'aurora', name: 'Aurora' },
-        { key: 'elgin', name: 'Elgin' },
-        { key: 'joliet', name: 'Joliet' },
-        { key: 'lyons', name: 'Lyons' },
-        { key: 'west chicago', name: 'West Chicago' },
-        { key: 'wheeling', name: 'Wheeling' }
-      ];
-    } catch (error) {
-      console.error('Error fetching all locations:', error);
-      return [];
-    }
+    // Stub implementation - replace with actual database call
+    return [
+      { key: 'aurora', name: 'Aurora' },
+      { key: 'elgin', name: 'Elgin' },
+      { key: 'joliet', name: 'Joliet' },
+      { key: 'lyons', name: 'Lyons' },
+      { key: 'west chicago', name: 'West Chicago' },
+      { key: 'wheeling', name: 'Wheeling' }
+    ];
   }
 
   /**

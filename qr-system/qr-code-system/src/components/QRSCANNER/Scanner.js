@@ -268,7 +268,7 @@ const Scanner = ({ onScan, location, eventType, mode = 'clock-in', isProcessing 
       return;
     }
 
-    if (event.key.length === 1 && /[\w\-]/.test(event.key)) {
+    if (event.key.length === 1 && /[\w-]/.test(event.key)) {
       setBarcodeInput(prev => {
         const newInput = prev + event.key;
         

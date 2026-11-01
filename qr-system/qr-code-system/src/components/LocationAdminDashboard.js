@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext } from 'react-router-dom';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
-import { 
-  Users, Calendar, Clock, RefreshCw, Filter, ChevronDown, 
-  AlertCircle, CheckCircle, CalendarDays, MapPin, Building,
-  User, Mail, Briefcase, ArrowUp, Search, X, Clock3, Shield
+import {
+  Users, Clock, RefreshCw, Filter, ChevronDown,
+  AlertCircle, CheckCircle, CalendarDays, MapPin,
+  Mail, Briefcase, Search, X, Clock3
 } from 'lucide-react';
 import { format } from 'date-fns';
 import './LocationAdminDashboard.css';
@@ -202,8 +202,6 @@ const DebugInfo = ({ enabled, allUserData, filteredUserData, activeLocation, adm
 };
 
 const LocationAdminDashboard = () => {
-  const navigate = useNavigate();
-  
   // Get current user from auth context
   const { user: currentUser } = useAuth();
   
@@ -217,7 +215,11 @@ const LocationAdminDashboard = () => {
   
   // Get context with fallback values
   const context = useOutletContext() || {};
-  const adminLocations = context.adminLocations || [];
+  // Memoized so the empty-array fallback keeps a stable reference across renders
+  const adminLocations = useMemo(
+    () => context.adminLocations || [],
+    [context.adminLocations]
+  );
   const hasAllLocations = context.hasAllLocations || false;
   
   // Memoize admin locations to avoid recreating on each render

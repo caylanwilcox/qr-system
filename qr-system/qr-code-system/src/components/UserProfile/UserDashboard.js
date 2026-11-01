@@ -5,7 +5,7 @@ import { ref, get, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { 
   User, BarChart2, Calendar, Award, Shield, Clock, 
-  ChevronUp, ChevronDown, MapPin, LogOut, Edit,
+  MapPin, LogOut, Edit,
   CheckCircle
 } from 'lucide-react';
 

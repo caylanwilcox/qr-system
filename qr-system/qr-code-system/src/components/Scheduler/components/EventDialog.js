@@ -151,7 +151,7 @@ const EventDialog = () => {
             locationsList = [userLocation];
           } else if (filteredLocations.length === 0) {
             console.log('🔍 EventDialog: No locations allowed, using all locations as fallback');
-            locationsList = locationsList; // Keep original list as fallback
+            // Keep original locationsList as fallback (intentionally left unchanged)
           } else {
             locationsList = filteredLocations;
           }

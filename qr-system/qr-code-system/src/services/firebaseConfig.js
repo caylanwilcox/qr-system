@@ -23,7 +23,7 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase services
 const auth = getAuth(app);  // Firebase Auth instance
 const database = getDatabase(app);  // Firebase Realtime Database instance
-const analytics = getAnalytics(app);  // Firebase Analytics
+getAnalytics(app);  // Firebase Analytics (starts page tracking; no handle needed)
 
 // Export the initialized services
 export { auth, database };

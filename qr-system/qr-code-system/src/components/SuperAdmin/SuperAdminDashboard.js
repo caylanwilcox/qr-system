@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
-import { Loader2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { eventBus, EVENTS } from '../../services/eventBus';
 import './SuperAdminDashboard.css';
 import moment from 'moment-timezone';
@@ -12,6 +12,18 @@ import MetricsGrid from './MetricsGrid';
 import ClockedInList from './ClockedInList';
 import NotClockedInList from './NotClockedInList';
 import DataFlowDebugger from '../debugging/DataFlowDebugger';
+
+// Map from display name to internal location key
+// (module-level constant so its reference is stable across renders)
+const locationMap = {
+  All: 'All',
+  Aurora: 'aurora',
+  Elgin: 'elgin',
+  Joliet: 'joliet',
+  Lyons: 'lyons',
+  'West Chicago': 'westchicago',
+  Wheeling: 'wheeling',
+};
 
 const SuperAdminDashboard = () => {
   const [metrics, setMetrics] = useState(null);
@@ -27,24 +39,13 @@ const SuperAdminDashboard = () => {
     refreshCount: 0,
     dataTimestamp: null
   });
-  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [, setIsManualRefreshing] = useState(false);
 
   const dataSnapshot = useRef(null);
   const isUpdatingColors = useRef(false);
   const DEBUG_PREFIX = '🔍 [SuperAdminDashboard]';
 
   const getCurrentDateISO = () => moment().tz('America/Chicago').format('YYYY-MM-DD');
-
-  // Map from display name to internal location key
-  const locationMap = {
-    All: 'All',
-    Aurora: 'aurora',
-    Elgin: 'elgin',
-    Joliet: 'joliet',
-    Lyons: 'lyons',
-    'West Chicago': 'westchicago',
-    Wheeling: 'wheeling',
-  };
 
   // Normalize location keys to handle case and formatting variations
   const normalizeLocationKey = useCallback((locationKey) => {
@@ -679,38 +680,6 @@ const SuperAdminDashboard = () => {
   const handleColorClick = (color) => {
     console.log(`${DEBUG_PREFIX} Color filter clicked:`, color);
     setActiveFilter(prev => (prev === color ? null : color));
-  };
-
-  // Handle manual refresh
-  const handleManualRefresh = () => {
-    console.log(`${DEBUG_PREFIX} Manual refresh triggered`);
-    fetchDashboardData(true);
-  };
-
-  // Handler to reset all padrinos to red and clear manualColorOverride
-  const handleResetAllPadrinos = async () => {
-    try {
-      setColorUpdateStatus('updating');
-      const usersRef = ref(database, 'users');
-      const snapshot = await new Promise((resolve, reject) => {
-        onValue(usersRef, resolve, { onlyOnce: true });
-      });
-      const users = snapshot.val();
-      const updates = {};
-      Object.entries(users || {}).forEach(([userId, user]) => {
-        if (user.profile && user.profile.padrino) {
-          updates[`users/${userId}/profile/padrinoColor`] = 'blue';
-          updates[`users/${userId}/profile/padrinoColorCode`] = 'blue';
-          updates[`users/${userId}/profile/manualColorOverride`] = false;
-        }
-      });
-      await update(ref(database), updates);
-      setColorUpdateStatus('success');
-      fetchDashboardData(true);
-    } catch (err) {
-      setColorUpdateStatus('error');
-      setError('Failed to reset padrinos: ' + err.message);
-    }
   };
 
   // Show loading state

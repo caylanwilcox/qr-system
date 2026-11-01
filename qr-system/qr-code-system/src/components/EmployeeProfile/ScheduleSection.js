@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import enUS from 'date-fns/locale/en-US';
-import { Clock, Plus, X, AlertCircle } from 'lucide-react';
+import { Clock, X, AlertCircle } from 'lucide-react';
 import { ref, update, get } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -342,20 +342,6 @@ const ScheduleSection = ({ employeeId, employeeDetails }) => {
       await update(eventRef, {
         [`event-${Date.now()}`]: newEvent
       });
-      
-      // Add the event to the local state immediately
-      const localEvent = {
-        id: `event-${Date.now()}`,
-        title: eventDetails.title,
-        start: new Date(eventDetails.timestamp),
-        end: new Date(eventDetails.timestamp),
-        eventType: 'scheduled',
-        notes: eventDetails.notes,
-        location: employeeDetails.primaryLocation || employeeDetails.location
-      };
-      
-      // This will trigger a re-render with the new event
-      // The component will fully refresh when the useEffect runs again
     } catch (error) {
       console.error('Error scheduling event:', error);
       setError('Failed to schedule event. Please try again.');

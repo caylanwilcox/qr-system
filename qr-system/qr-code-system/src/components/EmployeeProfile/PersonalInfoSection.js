@@ -29,7 +29,6 @@ import {
   X,
   RefreshCw,
   Shield,
-  Key,
   Eye,
   EyeOff
 } from 'lucide-react';
@@ -310,15 +309,20 @@ const PersonalInfoSection = ({
     name: ''
   });
 
-  // Update original values when formData changes
+  // Update original values when formData email/name change. Depends on these
+  // derived values, not the whole formData object, so typing in other fields
+  // does not reset originalValues.
+  const formEmail = formData?.email;
+  const formName = formData?.name;
+  const hasFormData = Boolean(formData && Object.keys(formData).length > 0);
   useEffect(() => {
-    if (formData && Object.keys(formData).length > 0) {
+    if (hasFormData) {
       setOriginalValues({
-        email: formData.email || '',
-        name: formData.name || ''
+        email: formEmail || '',
+        name: formName || ''
       });
     }
-  }, [formData?.email, formData?.name]);
+  }, [hasFormData, formEmail, formName]);
 
   // Debug logging
   useEffect(() => {
@@ -336,8 +340,6 @@ const PersonalInfoSection = ({
 
   // Handle password changes with logging
   const handlePasswordChange = (e) => {
-    const newPassword = e.target.value;
-    
     if (handleInputChange) {
       handleInputChange(e);
     }

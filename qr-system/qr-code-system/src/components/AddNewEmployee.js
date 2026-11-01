@@ -9,7 +9,7 @@ import {
   Building,
   AlertCircle
 } from 'lucide-react';
-import { ref, get, set, update, onValue } from 'firebase/database';
+import { ref, get, set, onValue } from 'firebase/database';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { database, auth } from '../services/firebaseConfig';
 import SystemCodes from '../utils/SystemCodes';

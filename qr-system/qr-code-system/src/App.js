@@ -23,7 +23,6 @@ import AccountSettings from './components/AccountSettings';
 import QRScannerPage from './components/QRSCANNER/index';
 import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
 import StatDetails from './components/SuperAdmin/StatDetails';
-import UserProfile from './components/UserProfile/UserDashboard';
 import UserDashboard from './components/UserProfile/UserDashboard';
 
 /* Lazy imports */

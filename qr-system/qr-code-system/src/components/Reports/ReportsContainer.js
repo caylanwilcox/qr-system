@@ -11,6 +11,105 @@ import StatsCards from './StatsCards';
 import MonthlyChart from './MonthlyChart';
 import EmployeeTable from './EmployeeTable';
 
+// Pure helpers (no component state) kept at module scope so the data-fetching
+// callbacks below don't need them as hook dependencies.
+
+// Convert timestamp to Chicago timezone date
+const timestampToChicagoDate = (timestamp) => {
+  return moment(parseInt(timestamp)).tz('America/Chicago').format('YYYY-MM-DD');
+};
+
+// Calculate if a clock-in is late based on event schedule
+const calculateIsLate = (record, date, allEvents) => {
+  try {
+    if (!record.clockInTime) return false;
+
+    // Find scheduled events for this date and event type
+    const scheduledEvents = Object.values(allEvents).filter(event => {
+      if (!event.start) return false;
+
+      // Check if event is on the same date
+      const eventDate = moment(event.start).tz('America/Chicago').format('YYYY-MM-DD');
+      if (eventDate !== date) return false;
+
+      // Check if event type matches (normalize for comparison)
+      const normalizeEventType = (eventType) => {
+        return eventType.toLowerCase().replace(/[^a-z0-9]/g, '');
+      };
+
+      const recordEventType = normalizeEventType(record.eventType || 'general');
+      const eventEventType = normalizeEventType(event.eventType || event.category || 'general');
+
+      return recordEventType === eventEventType;
+    });
+
+    if (scheduledEvents.length > 0) {
+      // Use the earliest scheduled event time for this event type
+      const earliestEvent = scheduledEvents.reduce((earliest, current) => {
+        return moment(current.start).isBefore(moment(earliest.start)) ? current : earliest;
+      });
+
+      const scheduledTime = moment(earliestEvent.start).tz('America/Chicago');
+
+      // Parse the clock-in time
+      let clockInMoment;
+      if (record.clockInTime.includes('AM') || record.clockInTime.includes('PM')) {
+        // 12-hour format
+        clockInMoment = moment.tz(`${date} ${record.clockInTime}`, 'YYYY-MM-DD h:mm A', 'America/Chicago');
+      } else {
+        // 24-hour format
+        clockInMoment = moment.tz(`${date} ${record.clockInTime}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
+      }
+
+      // Consider late if clocked in after the scheduled start time
+      return clockInMoment.isAfter(scheduledTime);
+    } else {
+      // No scheduled event found, person is on time since they're not late for any specific event
+      return false;
+    }
+  } catch (error) {
+    console.error('Error calculating late status:', error);
+    // Fallback: if there's an error, consider them on time
+    return false;
+  }
+};
+
+// FIXED: Check if a time is considered late - only applies if user had scheduled events
+const isLateTime = (timeStr, hasScheduledEvents = true) => {
+  try {
+    if (!timeStr) return false;
+
+    // FIXED: Only apply late logic if user had scheduled events for the day
+    if (!hasScheduledEvents) {
+      return false; // Never late if no scheduled events
+    }
+
+    // Handle different time formats
+    if (timeStr.includes('AM') || timeStr.includes('PM')) {
+      // 12-hour format - TODO: Compare against actual event start times instead of hardcoded 9:00 AM
+      const time = moment(timeStr, 'h:mm A');
+      const lateTime = moment('9:00 AM', 'h:mm A');
+      return time.isAfter(lateTime);
+    } else {
+      // 24-hour format - TODO: Compare against actual event start times instead of hardcoded 9:00 AM
+      const timeParts = timeStr.split(':');
+      if (timeParts.length >= 2) {
+        const hour = parseInt(timeParts[0]);
+        const minute = parseInt(timeParts[1]);
+        return hour > 9 || (hour === 9 && minute > 0);
+      }
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Calculate percentage
+const calculatePercentage = (numerator, denominator) => {
+  return denominator ? ((numerator / denominator) * 100).toFixed(2) : '0.00';
+};
+
 const ReportsContainer = ({ locationFiltered = false }) => {
   const { user } = useAuth();
   
@@ -34,22 +133,12 @@ const ReportsContainer = ({ locationFiltered = false }) => {
   });
   
   // Original attendance data
-  const [rawAttendanceData, setRawAttendanceData] = useState(null);
-  
+  const [, setRawAttendanceData] = useState(null);
+
   // UI state
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-
-  // Get Chicago time for date calculations
-  const getChicagoDate = () => {
-    return moment().tz('America/Chicago').format('YYYY-MM-DD');
-  };
-
-  // Convert timestamp to Chicago timezone date
-  const timestampToChicagoDate = (timestamp) => {
-    return moment(parseInt(timestamp)).tz('America/Chicago').format('YYYY-MM-DD');
-  };
 
   // Fetch employee data with location filtering
   const fetchEmployeeData = useCallback(async () => {
@@ -357,61 +446,6 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     return combinedData;
   };
 
-  // Calculate if a clock-in is late based on event schedule
-  const calculateIsLate = (record, date, allEvents) => {
-    try {
-      if (!record.clockInTime) return false;
-
-      // Find scheduled events for this date and event type
-      const scheduledEvents = Object.values(allEvents).filter(event => {
-        if (!event.start) return false;
-        
-        // Check if event is on the same date
-        const eventDate = moment(event.start).tz('America/Chicago').format('YYYY-MM-DD');
-        if (eventDate !== date) return false;
-        
-        // Check if event type matches (normalize for comparison)
-        const normalizeEventType = (eventType) => {
-          return eventType.toLowerCase().replace(/[^a-z0-9]/g, '');
-        };
-        
-        const recordEventType = normalizeEventType(record.eventType || 'general');
-        const eventEventType = normalizeEventType(event.eventType || event.category || 'general');
-        
-        return recordEventType === eventEventType;
-      });
-
-      if (scheduledEvents.length > 0) {
-        // Use the earliest scheduled event time for this event type
-        const earliestEvent = scheduledEvents.reduce((earliest, current) => {
-          return moment(current.start).isBefore(moment(earliest.start)) ? current : earliest;
-        });
-
-        const scheduledTime = moment(earliestEvent.start).tz('America/Chicago');
-        
-        // Parse the clock-in time
-        let clockInMoment;
-        if (record.clockInTime.includes('AM') || record.clockInTime.includes('PM')) {
-          // 12-hour format
-          clockInMoment = moment.tz(`${date} ${record.clockInTime}`, 'YYYY-MM-DD h:mm A', 'America/Chicago');
-        } else {
-          // 24-hour format
-          clockInMoment = moment.tz(`${date} ${record.clockInTime}`, 'YYYY-MM-DD HH:mm', 'America/Chicago');
-        }
-
-        // Consider late if clocked in after the scheduled start time
-        return clockInMoment.isAfter(scheduledTime);
-      } else {
-        // No scheduled event found, person is on time since they're not late for any specific event
-        return false;
-      }
-    } catch (error) {
-      console.error('Error calculating late status:', error);
-      // Fallback: if there's an error, consider them on time
-      return false;
-    }
-  };
-
   // Calculate monthly attendance data for chart and find missing employees
   const calculateMonthlyAttendance = (attendance, users, deletedUsers, userLocation = null) => {
     const monthlyData = {};
@@ -653,37 +687,6 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     return reports.sort((a, b) => b.daysPresent - a.daysPresent);
   };
 
-  // FIXED: Check if a time is considered late - only applies if user had scheduled events
-  const isLateTime = (timeStr, hasScheduledEvents = true) => {
-    try {
-      if (!timeStr) return false;
-      
-      // FIXED: Only apply late logic if user had scheduled events for the day
-      if (!hasScheduledEvents) {
-        return false; // Never late if no scheduled events
-      }
-      
-      // Handle different time formats
-      if (timeStr.includes('AM') || timeStr.includes('PM')) {
-        // 12-hour format - TODO: Compare against actual event start times instead of hardcoded 9:00 AM
-        const time = moment(timeStr, 'h:mm A');
-        const lateTime = moment('9:00 AM', 'h:mm A');
-        return time.isAfter(lateTime);
-      } else {
-        // 24-hour format - TODO: Compare against actual event start times instead of hardcoded 9:00 AM
-        const timeParts = timeStr.split(':');
-        if (timeParts.length >= 2) {
-          const hour = parseInt(timeParts[0]);
-          const minute = parseInt(timeParts[1]);
-          return hour > 9 || (hour === 9 && minute > 0);
-        }
-      }
-      return false;
-    } catch (e) {
-      return false;
-    }
-  };
-
   // Update overall stats
   const updateStats = (users, reports, totalClockIns) => {
     // Filter for padrinos if we're doing padrino-specific reports
@@ -719,11 +722,33 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     });
   };
 
-  // Calculate percentage
-  const calculatePercentage = (numerator, denominator) => {
-    return denominator ? ((numerator / denominator) * 100).toFixed(2) : '0.00';
-  };
-  
+  // Create placeholder employees for missing IDs
+  const createPlaceholderEmployees = useCallback((month) => {
+    if (!month) return [];
+
+    const missingData = missingEmployeeData[month] || [];
+    if (missingData.length === 0) return [];
+
+    return missingData.map(missing => ({
+      id: missing.userId,
+      name: missing.name,
+      email: '',
+      daysPresent: 1,
+      daysAbsent: 0,
+      daysLate: 0,
+      daysOnTime: 1,
+      onTimePercentage: '100.00',
+      latePercentage: '0.00',
+      attendancePercentage: '100.00',
+      status: 'unknown',
+      location: missing.eventData.location || 'unknown',
+      role: 'unknown',
+      isPadrino: false,
+      isPlaceholder: true, // Mark this as a placeholder record
+      reason: missing.reason || 'User data not found'
+    }));
+  }, [missingEmployeeData]);
+
   // Filter reports based on current filters
   const filterReports = useCallback(() => {
     // Start with all employee reports
@@ -826,44 +851,18 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     }
     
     setFilteredReports(filtered);
-  }, [employeeReports, searchTerm, selectedLocation, selectedEventType, selectedMonth, monthlyAttendance, monthlyEmployeeData, missingEmployeeData]);
-  
-  // Create placeholder employees for missing IDs
-  const createPlaceholderEmployees = (month) => {
-    if (!month) return [];
-    
-    const missingData = missingEmployeeData[month] || [];
-    if (missingData.length === 0) return [];
-    
-    return missingData.map(missing => ({
-      id: missing.userId,
-      name: missing.name,
-      email: '', 
-      daysPresent: 1,
-      daysAbsent: 0,
-      daysLate: 0,
-      daysOnTime: 1,
-      onTimePercentage: '100.00',
-      latePercentage: '0.00',
-      attendancePercentage: '100.00',
-      status: 'unknown',
-      location: missing.eventData.location || 'unknown',
-      role: 'unknown',
-      isPadrino: false,
-      isPlaceholder: true, // Mark this as a placeholder record
-      reason: missing.reason || 'User data not found'
-    }));
-  };
+  }, [employeeReports, searchTerm, selectedLocation, selectedEventType, selectedMonth, monthlyAttendance, monthlyEmployeeData, missingEmployeeData, createPlaceholderEmployees]);
 
   // Initial data fetch
   useEffect(() => {
     fetchEmployeeData();
   }, [fetchEmployeeData]);
-  
-  // Apply filters when any filter changes
+
+  // Apply filters when any filter changes (filterReports' identity changes
+  // exactly when one of its filter/data dependencies changes)
   useEffect(() => {
     filterReports();
-  }, [employeeReports, searchTerm, selectedLocation, selectedEventType, selectedMonth, monthlyAttendance, monthlyEmployeeData, missingEmployeeData]);
+  }, [filterReports]);
   
   // Handle clicking on a chart bar
   const handleBarClick = (data) => {
