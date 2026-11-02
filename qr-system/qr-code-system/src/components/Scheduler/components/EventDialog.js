@@ -4,6 +4,7 @@ import { useSchedulerContext } from '../context/SchedulerContext';
 import { useAuth } from '../../../services/authContext';
 import { ref, get } from 'firebase/database';
 import { database } from '../../../services/firebaseConfig';
+import { locationKey, managesLocation } from '../../../utils/eventVisibility';
 import moment from 'moment-timezone';
 import '../styles/EventDialog.css';
 
@@ -129,14 +130,14 @@ const EventDialog = () => {
           console.log('🔍 EventDialog: Added "All Locations" for super admin');
         } else if (currentUser?.profile?.role === 'admin') {
           // Location admins only see their managed locations (no "All Locations")
-          const managedLocations = currentUser?.managementPermissions?.managedLocations || {};
+          const managedLocations = currentUser?.managementPermissions?.managedLocations || [];
           console.log('🔍 EventDialog: Managed locations:', managedLocations);
           console.log('🔍 EventDialog: User location:', userLocation);
-          
+
           const filteredLocations = locationsList.filter(location => {
             // Check if location is in managed locations or is the user's own location
-            const isManaged = managedLocations[location] === true;
-            const isUserLocation = userLocation && location === userLocation;
+            const isManaged = managesLocation(managedLocations, location);
+            const isUserLocation = Boolean(userLocation) && locationKey(location) === locationKey(userLocation);
             const isAllowed = isManaged || isUserLocation;
             
             console.log(`🔍 EventDialog: Location "${location}" - managed: ${isManaged}, userLocation: ${isUserLocation}, allowed: ${isAllowed}`);
