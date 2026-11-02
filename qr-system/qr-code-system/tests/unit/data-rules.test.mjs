@@ -11,6 +11,7 @@ import {
   splitOpenClockIns,
   staleClockInUpdates,
   eventCoversDate,
+  eventTypeNamesByKey,
   findEventsToMarkAttended,
   prefixKeys,
   pickOpenClockIn,
@@ -18,7 +19,11 @@ import {
   composeClockInUpdates,
   composeClockOutUpdates,
   MAX_SHIFT_MS,
+  hasScheduledEventsToday,
+  isLateForScheduledEvents,
+  TIMEZONE,
 } from '../../src/utils/attendanceRules.js';
+import moment from 'moment-timezone';
 import {
   profileToForm,
   locationOptions,
@@ -143,6 +148,9 @@ test('eventCoversDate uses Chicago time, not UTC', () => {
   assert.equal(eventCoversDate({ start: '2026-11-02T03:00:00Z' }, '2026-11-01'), true);
   assert.equal(eventCoversDate({ start: '2026-11-02T03:00:00Z' }, '2026-11-02'), false);
   assert.equal(eventCoversDate({ start: '2026-10-30T15:00:00Z', end: '2026-11-02T15:00:00Z' }, '2026-11-01'), true, 'multi-day');
+  // No offset: read as Chicago time even on a UTC server (00:30 UTC would be Oct 31 in Chicago).
+  assert.equal(eventCoversDate({ start: '2026-11-01T00:30:00' }, '2026-11-01'), true, 'no offset');
+  assert.equal(eventCoversDate({ start: '2026-11-01' }, '2026-11-01'), true, 'date only');
   assert.equal(eventCoversDate({}, '2026-11-01'), false);
 });
 
@@ -151,14 +159,42 @@ test('findEventsToMarkAttended picks today\'s matching events the user is in', (
   const events = [
     { id: 'match', data: { start: today, eventType: 'HACIENDAS', participants: { u1: { assigned: true, attended: false } } } },
     { id: 'bare-true', data: { start: today, eventType: 'haciendas', participants: { u1: true } } },
-    { id: 'by-category', data: { start: today, eventType: 'other', category: 'Haciendas', participants: { u1: { assigned: true } } } },
     { id: 'already', data: { start: today, eventType: 'haciendas', participants: { u1: { attended: true } } } },
     { id: 'not-in-it', data: { start: today, eventType: 'haciendas', participants: { u2: true } } },
     { id: 'other-day', data: { start: '2026-11-05T15:00:00Z', eventType: 'haciendas', participants: { u1: true } } },
     { id: 'other-type', data: { start: today, eventType: 'workshops', participants: { u1: true } } },
   ];
   const ids = findEventsToMarkAttended({ events, userId: 'u1', dateStr: '2026-11-01', eventType: 'haciendas' });
-  assert.deepEqual(ids, ['match', 'bare-true', 'by-category']);
+  assert.deepEqual(ids, ['match', 'bare-true']);
+});
+
+test('Scheduler events: the type key is matched through its name, the default category never is', () => {
+  // The Scheduler saves the eventTypes key and always category "meetings";
+  // the scanner sends the type's name.
+  const today = '2026-11-01T23:00:00.000Z';
+  const participants = { u1: { assigned: true, attended: false } };
+  const eventTypeNames = eventTypeNamesByKey({
+    'et-1': { name: 'WORKSHOPS', displayName: 'Workshops' },
+    'et-4': { name: 'MEETINGS' },
+    '-Npush': { name: 'Bible Study' },
+    legacy: 'HACIENDAS',
+  });
+  assert.deepEqual(eventTypeNames, { 'et-1': 'WORKSHOPS', 'et-4': 'MEETINGS', '-Npush': 'Bible Study', legacy: 'HACIENDAS' });
+  const events = [
+    { id: 'workshop', data: { start: today, eventType: 'et-1', category: 'meetings', participants } },
+    { id: 'study', data: { start: today, eventType: '-Npush', category: 'meetings', participants } },
+  ];
+  const pick = (eventType) =>
+    findEventsToMarkAttended({ events, userId: 'u1', dateStr: '2026-11-01', eventType, eventTypeNames });
+  assert.deepEqual(pick('WORKSHOPS'), ['workshop']);
+  assert.deepEqual(pick('Bible Study'), ['study'], 'a type added in Settings');
+  assert.deepEqual(pick('MEETINGS'), [], 'the default category does not mark every event');
+  assert.deepEqual(
+    findEventsToMarkAttended({ events, userId: 'u1', dateStr: '2026-11-01', eventType: 'WORKSHOPS' }),
+    [],
+    'without the names, a key alone never matches'
+  );
+  assert.deepEqual(eventTypeNamesByKey(null), {});
 });
 
 test('two same-type events today: the scanned location wins', () => {
@@ -355,4 +391,45 @@ test('reset refuses a database from another project', () => {
   assert.equal(reset.databaseMatchesProject('https://other-default-rtdb.firebaseio.com', 'qr-system-1cea7'), false);
   assert.equal(reset.databaseMatchesProject('not a url', 'qr-system-1cea7'), false);
   assert.equal(reset.databaseMatchesProject(ok, ''), false);
+});
+
+// --- Late check (moved from the scanner page to run on the server) ---
+const chicago = (value) => moment.tz(value, 'YYYY-MM-DD HH:mm', TIMEZONE);
+const withEvents = (events) => ({ events: { workshops: events } });
+
+test('late check reads times without an offset as Chicago time, as the scanner did', () => {
+  const user = withEvents({ w1: { scheduled: true, date: '2026-11-02T09:00' } });
+  assert.equal(hasScheduledEventsToday(user, '2026-11-02'), true);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 08:50')), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 09:30')), true);
+});
+
+test('late check honors explicit offsets and uses the earliest start of the day', () => {
+  const user = withEvents({
+    w1: { scheduled: true, date: '2026-11-02T16:00:00.000Z' }, // 10:00 Chicago
+    w2: { scheduled: true, date: '2026-11-02T13:00' },
+  });
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 09:59')), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 10:01')), true);
+});
+
+test('a date-only event counts as scheduled but never makes anyone late', () => {
+  const user = withEvents({ w1: { scheduled: true, date: '2026-11-02' } });
+  assert.equal(hasScheduledEventsToday(user, '2026-11-02'), true);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 23:00')), false);
+});
+
+test('multi-day events count on every day they span; unscheduled entries are ignored', () => {
+  const user = withEvents({
+    h1: { scheduled: true, date: '2026-11-01T08:00', endDate: '2026-11-03T18:00' },
+    w2: { scheduled: false, date: '2026-11-02T07:00' },
+  });
+  assert.equal(hasScheduledEventsToday(user, '2026-11-02'), true);
+  assert.equal(hasScheduledEventsToday(user, '2026-11-04'), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-01', chicago('2026-11-01 07:30')), false);
+  assert.equal(isLateForScheduledEvents(user, '2026-11-01', chicago('2026-11-01 08:30')), true);
+  // Existing behavior, kept unchanged by the move: on later days of a
+  // multi-day event the scanner compares with the first day's start, so any
+  // clock-in counts as late. Fixing that is a separate, deliberate change.
+  assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 07:30')), true);
 });

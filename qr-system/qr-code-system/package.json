@@ -57,6 +57,7 @@
     "test": "react-scripts test",
     "test:api": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/api/*.test.mjs",
     "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/unit/*.test.mjs",
+    "test:rules": "firebase emulators:exec --only database --project demo-qr-rules \"node --test tests/rules/*.test.mjs\"",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

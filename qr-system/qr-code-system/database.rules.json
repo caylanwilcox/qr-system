@@ -1,0 +1,88 @@
+{
+  "rules": {
+    ".read": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i)))",
+    ".write": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i)))",
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && !data.exists()",
+        "name": {
+          ".write": "auth != null && auth.uid === $uid"
+        },
+        "email": {
+          ".write": "auth != null && auth.uid === $uid"
+        },
+        "profile": {
+          "name": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "email": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "username": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "phone": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "emergencyContact": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "emergencyPhone": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "position": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "department": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "service": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "joinDate": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "updatedAt": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "authUid": {
+            ".write": "auth != null && auth.uid === $uid && newData.val() === auth.uid"
+          },
+          "status": {
+            ".validate": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i))) || newData.val() === 'active'"
+          },
+          "createdAt": {
+            ".validate": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i))) || newData.isString()"
+          },
+          "$other": {
+            ".validate": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i)))"
+          }
+        },
+        "stats": {
+          "lastLogin": {
+            ".write": "auth != null && auth.uid === $uid"
+          },
+          "$other": {
+            ".validate": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i)))"
+          }
+        },
+        "$other": {
+          ".validate": "auth != null && (auth.token.admin === true || auth.token.superAdmin === true || (auth.token.role != null && auth.token.role.matches(/^ *(admin|super[ _-]*admin) *$/i)))"
+        }
+      }
+    },
+    "events": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "location"
+      ]
+    },
+    "eventTypes": {
+      ".read": "auth != null"
+    },
+    "locations": {
+      ".read": "auth != null"
+    }
+  }
+}

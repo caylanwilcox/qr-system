@@ -20,20 +20,21 @@ const EVENT_TYPE_ALIASES = {
   gestion: 'gestion',
 };
 
+// Only the alias table's own entries, never inherited names like "constructor"
+// (event types now arrive over the network, at the scan endpoint).
+const aliasFor = (key) =>
+  Object.prototype.hasOwnProperty.call(EVENT_TYPE_ALIASES, key) ? EVENT_TYPE_ALIASES[key] : key;
+
 // The scanner's storage key for an event type (unchanged behavior).
 export function normalizeEventType(value) {
   if (typeof value !== 'string') return '';
-  const key = value.toLowerCase().replace(/\s+/g, '');
-  return EVENT_TYPE_ALIASES[key] || key;
+  return aliasFor(value.toLowerCase().replace(/\s+/g, ''));
 }
 
 // Looser match for comparing types across screens: "HACIENDAS",
 // "haciendas" and "Junta de Hacienda" / "JUNTA_HACIENDA" all compare equal.
 export function sameEventType(a, b) {
-  const compact = (value) => {
-    const key = normalizeEventType(value).replace(/[^a-z0-9]/g, '');
-    return EVENT_TYPE_ALIASES[key] || key;
-  };
+  const compact = (value) => aliasFor(normalizeEventType(value).replace(/[^a-z0-9]/g, ''));
   const left = compact(a);
   return left !== '' && left === compact(b);
 }
@@ -100,30 +101,135 @@ export function staleClockInUpdates(stale, timestamp) {
 }
 
 // True when the event runs on dateStr (YYYY-MM-DD) in Chicago time,
-// including multi-day events.
+// including multi-day events. Times without an offset are read as Chicago
+// time, as the browser did; the server runs in UTC.
 export function eventCoversDate(event, dateStr, timezone = TIMEZONE) {
   if (!event || !event.start) return false;
-  const start = moment(event.start).tz(timezone);
+  const start = moment.tz(event.start, timezone);
   if (!start.isValid()) return false;
-  const end = event.end ? moment(event.end).tz(timezone) : start;
+  const end = event.end ? moment.tz(event.end, timezone) : start;
   const first = start.format('YYYY-MM-DD');
   const last = end.isValid() ? end.format('YYYY-MM-DD') : first;
   return first <= dateStr && dateStr <= (last < first ? first : last);
 }
 
+// --- Late check (moved unchanged from the QR scanner page) ---
+// Dates without an offset are read as Chicago time. The scanner used to run
+// in a Chicago browser; the server runs in UTC, where a plain moment(value)
+// would shift those times by 5-6 hours.
+const inZone = (value, timezone) => moment.tz(value, timezone);
+
+// The per-user event lists the late check has always looked at.
+const LATE_CHECK_EVENT_TYPES = ['workshops', 'meetings', 'haciendas', 'juntaHacienda', 'gestion', 'generalmeeting'];
+
+function scheduledUserEvents(userData) {
+  const result = [];
+  if (!userData || !userData.events) return result;
+  LATE_CHECK_EVENT_TYPES.forEach((type) => {
+    Object.values(userData.events[type] || {}).forEach((eventData) => {
+      if (eventData && eventData.scheduled) result.push(eventData);
+    });
+  });
+  return result;
+}
+
+const assignedStatsOn = (userData, dateStr) =>
+  Object.values((userData && userData.statistics) || {}).filter(
+    (entry) => entry && entry.date === dateStr && entry.status === 'assigned'
+  );
+
+const isOnDate = (eventData, dateStr, timezone) =>
+  Boolean(eventData.date) && inZone(eventData.date, timezone).format('YYYY-MM-DD') === dateStr;
+
+const spansDate = (eventData, dateStr, timezone) =>
+  Boolean(eventData.endDate) &&
+  inZone(dateStr, timezone).isBetween(inZone(eventData.date, timezone), inZone(eventData.endDate, timezone), 'day', '[]');
+
+// True when the user has a scheduled event (or an assigned statistic) on dateStr.
+export function hasScheduledEventsToday(userData, dateStr, timezone = TIMEZONE) {
+  if (!userData || !dateStr) return false;
+  const scheduled = scheduledUserEvents(userData).some(
+    (eventData) => isOnDate(eventData, dateStr, timezone) || spansDate(eventData, dateStr, timezone)
+  );
+  return scheduled || assignedStatsOn(userData, dateStr).length > 0;
+}
+
+// Start time of a scheduled event on dateStr. null means the event has only a
+// date (midnight), and the late check skips that event entirely.
+function eventStartOn(eventData, dateStr, timezone) {
+  if (eventData.start) return inZone(eventData.start, timezone);
+  if (eventData.time) return moment.tz(`${dateStr} ${eventData.time}`, 'YYYY-MM-DD HH:mm', timezone);
+  if (eventData.startTime) return moment.tz(`${dateStr} ${eventData.startTime}`, 'YYYY-MM-DD HH:mm', timezone);
+  const dateTime = inZone(eventData.date, timezone);
+  return dateTime.format('HH:mm') === '00:00' ? null : dateTime;
+}
+
+// Midnight counts as "no time given" unless the event says it isn't all-day.
+const hasRealTime = (time, eventData) =>
+  time.isValid() && (time.format('HH:mm') !== '00:00' || eventData.allDay === false);
+
+// Late means clocking in after the earliest scheduled start time on dateStr.
+// With no scheduled times that day, nobody is late.
+export function isLateForScheduledEvents(userData, dateStr, clockInMoment, timezone = TIMEZONE) {
+  if (!userData || !dateStr || !clockInMoment) return false;
+  const starts = [];
+
+  scheduledUserEvents(userData).forEach((eventData) => {
+    if (isOnDate(eventData, dateStr, timezone)) {
+      const time = eventStartOn(eventData, dateStr, timezone);
+      if (time === null) return;
+      if (hasRealTime(time, eventData)) starts.push(time);
+    }
+    if (spansDate(eventData, dateStr, timezone)) {
+      const start = inZone(eventData.date, timezone);
+      if (hasRealTime(start, eventData)) starts.push(start);
+    }
+  });
+
+  assignedStatsOn(userData, dateStr).forEach((entry) => {
+    const clock = entry.eventTime || entry.startTime;
+    if (!clock) return;
+    const time = moment.tz(`${dateStr} ${clock}`, 'YYYY-MM-DD HH:mm', timezone);
+    if (time.isValid()) starts.push(time);
+  });
+
+  if (starts.length === 0) return false;
+  const earliest = starts.reduce((a, b) => (b.isBefore(a) ? b : a));
+  return clockInMoment.isAfter(earliest);
+}
+
 const compactLocation = (value) =>
   typeof value === 'string' ? value.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
+// Event-type names by eventTypes key. The Scheduler saves an event's type as
+// its key (e.g. "et-1"); the scanner sends the type's name, read the same way.
+export function eventTypeNamesByKey(eventTypes) {
+  const names = {};
+  Object.entries(eventTypes || {}).forEach(([key, value]) => {
+    if (typeof value === 'string') names[key] = value;
+    else if (value && typeof value === 'object') names[key] = value.name || value.key || key;
+  });
+  return names;
+}
+
 // IDs of the scheduled events a clock-in should mark attended: events the
 // user is a participant in, running today, with the scanned event type.
-// When several match, the ones at the scanned location win.
-export function findEventsToMarkAttended({ events, userId, dateStr, eventType, locationKey, timezone = TIMEZONE }) {
+// An event's type may be a name or an eventTypes key (resolved through
+// `eventTypeNames`). `category` is not compared: the Scheduler always saves
+// the default "meetings" there. When several match, the ones at the scanned
+// location win.
+export function findEventsToMarkAttended({
+  events, userId, dateStr, eventType, locationKey, eventTypeNames = {}, timezone = TIMEZONE,
+}) {
   const matches = (events || []).filter(({ data }) => {
     const participant = data && data.participants ? data.participants[userId] : undefined;
     if (participant === undefined || participant === null) return false;
     if (typeof participant === 'object' && participant.attended === true) return false;
     if (!eventCoversDate(data, dateStr, timezone)) return false;
-    return [data.eventType, data.category, data.originalEventType].some((type) =>
+    const typeName = Object.prototype.hasOwnProperty.call(eventTypeNames, data.eventType)
+      ? eventTypeNames[data.eventType]
+      : undefined;
+    return [data.eventType, typeName, data.originalEventType].some((type) =>
       sameEventType(eventType, type)
     );
   });

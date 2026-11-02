@@ -18,6 +18,7 @@ import {
 } from '../utils/employeeUtils';
 import { calculatePadrinoColor } from '../utils/padrinoColorCalculator';
 import { fetchLocations } from '../../services/locationService';
+import { setUserRole } from '../../services/adminApi';
 import { ROLES, normalizeRole } from '../../utils/roles';
 import { profileToForm } from './profileForm';
 
@@ -328,11 +329,13 @@ const EmployeeProfile = () => {
     }
     const newRole = currentRole === ROLES.ADMIN ? ROLES.EMPLOYEE : ROLES.ADMIN;
     try {
-      await update(ref(database, `users/${employeeId}/profile`), { role: newRole });
+      // The server changes the login claim and the stored role together.
+      // Only super admins may change roles.
+      await setUserRole(employeeId, newRole);
       setFormData((prev) => ({ ...prev, role: newRole }));
       showNotification(`Role updated to ${newRole}`);
     } catch (err) {
-      showNotification('Failed to update role', 'error');
+      showNotification(`Failed to update role: ${err.message}`, 'error');
     }
   };
 

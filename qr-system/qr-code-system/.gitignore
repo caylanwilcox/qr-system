@@ -23,3 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 .env
 .next/
+
+# Firebase emulator logs
+firebase-debug.log*
+database-debug.log*

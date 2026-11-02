@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ref, get, set, update } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
+import { setUserRole } from '../services/adminApi';
 import { 
   Loader2, 
   AlertCircle, 
@@ -532,11 +533,10 @@ const ManageAdmins = () => {
     try {
       setLoading(true);
       
-      // First update the user's role if needed
+      // First update the user's role if needed. The server changes the login
+      // claim and the stored role together.
       if (!userToPromote.role || userToPromote.role.toLowerCase() !== quickAssignRole.toLowerCase()) {
-        await update(ref(database, `users/${userToPromote.id}/profile`), {
-          role: quickAssignRole
-        });
+        await setUserRole(userToPromote.id, quickAssignRole);
       }
       
       // Then assign them to the location
@@ -571,7 +571,7 @@ const ManageAdmins = () => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError('Failed to assign admin');
+      setError(`Failed to assign admin: ${err.message}`);
       console.error('Error:', err);
     } finally {
       setLoading(false);
@@ -614,10 +614,8 @@ const ManageAdmins = () => {
     try {
       setLoading(true);
       
-      // Update user role in database
-      await update(ref(database, `users/${userToPromote.id}/profile`), {
-        role: selectedRole
-      });
+      // The server changes the login claim and the stored role together.
+      await setUserRole(userToPromote.id, selectedRole);
       
       // Update local state
       if (selectedRole === 'admin' || selectedRole === 'super_admin') {
@@ -637,7 +635,7 @@ const ManageAdmins = () => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError('Failed to update user role');
+      setError(`Failed to update user role: ${err.message}`);
       console.error('Error:', err);
     } finally {
       setLoading(false);
@@ -669,15 +667,9 @@ const ManageAdmins = () => {
       try {
         setLoading(true);
         
-        // Set an explicit role: a null role made the app fall back to the
-        // old login claim, so a demoted admin kept admin access.
-        await update(ref(database, `users/${adminId}/profile`), {
-          role: 'employee'
-        });
-        
-        // Remove from all management structures
-        const managementRef = ref(database, `managementStructure/${adminId}`);
-        await set(managementRef, null);
+        // The server sets the login claim and the stored role to employee,
+        // and removes the admin's management entry, in one request.
+        await setUserRole(adminId, 'employee');
         
         // Update local state
         const demotedAdmin = admins.find(a => a.id === adminId);
@@ -701,7 +693,7 @@ const ManageAdmins = () => {
         // Clear success message after 3 seconds
         setTimeout(() => setSuccessMessage(''), 3000);
       } catch (err) {
-        setError('Failed to demote administrator');
+        setError(`Failed to demote administrator: ${err.message}`);
         console.error('Error:', err);
       } finally {
         setLoading(false);

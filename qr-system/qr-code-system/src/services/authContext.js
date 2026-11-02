@@ -23,6 +23,35 @@ export const useAuth = () => {
   return context;
 };
 
+// Management permissions for an admin or super admin, or null. If the entry
+// can't be read (the database rules refuse a login that has no role claim
+// yet), the person still signs in, with no managed locations.
+async function loadManagementPermissions(uid, role) {
+  const isSuperAdmin = role === 'SUPER_ADMIN' || role === 'super_admin';
+  const isAdmin = role === 'ADMIN' || role === 'admin';
+  if (!isSuperAdmin && !isAdmin) return null;
+
+  let snapshot = null;
+  try {
+    snapshot = await get(ref(database, `managementStructure/${uid}`));
+  } catch (error) {
+    console.error('Could not read management permissions:', error);
+  }
+  if (snapshot && snapshot.exists()) {
+    const mgmtData = snapshot.val();
+    return {
+      role: mgmtData.role || role.toLowerCase(),
+      managedLocations: mgmtData.managedLocations ? Object.keys(mgmtData.managedLocations) : [],
+      managedDepartments: mgmtData.managedDepartments ? Object.keys(mgmtData.managedDepartments) : []
+    };
+  }
+  if (isSuperAdmin) {
+    // A super admin without an entry manages everything ('*' means all).
+    return { role: 'super_admin', managedLocations: ['*'], managedDepartments: ['*'] };
+  }
+  return null;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,31 +71,7 @@ export const AuthProvider = ({ children }) => {
       // Get role from profile if it exists, otherwise from claims or default
       // Normalized so stored spellings like "super-admin" still match.
       const userRole = resolveRole(userData?.profile?.role, idTokenResult.claims.role);
-      
-      // Get management permissions if admin or super_admin
-      let permissions = null;
-      if (userRole === 'SUPER_ADMIN' || userRole === 'super_admin' || 
-          userRole === 'ADMIN' || userRole === 'admin') {
-        const mgmtRef = ref(database, `managementStructure/${userCredential.user.uid}`);
-        const mgmtSnapshot = await get(mgmtRef);
-        
-        if (mgmtSnapshot.exists()) {
-          const mgmtData = mgmtSnapshot.val();
-          permissions = {
-            role: mgmtData.role || userRole.toLowerCase(),
-            managedLocations: mgmtData.managedLocations ? Object.keys(mgmtData.managedLocations) : [],
-            managedDepartments: mgmtData.managedDepartments ? Object.keys(mgmtData.managedDepartments) : []
-          };
-        } else if (userRole === 'SUPER_ADMIN' || userRole === 'super_admin') {
-          // Super admin without explicit permissions can manage everything
-          // This ensures super admin works even without management structure entry
-          permissions = {
-            role: 'super_admin',
-            managedLocations: ['*'], // Special wildcard meaning "all locations"
-            managedDepartments: ['*'] // Special wildcard meaning "all departments"
-          };
-        }
-      }
+      const permissions = await loadManagementPermissions(userCredential.user.uid, userRole);
 
       const userWithRole = {
         ...userCredential.user,
@@ -76,6 +81,10 @@ export const AuthProvider = ({ children }) => {
         managementPermissions: permissions
       };
 
+      // Set the user now, so the page the login screen opens next doesn't
+      // send them back to /login while the auth listener is still loading.
+      setManagementPermissions(permissions);
+      setUser(userWithRole);
       return userWithRole;
     } catch (error) {
       console.error('Sign in error:', error);
@@ -224,38 +233,22 @@ export const AuthProvider = ({ children }) => {
         if (firebaseUser) {
           // Get custom claims and database data
           const [tokenResult, userSnapshot] = await Promise.all([
-            getIdTokenResult(firebaseUser),
+            // Fresh token on every load, so a role claim changed on the server
+            // reaches the database rules without waiting up to an hour.
+            // If only the network fails, the cached token is used; any other
+            // error (disabled or expired login) still signs the user out.
+            getIdTokenResult(firebaseUser, true).catch((error) => {
+              if (error?.code === 'auth/network-request-failed') return getIdTokenResult(firebaseUser);
+              throw error;
+            }),
             get(ref(database, `users/${firebaseUser.uid}`))
           ]);
 
           const userData = userSnapshot.val();
           // Normalized so stored spellings like "super-admin" still match.
           const role = resolveRole(userData?.profile?.role, tokenResult.claims.role);
-          
-          // Get management permissions if admin or super_admin
-          let permissions = null;
-          if (role === 'SUPER_ADMIN' || role === 'super_admin' || 
-              role === 'ADMIN' || role === 'admin') {
-            const mgmtRef = ref(database, `managementStructure/${firebaseUser.uid}`);
-            const mgmtSnapshot = await get(mgmtRef);
-            
-            if (mgmtSnapshot.exists()) {
-              const mgmtData = mgmtSnapshot.val();
-              permissions = {
-                role: mgmtData.role || role.toLowerCase(),
-                managedLocations: mgmtData.managedLocations ? Object.keys(mgmtData.managedLocations) : [],
-                managedDepartments: mgmtData.managedDepartments ? Object.keys(mgmtData.managedDepartments) : []
-              };
-            } else if (role === 'SUPER_ADMIN' || role === 'super_admin') {
-              // Super admin without explicit permissions can manage everything
-              permissions = {
-                role: 'super_admin',
-                managedLocations: ['*'], // Special wildcard for all locations
-                managedDepartments: ['*'] // Special wildcard for all departments
-              };
-            }
-          }
-          
+          const permissions = await loadManagementPermissions(firebaseUser.uid, role);
+
           setManagementPermissions(permissions);
           setUser({
             ...firebaseUser,

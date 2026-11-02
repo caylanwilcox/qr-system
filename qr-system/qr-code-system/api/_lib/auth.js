@@ -71,7 +71,9 @@ export async function requireAdmin(req) {
   const admin = getAdmin();
   let decoded;
   try {
-    decoded = await admin.auth().verifyIdToken(header.slice('Bearer '.length));
+    // checkRevoked: a demoted admin's sessions are revoked, so their old
+    // token stops working here at once instead of when it expires.
+    decoded = await admin.auth().verifyIdToken(header.slice('Bearer '.length), true);
   } catch {
     throw new HttpError(401, 'Unauthorized');
   }
