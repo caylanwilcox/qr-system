@@ -397,25 +397,10 @@ const EmployeeProfile = () => {
       // Format scheduled dates
       setScheduledDates(formatScheduledDates(data.assignedDates || []));
 
-      // Auto-update padrino color if needed, unless an admin picked it by hand
-      if (data.profile?.padrino && !data.profile?.manualColorOverride && data.events) {
-        const padrinoStatus = calculatePadrinoColor(data);
-        if (
-          padrinoStatus.color &&
-          padrinoStatus.color !== data.profile?.padrinoColor
-        ) {
-          await update(ref(database, `users/${employeeId}/profile`), {
-            padrinoColor: padrinoStatus.color,
-            padrinoColorCode: padrinoStatus.color,
-          });
-          setFormData((prev) => ({
-            ...prev,
-            padrinoColor: padrinoStatus.color,
-            padrinoColorCode: padrinoStatus.color,
-          }));
-          console.log(`Auto-updated padrino color to ${padrinoStatus.color}`);
-        }
-      }
+      // Opening a profile never changes the padrino colour. The calculated
+      // colour counts only events the member was scanned into (always 100%
+      // attended), so it isn't saved without an admin choosing it (the
+      // Auto-calculate option or a colour pick).
     } catch (err) {
       console.error('Error fetching employee details:', err);
       setError(err.message || 'Failed to fetch employee data');
