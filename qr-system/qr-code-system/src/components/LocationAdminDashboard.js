@@ -8,6 +8,8 @@ import {
   Mail, Briefcase, Search, X, Clock3
 } from 'lucide-react';
 import { format } from 'date-fns';
+import moment from 'moment-timezone';
+import { TIMEZONE } from '../utils/attendanceRules';
 import './LocationAdminDashboard.css';
 import LocationMetricsGrid from './LocationMetricsGrid';
 import { useAuth } from '../services/authContext'; // Import auth context to get current user
@@ -84,7 +86,7 @@ const getInitials = (user) => {
 };
 
 // Status badge component - extracted for better reuse
-const StatusBadge = ({ clockInTime, userData, date }) => {
+const StatusBadge = ({ clockInTime, status }) => {
   if (!clockInTime) {
     return (
       <span className="badge badge-absent">
@@ -94,45 +96,10 @@ const StatusBadge = ({ clockInTime, userData, date }) => {
     );
   }
 
-  // FIXED: Only calculate late status if user has scheduled events for this date
-  let isLate = false;
-  let isSlightlyLate = false;
-  
-  if (userData && date) {
-    // Check if user has scheduled events for this date
-    let hasScheduledEvents = false;
-    
-    if (userData.events) {
-      Object.values(userData.events).forEach(eventTypeData => {
-        if (eventTypeData && typeof eventTypeData === 'object') {
-          Object.values(eventTypeData).forEach(eventData => {
-            if (eventData && eventData.scheduled && eventData.date === date) {
-              hasScheduledEvents = true;
-            }
-          });
-        }
-      });
-    }
-    
-    // Only apply late logic if there are scheduled events
-    if (hasScheduledEvents) {
-      try {
-        const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-        const expectedTime = new Date(`2000-01-01 09:00`);
-        const lateTime = new Date(`2000-01-01 09:15`);
-
-        if (clockInTime9AM > lateTime) {
-          isLate = true;
-        } else if (clockInTime9AM > expectedTime) {
-          isSlightlyLate = true;
-        }
-      } catch (e) {
-        // If time parsing fails, don't mark as late
-        isLate = false;
-        isSlightlyLate = false;
-      }
-    }
-  }
+  // The status comes from the attendance record (the server's isLate),
+  // not from a fixed 9:00/9:15 start: events start at different times.
+  const isLate = status === 'late';
+  const isSlightlyLate = status === 'slightly-late';
 
   // Return status based on calculation
   if (isLate) {
@@ -243,7 +210,9 @@ const LocationAdminDashboard = () => {
   const [activeLocation, setActiveLocation] = useState('all'); // Default to all, will update based on userLocation
   const [searchQuery, setSearchQuery] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // Today in Chicago, where the scanner dates its records (a UTC date would
+  // switch to tomorrow at 6-7 PM).
+  const [selectedDate, setSelectedDate] = useState(() => moment.tz(TIMEZONE).format('YYYY-MM-DD'));
   const [refreshing, setRefreshing] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [locationInfo, setLocationInfo] = useState({
@@ -311,23 +280,6 @@ const LocationAdminDashboard = () => {
     return locationMatch && hasAccess;
   }, [effectiveAdminLocations, hasAllLocations, extractUserLocation]);
 
-  // Helper function to check if user has scheduled events for a date
-  const userHasScheduledEvents = useCallback((user, date) => {
-    if (!user?.events || !date) return false;
-    
-    let hasScheduled = false;
-    Object.values(user.events).forEach(eventTypeData => {
-      if (eventTypeData && typeof eventTypeData === 'object') {
-        Object.values(eventTypeData).forEach(eventData => {
-          if (eventData && eventData.scheduled && eventData.date === date) {
-            hasScheduled = true;
-          }
-        });
-      }
-    });
-    return hasScheduled;
-  }, []);
-
   // Check if user is clocked in - dependencies properly declared
   const getUserAttendanceStatus = useCallback((user) => {
     if (!user) return { present: false };
@@ -338,29 +290,21 @@ const LocationAdminDashboard = () => {
       formatDateAlternative(selectedDate, 'M/D/YYYY')
     ].filter(Boolean);
 
-    // Helper function to determine status based on time and scheduled events
-    const determineStatusFromTime = (clockInTime, user, date) => {
-      if (!clockInTime) return 'on-time';
-      
-      // Only apply late logic if user has scheduled events
-      const hasScheduledEvents = userHasScheduledEvents(user, date);
-      if (!hasScheduledEvents) return 'on-time';
-      
-      try {
-        const timeObj = new Date(`2000-01-01 ${clockInTime}`);
-        const expectedTime = new Date(`2000-01-01 09:00`);
-        const lateTime = new Date(`2000-01-01 09:15`);
-        
-        if (timeObj > lateTime) {
-          return 'late';
-        } else if (timeObj > expectedTime) {
-          return 'slightly-late';
-        }
-        return 'on-time';
-      } catch (e) {
-        return 'on-time';
-      }
-    };
+    // Older record formats are late only when they say so (onTime === false,
+    // checked by the callers). There is no fixed start time to compare with.
+    const determineStatusFromTime = () => 'on-time';
+
+    // The scanner's records first: attendance/{YYYY-MM-DD}_{timestamp},
+    // keyed by the Chicago date, with the clock-in time and the server's
+    // isLate. Present means they clocked in that day, even if they have
+    // clocked out since; the first clock-in of the day decides late.
+    const dayRecords = Object.entries(user.attendance || {})
+      .filter(([key, entry]) => key.startsWith(`${selectedDate}_`) && entry && entry.clockInTime)
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (dayRecords.length > 0) {
+      const [, first] = dayRecords[0];
+      return { present: true, time: first.clockInTime, status: first.isLate === true ? 'late' : 'on-time' };
+    }
 
     // Check attendance object (standard format)
     if (user.attendance) {
@@ -431,20 +375,15 @@ const LocationAdminDashboard = () => {
     
     // Check clockInTimes object (timestamp-based format)
     if (user.clockInTimes) {
-      const targetDate = new Date(selectedDate);
-      const targetDateStr = targetDate.toISOString().split('T')[0];
-      
       for (const timestamp in user.clockInTimes) {
         try {
-          const timestampDate = new Date(parseInt(timestamp));
-          const timestampDateStr = timestampDate.toISOString().split('T')[0];
-          
-          if (timestampDateStr === targetDateStr) {
-            // Check if there's a corresponding clock-out time
-            if (user.clockOutTimes && user.clockOutTimes[timestamp]) {
-              return { present: false }; // User has clocked out
-            }
-            
+          // Chicago date of the clock-in. (clockOutTimes is keyed by the
+          // clock-out's own time, so it can't be matched to a clock-in here,
+          // and a clock-out doesn't make the day absent anyway.)
+          const timestampDateStr = moment.tz(parseInt(timestamp, 10), TIMEZONE).format('YYYY-MM-DD');
+
+          if (timestampDateStr === selectedDate) {
+
             const clockInTime = user.clockInTimes[timestamp];
             let status = 'on-time';
             
@@ -516,7 +455,7 @@ const LocationAdminDashboard = () => {
     }
     
     return { present: false };
-  }, [selectedDate, userHasScheduledEvents]);
+  }, [selectedDate]);
 
   // Apply search filter - memoize this function
   const applySearchFilter = useCallback((users, searchTerm) => {
@@ -969,7 +908,7 @@ const LocationAdminDashboard = () => {
                 <span className="font-medium text-blue-400">
                   {activeLocation === 'all' ? 'all locations' : activeLocation}
                 </span>{' '}
-                on {format(new Date(selectedDate), 'MMMM d, yyyy')}
+                on {format(new Date(`${selectedDate}T00:00:00`), 'MMMM d, yyyy')}
               </p>
               <p className="text-xs text-gray-400 mt-1">
                 Your Location: {userLocation || 'Not Set'} • 
@@ -1018,7 +957,7 @@ const LocationAdminDashboard = () => {
                     }}
                   >
                     <CalendarDays size={16} />
-                    <span>{format(new Date(selectedDate), 'MMM d, yyyy')}</span>
+                    <span>{format(new Date(`${selectedDate}T00:00:00`), 'MMM d, yyyy')}</span>
                     <ChevronDown size={16} />
                   </button>
                   
@@ -1197,7 +1136,7 @@ const LocationAdminDashboard = () => {
                     </div>
                   </div>
                   <div className="time-info">
-                    <StatusBadge clockInTime={user.attendance.time} userData={user} date={selectedDate} />
+                    <StatusBadge clockInTime={user.attendance.time} status={user.attendance.status} />
                     {user.attendance.time && (
                       <div className="text-base font-medium text-white mt-1.5">
                         {user.attendance.time}
@@ -1255,7 +1194,7 @@ const LocationAdminDashboard = () => {
                     </div>
                   </div>
                   <div className="time-info">
-                    <StatusBadge clockInTime={null} userData={user} date={selectedDate} />
+                    <StatusBadge clockInTime={null} />
                     <div className="text-sm text-gray-400 mt-1.5">Not checked in</div>
                   </div>
                 </div>
