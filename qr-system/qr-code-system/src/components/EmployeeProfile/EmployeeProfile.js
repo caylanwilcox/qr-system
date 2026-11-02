@@ -274,7 +274,9 @@ const EmployeeProfile = () => {
   // Handle Padrino color selection. A colour picked by hand is marked
   // manualColorOverride, so the automatic colour never replaces it; the
   // Auto-calculate option passes `auto: true` and clears the mark.
-  const handlePadrinoColorChange = async (e) => {
+  // Memoized: the Auto-calculate effect depends on it, and a new function on
+  // every render made that effect save again after each save.
+  const handlePadrinoColorChange = useCallback(async (e) => {
     const { value } = e.target;
     const manualColorOverride = !e.auto;
     try {
@@ -289,7 +291,7 @@ const EmployeeProfile = () => {
       console.error('Error updating padrino color:', err);
       showNotification('Failed to update padrino color', 'error');
     }
-  };
+  }, [employeeId, showNotification]);
 
   // 🔥 ENHANCED: Handle save - this will be called by PersonalInfoSection
   const handleSave = async () => {

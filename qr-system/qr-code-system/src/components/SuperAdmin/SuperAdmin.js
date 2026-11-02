@@ -37,9 +37,10 @@ const SuperAdmin = ({ parentPath = '/super-admin' }) => {
   const handleLogout = async () => {
     try {
       await signOut();
-    } finally {
-      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
+    navigate('/login');
   };
 
   const navItems = [

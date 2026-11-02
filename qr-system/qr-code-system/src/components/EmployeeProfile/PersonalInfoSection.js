@@ -92,11 +92,13 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
       const status = calculatePadrinoColor(userData);
       setPadrinoStatus(status);
       
-      if (autoCalculate && formData.padrino) {
+      // Save only when the colour would change, so a save doesn't trigger
+      // another one.
+      if (autoCalculate && formData.padrino && status.color !== formData.padrinoColorCode) {
         onPadrinoColorChange({ target: { value: status.color }, auto: true });
       }
     }
-  }, [userData, autoCalculate, onPadrinoColorChange, formData.padrino]);
+  }, [userData, autoCalculate, onPadrinoColorChange, formData.padrino, formData.padrinoColorCode]);
 
   const getColorDisplayName = (color) => {
     return color ? color.charAt(0).toUpperCase() + color.slice(1) : 'Blue';
