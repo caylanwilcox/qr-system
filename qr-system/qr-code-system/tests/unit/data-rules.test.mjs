@@ -21,6 +21,7 @@ import {
   MAX_SHIFT_MS,
   hasScheduledEventsToday,
   isLateForScheduledEvents,
+  isLateForEvents,
   TIMEZONE,
 } from '../../src/utils/attendanceRules.js';
 import moment from 'moment-timezone';
@@ -432,4 +433,26 @@ test('multi-day events count on every day they span; unscheduled entries are ign
   // multi-day event the scanner compares with the first day's start, so any
   // clock-in counts as late. Fixing that is a separate, deliberate change.
   assert.equal(isLateForScheduledEvents(user, '2026-11-02', chicago('2026-11-02 07:30')), true);
+});
+
+test('isLateForEvents: late means after the earliest start of the events scanned into', () => {
+  const events = [
+    { id: 'ev1', data: { start: '2026-11-03T00:00:00.000Z', allDay: false } }, // 6:00 PM Chicago, Nov 2
+    { id: 'ev2', data: { start: '2026-11-03T01:00:00.000Z', allDay: false } }, // 7:00 PM
+    { id: 'other', data: { start: '2026-11-02T15:00:00.000Z', allDay: false } }, // 9:00 AM, not scanned into
+  ];
+  assert.equal(isLateForEvents(events, ['ev2'], '2026-11-02', chicago('2026-11-02 18:55')), false, 'evening event, morning event ignored');
+  assert.equal(isLateForEvents(events, ['ev2'], '2026-11-02', chicago('2026-11-02 19:05')), true);
+  assert.equal(isLateForEvents(events, ['ev1', 'ev2'], '2026-11-02', chicago('2026-11-02 18:30')), true, 'earliest start wins');
+  assert.equal(isLateForEvents(events, [], '2026-11-02', chicago('2026-11-02 23:00')), false, 'no events, never late');
+});
+
+test('isLateForEvents: all-day events and later days of a multi-day event are never late', () => {
+  const events = [
+    { id: 'all', data: { start: '2026-11-02T06:00:00.000Z', allDay: true } },
+    { id: 'multi', data: { start: '2026-11-01T13:00:00.000Z', end: '2026-11-03T23:00:00.000Z', allDay: false } },
+  ];
+  assert.equal(isLateForEvents(events, ['all'], '2026-11-02', chicago('2026-11-02 15:00')), false);
+  assert.equal(isLateForEvents(events, ['multi'], '2026-11-01', chicago('2026-11-01 09:00')), true, 'first day counts');
+  assert.equal(isLateForEvents(events, ['multi'], '2026-11-02', chicago('2026-11-02 09:00')), false, 'later day does not');
 });

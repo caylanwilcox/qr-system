@@ -442,6 +442,35 @@ test('scan: a Scheduler event (type saved as its key) is marked attended; the de
   assert.equal(fake().db.events.ev1.participants.emp1.attended, false);
 });
 
+test('scan: clocking in after the scheduled start is late, and counted once', async () => {
+  fake().db.users.emp1.schedule = { ev1: true };
+  fake().db.events = {
+    // Started at midnight today, so any clock-in today is after it.
+    ev1: { start: chicagoNow().startOf('day').toISOString(), allDay: false, eventType: 'Workshops', participants: { emp1: { assigned: true, attended: false } } },
+  };
+  const res = await clockIn();
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+  assert.equal(res.body.attendedEvents, 1);
+  assert.equal(res.body.isLate, true);
+  const [[, record]] = records();
+  assert.equal(record.isLate, true);
+  assert.equal(record.onTime, false);
+  assert.equal(fake().db.attendance.aurora[today()].emp1.isLate, true);
+  assert.equal(fake().db.users.emp1.stats.daysLate, 1);
+});
+
+test('scan: clocking in before the scheduled start is on time', async () => {
+  fake().db.users.emp1.schedule = { ev1: true };
+  fake().db.events = {
+    ev1: { start: chicagoNow().endOf('day').toISOString(), allDay: false, eventType: 'Workshops', participants: { emp1: { assigned: true, attended: false } } },
+  };
+  const res = await clockIn();
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+  assert.equal(res.body.attendedEvents, 1);
+  assert.equal(res.body.isLate, false);
+  assert.equal(fake().db.users.emp1.stats.daysLate || 0, 0);
+});
+
 test('scan: the Scheduler event key matches the scanned type name', async () => {
   fake().db.eventTypes = { 'et-1': { name: 'Workshops' } };
   fake().db.users.emp1.schedule = { ev1: true };
