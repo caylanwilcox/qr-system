@@ -100,7 +100,10 @@ export function buildUserRecord(request, location, now) {
       service: request.service,
       status: request.status,
       notes: '',
-      ...(request.padrino ? { padrino: true, padrinoColor: request.padrinoColor } : {}),
+      // The member lists and dashboards read padrinoColorCode, so save both.
+      ...(request.padrino
+        ? { padrino: true, padrinoColor: request.padrinoColor, padrinoColorCode: request.padrinoColor }
+        : {}),
     },
     stats: { attendanceRate: 0, daysAbsent: 0, daysLate: 0, daysPresent: 0, onTimeRate: 0, totalHours: 0 },
     status: request.status,

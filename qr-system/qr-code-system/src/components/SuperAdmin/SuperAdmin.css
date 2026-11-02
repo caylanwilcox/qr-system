@@ -135,6 +135,28 @@ body {
   color: #ef4444;
 }
 
+/* Logout is a button (it signs out), styled like the nav links. */
+.logout-item .logout-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: #ef4444;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.logout-item .logout-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+}
+
 .admin-main {
   flex: 1;
   margin-left: 250px;

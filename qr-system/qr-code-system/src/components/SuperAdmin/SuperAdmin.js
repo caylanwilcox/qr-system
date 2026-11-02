@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ref, onValue } from "firebase/database";
 import { format } from 'date-fns';
 import { database } from '../../services/firebaseConfig';
@@ -28,9 +28,19 @@ const SuperAdmin = ({ parentPath = '/super-admin' }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showUserInfo, setShowUserInfo] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Get user information from auth context
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+
+  // Sign out first, then leave, so the login screen doesn't see an old session.
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } finally {
+      navigate('/login');
+    }
+  };
 
   const navItems = [
     { path: '/super-admin', icon: <Home size={24} />, text: 'Dashboard Overview' },
@@ -224,10 +234,10 @@ const SuperAdmin = ({ parentPath = '/super-admin' }) => {
               </li>
             ))}
             <li className="logout-item">
-              <Link to="/login">
+              <button onClick={handleLogout} className="logout-button">
                 <span className="nav-icon"><LogOut size={24} /></span>
                 <span className="nav-text">Logout</span>
-              </Link>
+              </button>
             </li>
           </ul>
         </nav>

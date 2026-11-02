@@ -271,12 +271,19 @@ const EmployeeProfile = () => {
     }
   };
 
-  // Handle Padrino color selection
+  // Handle Padrino color selection. A colour picked by hand is marked
+  // manualColorOverride, so the automatic colour never replaces it; the
+  // Auto-calculate option passes `auto: true` and clears the mark.
   const handlePadrinoColorChange = async (e) => {
     const { value } = e.target;
+    const manualColorOverride = !e.auto;
     try {
-      await update(ref(database, `users/${employeeId}/profile`), { padrinoColor: value, padrinoColorCode: value });
-      setFormData((prev) => ({ ...prev, padrinoColorCode: value }));
+      await update(ref(database, `users/${employeeId}/profile`), {
+        padrinoColor: value,
+        padrinoColorCode: value,
+        manualColorOverride,
+      });
+      setFormData((prev) => ({ ...prev, padrinoColorCode: value, manualColorOverride }));
       showNotification('Padrino color updated successfully');
     } catch (err) {
       console.error('Error updating padrino color:', err);
@@ -390,25 +397,10 @@ const EmployeeProfile = () => {
       // Format scheduled dates
       setScheduledDates(formatScheduledDates(data.assignedDates || []));
 
-      // Auto-update padrino color if needed
-      if (data.profile?.padrino && data.events) {
-        const padrinoStatus = calculatePadrinoColor(data);
-        if (
-          padrinoStatus.color &&
-          padrinoStatus.color !== data.profile?.padrinoColor
-        ) {
-          await update(ref(database, `users/${employeeId}/profile`), {
-            padrinoColor: padrinoStatus.color,
-            padrinoColorCode: padrinoStatus.color,
-          });
-          setFormData((prev) => ({
-            ...prev,
-            padrinoColor: padrinoStatus.color,
-            padrinoColorCode: padrinoStatus.color,
-          }));
-          console.log(`Auto-updated padrino color to ${padrinoStatus.color}`);
-        }
-      }
+      // Opening a profile never changes the padrino colour. The calculated
+      // colour counts only events the member was scanned into (always 100%
+      // attended), so it isn't saved without an admin choosing it (the
+      // Auto-calculate option or a colour pick).
     } catch (err) {
       console.error('Error fetching employee details:', err);
       setError(err.message || 'Failed to fetch employee data');

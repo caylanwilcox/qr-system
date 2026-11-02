@@ -198,6 +198,24 @@ export function isLateForScheduledEvents(userData, dateStr, clockInMoment, timez
   return clockInMoment.isAfter(earliest);
 }
 
+// Late for the Scheduler events a clock-in is for (`eventIds`, from
+// findEventsToMarkAttended): clocking in after the earliest of their start
+// times. Only the day an event starts counts, since later days of a multi-day
+// event have no start time of their own. All-day events never make anyone late.
+export function isLateForEvents(events, eventIds, dateStr, clockInMoment, timezone = TIMEZONE) {
+  if (!clockInMoment || !Array.isArray(eventIds) || eventIds.length === 0) return false;
+  const wanted = new Set(eventIds);
+  const starts = [];
+  (events || []).forEach(({ id, data }) => {
+    if (!wanted.has(id) || !data || !data.start || data.allDay === true) return;
+    const start = inZone(data.start, timezone);
+    if (hasRealTime(start, data) && start.format('YYYY-MM-DD') === dateStr) starts.push(start);
+  });
+  if (starts.length === 0) return false;
+  const earliest = starts.reduce((a, b) => (b.isBefore(a) ? b : a));
+  return clockInMoment.isAfter(earliest);
+}
+
 const compactLocation = (value) =>
   typeof value === 'string' ? value.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 

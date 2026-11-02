@@ -16,7 +16,7 @@ const LocationAdmin = ({ parentPath = '/location-admin' }) => {
   const location = useLocation();
   
   // Get user information from auth context
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   // Ensure user is loaded
   useEffect(() => {
@@ -122,9 +122,13 @@ const LocationAdmin = ({ parentPath = '/location-admin' }) => {
     return departments.join(', ');
   };
 
-  // Handle logout
-  const handleLogout = () => {
-    navigate('/login');
+  // Sign out first, then leave, so the login screen doesn't see an old session.
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } finally {
+      navigate('/login');
+    }
   };
 
   return (
