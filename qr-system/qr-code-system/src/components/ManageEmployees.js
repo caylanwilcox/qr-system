@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ref, onValue, remove, set, get } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
 import { setUserRole } from '../services/adminApi';
+import { normalizeRole } from '../utils/roles';
 import { Link } from 'react-router-dom';
 import { 
   ChevronLeft, 
@@ -224,7 +225,9 @@ const ManageEmployees = ({ locationFiltered = false }) => {
               const status = userData.status ? userData.status.toLowerCase() : 
                             (profile.status ? profile.status.toLowerCase() : 'inactive');
               
-              const role = (profile.role || 'employee').toLowerCase();
+              // Normalized, so a stored "super-admin" is still a super admin
+              // and never gets the promote/demote button.
+              const role = normalizeRole(profile.role) || 'employee';
               const service = profile.service || 'Not Assigned';
 
               const daysPresent = stats.daysPresent || 0;
