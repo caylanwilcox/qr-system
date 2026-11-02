@@ -430,6 +430,30 @@ test('scan: clock-in marks the matching scheduled event attended', async () => {
   assert.equal(fake().db.events.ev2.participants.emp1.attended, undefined);
 });
 
+test('scan: a Scheduler event (type saved as its key) is marked attended; the default category is not matched', async () => {
+  fake().db.eventTypes = { 'et-1': { name: 'Workshops' }, 'et-4': { name: 'MEETINGS' } };
+  fake().db.users.emp1.schedule = { ev1: true };
+  fake().db.events = {
+    ev1: { start: chicagoNow().toISOString(), eventType: 'et-1', category: 'meetings', participants: { emp1: { assigned: true, attended: false } } },
+  };
+  const meeting = await clockIn('admin', { eventType: 'MEETINGS' });
+  assert.equal(meeting.statusCode, 200, JSON.stringify(meeting.body));
+  assert.equal(meeting.body.attendedEvents, 0, 'a meetings scan must not mark the workshop');
+  assert.equal(fake().db.events.ev1.participants.emp1.attended, false);
+});
+
+test('scan: the Scheduler event key matches the scanned type name', async () => {
+  fake().db.eventTypes = { 'et-1': { name: 'Workshops' } };
+  fake().db.users.emp1.schedule = { ev1: true };
+  fake().db.events = {
+    ev1: { start: chicagoNow().toISOString(), eventType: 'et-1', category: 'meetings', participants: { emp1: { assigned: true, attended: false } } },
+  };
+  const res = await clockIn();
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+  assert.equal(res.body.attendedEvents, 1);
+  assert.equal(fake().db.events.ev1.participants.emp1.attended, true);
+});
+
 test('scan: unknown, deleted and malformed badges are refused', async () => {
   assert.equal((await clockIn('admin', { userId: 'ghost' })).statusCode, 404);
   fake().db.deleted_users = { 'emp1_2026-01-01T00-00-00_000Z': { name: 'x' } };

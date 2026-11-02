@@ -101,12 +101,13 @@ export function staleClockInUpdates(stale, timestamp) {
 }
 
 // True when the event runs on dateStr (YYYY-MM-DD) in Chicago time,
-// including multi-day events.
+// including multi-day events. Times without an offset are read as Chicago
+// time, as the browser did; the server runs in UTC.
 export function eventCoversDate(event, dateStr, timezone = TIMEZONE) {
   if (!event || !event.start) return false;
-  const start = moment(event.start).tz(timezone);
+  const start = moment.tz(event.start, timezone);
   if (!start.isValid()) return false;
-  const end = event.end ? moment(event.end).tz(timezone) : start;
+  const end = event.end ? moment.tz(event.end, timezone) : start;
   const first = start.format('YYYY-MM-DD');
   const last = end.isValid() ? end.format('YYYY-MM-DD') : first;
   return first <= dateStr && dateStr <= (last < first ? first : last);
@@ -200,16 +201,35 @@ export function isLateForScheduledEvents(userData, dateStr, clockInMoment, timez
 const compactLocation = (value) =>
   typeof value === 'string' ? value.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
+// Event-type names by eventTypes key. The Scheduler saves an event's type as
+// its key (e.g. "et-1"); the scanner sends the type's name, read the same way.
+export function eventTypeNamesByKey(eventTypes) {
+  const names = {};
+  Object.entries(eventTypes || {}).forEach(([key, value]) => {
+    if (typeof value === 'string') names[key] = value;
+    else if (value && typeof value === 'object') names[key] = value.name || value.key || key;
+  });
+  return names;
+}
+
 // IDs of the scheduled events a clock-in should mark attended: events the
 // user is a participant in, running today, with the scanned event type.
-// When several match, the ones at the scanned location win.
-export function findEventsToMarkAttended({ events, userId, dateStr, eventType, locationKey, timezone = TIMEZONE }) {
+// An event's type may be a name or an eventTypes key (resolved through
+// `eventTypeNames`). `category` is not compared: the Scheduler always saves
+// the default "meetings" there. When several match, the ones at the scanned
+// location win.
+export function findEventsToMarkAttended({
+  events, userId, dateStr, eventType, locationKey, eventTypeNames = {}, timezone = TIMEZONE,
+}) {
   const matches = (events || []).filter(({ data }) => {
     const participant = data && data.participants ? data.participants[userId] : undefined;
     if (participant === undefined || participant === null) return false;
     if (typeof participant === 'object' && participant.attended === true) return false;
     if (!eventCoversDate(data, dateStr, timezone)) return false;
-    return [data.eventType, data.category, data.originalEventType].some((type) =>
+    const typeName = Object.prototype.hasOwnProperty.call(eventTypeNames, data.eventType)
+      ? eventTypeNames[data.eventType]
+      : undefined;
+    return [data.eventType, typeName, data.originalEventType].some((type) =>
       sameEventType(eventType, type)
     );
   });

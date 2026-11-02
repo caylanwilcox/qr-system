@@ -57,7 +57,9 @@ function completedStatistics(userData, currentDate, normalizedEventType, formatt
   return updates;
 }
 
-export function planClockIn({ userId, userData, now, location, eventType, eventTypeLabel, scheduledEvents, existingShared }) {
+export function planClockIn({
+  userId, userData, now, location, eventType, eventTypeLabel, scheduledEvents, eventTypeNames, existingShared,
+}) {
   const { timestamp, currentDate, formattedTime, iso } = timesOf(now);
   const name = userName(userData);
   const position = positionOf(userData);
@@ -118,6 +120,7 @@ export function planClockIn({ userId, userData, now, location, eventType, eventT
     dateStr: currentDate,
     eventType,
     locationKey,
+    eventTypeNames,
   });
 
   const updates = composeClockInUpdates({

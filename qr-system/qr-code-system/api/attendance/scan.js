@@ -15,7 +15,13 @@ import moment from 'moment-timezone';
 import { getAdmin } from '../_lib/firebaseAdmin.js';
 import { HttpError, requireAdmin, sendError, isValidId } from '../_lib/auth.js';
 import { planClockIn, planClockOut, locationKeyOf } from '../_lib/clockPlan.js';
-import { TIMEZONE, normalizeEventType, splitOpenClockIns, sharedPathFor } from '../../src/utils/attendanceRules.js';
+import {
+  TIMEZONE,
+  normalizeEventType,
+  splitOpenClockIns,
+  sharedPathFor,
+  eventTypeNamesByKey,
+} from '../../src/utils/attendanceRules.js';
 
 export const SCAN_LOCK_MS = 30 * 1000;
 const MODES = ['clock-in', 'clock-out'];
@@ -113,19 +119,28 @@ async function existingSharedPaths(db, userId, attendance, currentDate) {
   }
 }
 
-// The scheduled events on the user's calendar, for marking attendance. If
-// they can't be read, the clock-in still goes ahead (as it always has) and
-// the event can be marked by hand.
+// The scheduled events on the user's calendar, for marking attendance, plus
+// the event-type names by key (the Scheduler saves a type's key, the scanner
+// sends its name). If they can't be read, the clock-in still goes ahead (as
+// it always has) and the event can be marked by hand.
 async function loadScheduledEvents(db, schedule) {
+  const none = { scheduledEvents: [], eventTypeNames: {} };
   try {
     const ids = Object.keys(schedule || {});
-    const snapshots = await Promise.all(ids.map((id) => db.ref(`events/${id}`).once('value')));
-    return snapshots
-      .map((snapshot, index) => ({ id: ids[index], data: snapshot.val() }))
-      .filter((event) => event.data);
+    if (ids.length === 0) return none;
+    const [snapshots, types] = await Promise.all([
+      Promise.all(ids.map((id) => db.ref(`events/${id}`).once('value'))),
+      db.ref('eventTypes').once('value'),
+    ]);
+    return {
+      scheduledEvents: snapshots
+        .map((snapshot, index) => ({ id: ids[index], data: snapshot.val() }))
+        .filter((event) => event.data),
+      eventTypeNames: eventTypeNamesByKey(types.val()),
+    };
   } catch (error) {
     console.error('[attendance-scan] could not read scheduled events', error);
-    return [];
+    return none;
   }
 }
 
@@ -156,7 +171,7 @@ export default async function handler(req, res) {
               userData,
               now,
               existingShared,
-              scheduledEvents: await loadScheduledEvents(db, userData.schedule),
+              ...(await loadScheduledEvents(db, userData.schedule)),
             })
           : planClockOut({ ...scan, userData, now, existingShared });
 

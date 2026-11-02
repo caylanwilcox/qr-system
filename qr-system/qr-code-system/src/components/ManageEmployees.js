@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ref, onValue, update, remove, set, get } from 'firebase/database';
+import { ref, onValue, remove, set, get } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
+import { setUserRole } from '../services/adminApi';
 import { Link } from 'react-router-dom';
 import { 
   ChevronLeft, 
@@ -389,13 +390,12 @@ const ManageEmployees = ({ locationFiltered = false }) => {
     setUserToDelete(null);
   };
 
-  // Update role inside the profile node
+  // The server changes the stored role and the login's role claim together
+  // (super admins only), so the two always agree.
   const handleToggleRole = async (employee) => {
     try {
       const newRole = employee.role === 'admin' ? 'employee' : 'admin';
-      await update(ref(database, `users/${employee.id}/profile`), {
-        role: newRole,
-      });
+      await setUserRole(employee.id, newRole);
       setSuccessMessage(`Successfully updated ${employee.name}'s role to ${newRole}`);
       
       // Update local state to refresh user role without reloading
@@ -409,7 +409,7 @@ const ManageEmployees = ({ locationFiltered = false }) => {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Error updating role:', err);
-      setError('Failed to update role. Please try again.');
+      setError(`Failed to update role: ${err.message}`);
     }
   };
 

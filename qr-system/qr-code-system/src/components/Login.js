@@ -57,7 +57,7 @@ const Login = () => {
           navigate('/super-admin/manage-employees');
           break;
         case 'ADMIN':
-          navigate('/location-admin/employees');
+          navigate('/location-admin');
           break;
         case 'EMPLOYEE':
           navigate('/dashboard');
@@ -72,7 +72,7 @@ const Login = () => {
             if (dbRole === 'SUPER_ADMIN' || dbRole === 'SUPER-ADMIN') {
               navigate('/super-admin/manage-employees');
             } else if (dbRole === 'ADMIN') {
-              navigate('/location-admin/employees');
+              navigate('/location-admin');
             } else {
               navigate('/dashboard'); // Default to employee dashboard
             }
@@ -89,6 +89,8 @@ const Login = () => {
         setError('No account exists with this email address.');
       } else if (error.code === 'auth/wrong-password') {
         setError('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/invalid-credential') {
+        setError('Incorrect email or password. Please try again.');
       } else if (error.code === 'auth/too-many-requests') {
         setError('Too many login attempts. Please try again later.');
       } else {

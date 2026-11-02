@@ -439,9 +439,9 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
                   <div className="ml-3">
                     <div className="stat-label">Total Hours</div>
                     <div className="stat-value flex items-center">
-                      {stats.totalHours.toFixed(1)}
+                      {Number(stats.totalHours || 0).toFixed(1)}
                       <span className="text-xs text-green-400 ml-2">
-                        {stats.hoursChange >= 0 && '+'}{stats.hoursChange.toFixed(1)}% vs last month
+                        {stats.hoursChange >= 0 && '+'}{Number(stats.hoursChange || 0).toFixed(1)}% vs last month
                       </span>
                     </div>
                   </div>
@@ -489,7 +489,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
                 description="Achieve 90% or higher punctuality rate"
                 isUnlocked={stats.punctualityRate >= 90}
                 color="blue"
-                progress={{ current: stats.punctualityRate.toFixed(1), target: 90, suffix: '%' }}
+                progress={{ current: Number(stats.punctualityRate || 0).toFixed(1), target: 90, suffix: '%' }}
               />
               
               {/* Service Star Achievement */}
@@ -509,7 +509,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
                 description="Log 100+ total hours of service"
                 isUnlocked={stats.totalHours >= 100}
                 color="red"
-                progress={{ current: stats.totalHours.toFixed(1), target: 100, suffix: ' hours' }}
+                progress={{ current: Number(stats.totalHours || 0).toFixed(1), target: 100, suffix: ' hours' }}
               />
               
               {/* Early Bird Achievement */}
@@ -519,7 +519,7 @@ const UserDashboard = ({ initialTab = 'personal' }) => {
                 description="Arrive early at least 25% of the time"
                 isUnlocked={stats.earlyArrivalRate >= 25}
                 color="purple"
-                progress={{ current: stats.earlyArrivalRate.toFixed(1), target: 25, suffix: '%' }}
+                progress={{ current: Number(stats.earlyArrivalRate || 0).toFixed(1), target: 25, suffix: '%' }}
               />
               
               {/* Padrino Achievement */}

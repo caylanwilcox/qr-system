@@ -11,6 +11,7 @@ import {
   splitOpenClockIns,
   staleClockInUpdates,
   eventCoversDate,
+  eventTypeNamesByKey,
   findEventsToMarkAttended,
   prefixKeys,
   pickOpenClockIn,
@@ -147,6 +148,9 @@ test('eventCoversDate uses Chicago time, not UTC', () => {
   assert.equal(eventCoversDate({ start: '2026-11-02T03:00:00Z' }, '2026-11-01'), true);
   assert.equal(eventCoversDate({ start: '2026-11-02T03:00:00Z' }, '2026-11-02'), false);
   assert.equal(eventCoversDate({ start: '2026-10-30T15:00:00Z', end: '2026-11-02T15:00:00Z' }, '2026-11-01'), true, 'multi-day');
+  // No offset: read as Chicago time even on a UTC server (00:30 UTC would be Oct 31 in Chicago).
+  assert.equal(eventCoversDate({ start: '2026-11-01T00:30:00' }, '2026-11-01'), true, 'no offset');
+  assert.equal(eventCoversDate({ start: '2026-11-01' }, '2026-11-01'), true, 'date only');
   assert.equal(eventCoversDate({}, '2026-11-01'), false);
 });
 
@@ -155,14 +159,42 @@ test('findEventsToMarkAttended picks today\'s matching events the user is in', (
   const events = [
     { id: 'match', data: { start: today, eventType: 'HACIENDAS', participants: { u1: { assigned: true, attended: false } } } },
     { id: 'bare-true', data: { start: today, eventType: 'haciendas', participants: { u1: true } } },
-    { id: 'by-category', data: { start: today, eventType: 'other', category: 'Haciendas', participants: { u1: { assigned: true } } } },
     { id: 'already', data: { start: today, eventType: 'haciendas', participants: { u1: { attended: true } } } },
     { id: 'not-in-it', data: { start: today, eventType: 'haciendas', participants: { u2: true } } },
     { id: 'other-day', data: { start: '2026-11-05T15:00:00Z', eventType: 'haciendas', participants: { u1: true } } },
     { id: 'other-type', data: { start: today, eventType: 'workshops', participants: { u1: true } } },
   ];
   const ids = findEventsToMarkAttended({ events, userId: 'u1', dateStr: '2026-11-01', eventType: 'haciendas' });
-  assert.deepEqual(ids, ['match', 'bare-true', 'by-category']);
+  assert.deepEqual(ids, ['match', 'bare-true']);
+});
+
+test('Scheduler events: the type key is matched through its name, the default category never is', () => {
+  // The Scheduler saves the eventTypes key and always category "meetings";
+  // the scanner sends the type's name.
+  const today = '2026-11-01T23:00:00.000Z';
+  const participants = { u1: { assigned: true, attended: false } };
+  const eventTypeNames = eventTypeNamesByKey({
+    'et-1': { name: 'WORKSHOPS', displayName: 'Workshops' },
+    'et-4': { name: 'MEETINGS' },
+    '-Npush': { name: 'Bible Study' },
+    legacy: 'HACIENDAS',
+  });
+  assert.deepEqual(eventTypeNames, { 'et-1': 'WORKSHOPS', 'et-4': 'MEETINGS', '-Npush': 'Bible Study', legacy: 'HACIENDAS' });
+  const events = [
+    { id: 'workshop', data: { start: today, eventType: 'et-1', category: 'meetings', participants } },
+    { id: 'study', data: { start: today, eventType: '-Npush', category: 'meetings', participants } },
+  ];
+  const pick = (eventType) =>
+    findEventsToMarkAttended({ events, userId: 'u1', dateStr: '2026-11-01', eventType, eventTypeNames });
+  assert.deepEqual(pick('WORKSHOPS'), ['workshop']);
+  assert.deepEqual(pick('Bible Study'), ['study'], 'a type added in Settings');
+  assert.deepEqual(pick('MEETINGS'), [], 'the default category does not mark every event');
+  assert.deepEqual(
+    findEventsToMarkAttended({ events, userId: 'u1', dateStr: '2026-11-01', eventType: 'WORKSHOPS' }),
+    [],
+    'without the names, a key alone never matches'
+  );
+  assert.deepEqual(eventTypeNamesByKey(null), {});
 });
 
 test('two same-type events today: the scanned location wins', () => {
