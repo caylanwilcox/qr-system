@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/authContext';
 import { ref, get, set, update } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
-import { Loader2, AlertCircle } from 'lucide-react'; // Optional - you can remove if not using
 import './Login.css';
 
 const Login = () => {

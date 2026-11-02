@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ref, onValue } from "firebase/database";
 import { format } from 'date-fns';
 import { database } from '../../services/firebaseConfig';
@@ -9,28 +9,28 @@ import Dashboard from './SuperAdminDashboard';
 import logo from '../logo.png';
 import {
   Home, Users, FileText, Settings, Calendar, QrCode,
-  LogOut, ChevronLeft, ChevronRight, Building, UserPlus,
+  LogOut, ChevronLeft, ChevronRight, UserPlus,
   Shield, User
 } from 'lucide-react';
+
+// Module-level constant so its reference is stable across renders
+const locations = [
+  'Aurora', 'Lyons', 'Agua Viva',
+  'Elgin', 'Joliet', 'Wheeling',
+];
 
 const SuperAdmin = ({ parentPath = '/super-admin' }) => {
   const [locationAnalytics, setLocationAnalytics] = useState({});
   const [topEmployees, setTopEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [weekWeather, setWeekWeather] = useState([]);
+  const [, setWeekWeather] = useState([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showUserInfo, setShowUserInfo] = useState(false);
-  const navigate = useNavigate();
   const location = useLocation();
-  
+
   // Get user information from auth context
   const { user } = useAuth();
-
-  const locations = [
-    'Aurora', 'Lyons', 'Agua Viva',
-    'Elgin', 'Joliet', 'Wheeling',
-  ];
 
   const navItems = [
     { path: '/super-admin', icon: <Home size={24} />, text: 'Dashboard Overview' },

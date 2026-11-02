@@ -1,9 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { Trash2, Clock, AlertCircle, CheckCircle, RefreshCw, Calendar, Plus, MapPin, Tag } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Trash2, Clock, AlertCircle, CheckCircle, RefreshCw, Plus, MapPin, Tag } from 'lucide-react';
 import { ref, get, set, remove, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import moment from 'moment-timezone';
+
+// Format time from various formats to readable format (pure helper)
+const formatTime = (timeStr) => {
+  if (!timeStr) return null;
+
+  // If already in readable format (e.g., "09:15 AM"), return as-is
+  if (timeStr.includes('AM') || timeStr.includes('PM')) {
+    return timeStr;
+  }
+
+  // If it's an ISO string
+  if (timeStr.includes('T')) {
+    try {
+      return new Date(timeStr).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      console.error('Error parsing ISO time:', e);
+      return timeStr;
+    }
+  }
+
+  // If it's in HH:MM format, convert to 12-hour format
+  if (timeStr.match(/^\d{2}:\d{2}$/)) {
+    try {
+      const [hours, minutes] = timeStr.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours), parseInt(minutes), 0);
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      console.error('Error parsing HH:MM time:', e);
+      return timeStr;
+    }
+  }
+
+  return timeStr;
+};
 
 const AttendanceSection = ({
   attendanceRecords: initialRecords = [],
@@ -21,21 +63,6 @@ const AttendanceSection = ({
     clockOutTime: '17:00',
     eventType: 'general'
   });
-
-  // Get current date in Chicago timezone
-  const getChicagoDate = () => {
-    return moment().tz('America/Chicago').format('YYYY-MM-DD');
-  };
-
-  // Get Chicago time from various inputs
-  const getChicagoTime = () => {
-    return moment().tz('America/Chicago');
-  };
-
-  // Convert timestamp to Chicago timezone date
-  const timestampToChicagoDate = (timestamp) => {
-    return moment(parseInt(timestamp)).tz('America/Chicago').format('YYYY-MM-DD');
-  };
 
   // Status badge component
   const StatusBadge = ({ clockInTime, isLate }) => {
@@ -210,51 +237,8 @@ const AttendanceSection = ({
     }
   };
 
-  // Format time from various formats to readable format
-  const formatTime = (timeStr) => {
-    if (!timeStr) return null;
-    
-    // If already in readable format (e.g., "09:15 AM"), return as-is
-    if (timeStr.includes('AM') || timeStr.includes('PM')) {
-      return timeStr;
-    }
-    
-    // If it's an ISO string
-    if (timeStr.includes('T')) {
-      try {
-        return new Date(timeStr).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true 
-        });
-      } catch (e) {
-        console.error('Error parsing ISO time:', e);
-        return timeStr;
-      }
-    }
-    
-    // If it's in HH:MM format, convert to 12-hour format
-    if (timeStr.match(/^\d{2}:\d{2}$/)) {
-      try {
-        const [hours, minutes] = timeStr.split(':');
-        const date = new Date();
-        date.setHours(parseInt(hours), parseInt(minutes), 0);
-        return date.toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true 
-        });
-      } catch (e) {
-        console.error('Error parsing HH:MM time:', e);
-        return timeStr;
-      }
-    }
-    
-    return timeStr;
-  };
-
   // Main function to fetch attendance records - COMPLETELY REWRITTEN for proper clock-in/out handling
-  const fetchAttendanceRecords = async () => {
+  const fetchAttendanceRecords = useCallback(async () => {
     if (!employeeId) {
       setError('Employee ID is missing');
       return;
@@ -486,9 +470,7 @@ const AttendanceSection = ({
               // We don't have full user data here, so we'll use a conservative approach
               // Only mark as late if after 9:00 AM AND we have evidence of scheduled events
               // This is a fallback - the main logic should be in the clock-in process
-              const clockInMoment = moment.tz(`2000-01-01 ${entry.clockInTime}`, 'YYYY-MM-DD HH:mm A', 'America/Chicago');
-              const nineAM = moment.tz('2000-01-01 09:00', 'YYYY-MM-DD HH:mm', 'America/Chicago');
-              
+
               // Conservative approach: don't mark as late unless we're very sure
               return false; // Let the actual clock-in logic handle late status
             })() : false;
@@ -547,14 +529,15 @@ const AttendanceSection = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [employeeId]);
 
-  // Fetch records on component mount
+  // Fetch records on component mount and when employeeId changes
+  // (fetchAttendanceRecords only changes when employeeId does)
   useEffect(() => {
     if (employeeId) {
       fetchAttendanceRecords();
     }
-  }, [employeeId]);
+  }, [employeeId, fetchAttendanceRecords]);
 
   // Handle record deletion - updated to use originalKey
   const handleDeleteRecord = async (timestamp, recordId) => {

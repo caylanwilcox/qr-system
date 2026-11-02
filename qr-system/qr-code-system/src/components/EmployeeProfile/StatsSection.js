@@ -4,14 +4,10 @@ import {
   Activity,
   Clock,
   Calendar,
-  Users,
   ChartBar,
   CheckSquare,
   XSquare,
   RefreshCw,
-  FileText,
-  MapPin,
-  Tag,
   AlertCircle
 } from 'lucide-react';
 import moment from 'moment-timezone';
@@ -30,7 +26,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   const [employeeData, setEmployeeData] = useState(employeeDetails || null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [eventCount, setEventCount] = useState(0);
-  const [recentClockIns, setRecentClockIns] = useState([]);
+  const [, setRecentClockIns] = useState([]);
   const [eventTypes, setEventTypes] = useState({});
   const [loadingEventTypes, setLoadingEventTypes] = useState(true);
   const [error, setError] = useState(null);
@@ -40,7 +36,16 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   const eventTypesLoadedRef = useRef(false);
   const globalEventsLoadedRef = useRef(false);
   const subscriptionsRef = useRef([]);
-  
+  // Latest employeeData, read by extractRecentClockIns without making it a
+  // dependency (which would cascade into loadEmployeeData and re-fetch loops)
+  const employeeDataRef = useRef(employeeData);
+  // Whether a global-events fetch is currently in flight
+  const loadingGlobalEventsRef = useRef(false);
+
+  useEffect(() => {
+    employeeDataRef.current = employeeData;
+  }, [employeeData]);
+
   const DEBUG_PREFIX = '🔍 [StatsSection]';
 
   // Memoized user ID getter
@@ -78,12 +83,9 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   }, []);
 
   // Optimized event types fetcher with caching
+  // Always fetches: manual refresh relies on the loadingEventTypes toggle to
+  // re-trigger the dependent effects below.
   const fetchEventTypes = useCallback(async () => {
-    if (eventTypesLoadedRef.current && Object.keys(eventTypes).length > 0) {
-      console.log(`${DEBUG_PREFIX} Event types already loaded, skipping fetch`);
-      return;
-    }
-
     try {
       console.log(`${DEBUG_PREFIX} Fetching event types from database`);
       setLoadingEventTypes(true);
@@ -215,12 +217,13 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
               let isLate = false;
               
               // Check if user has scheduled events for this date
-              if (employeeData && employeeData.events) {
+              const currentEmployeeData = employeeDataRef.current;
+              if (currentEmployeeData && currentEmployeeData.events) {
                 const eventDateStr = date;
                 let hasScheduledEvents = false;
-                
+
                 // Check for scheduled events on this date
-                Object.values(employeeData.events).forEach(eventTypeData => {
+                Object.values(currentEmployeeData.events).forEach(eventTypeData => {
                   if (eventTypeData && typeof eventTypeData === 'object') {
                     Object.values(eventTypeData).forEach(eventData => {
                       if (eventData && eventData.scheduled && eventData.date) {
@@ -338,9 +341,10 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
   // Load global events for this user
   const loadGlobalEvents = useCallback(async (force = false) => {
     if (!userId) return;
-    if (loadingGlobalEvents && !force) return;
+    if (loadingGlobalEventsRef.current && !force) return;
     if (globalEventsLoadedRef.current && !force) return;
-    
+
+    loadingGlobalEventsRef.current = true;
     setLoadingGlobalEvents(true);
     try {
       console.log(`${DEBUG_PREFIX} Loading global events for user: ${userId} (force: ${force})`);
@@ -399,17 +403,20 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       setGlobalEvents([]);
       globalEventsLoadedRef.current = true;
     } finally {
+      loadingGlobalEventsRef.current = false;
       setLoadingGlobalEvents(false);
     }
   }, [userId]);
 
-  // Load global events when user changes
+  // Load global events when user changes or event types finish loading.
+  // In-flight status is read from a ref, not state, so a finished load does
+  // not re-run this effect (that would reset the loaded flag and re-fetch in a loop).
   useEffect(() => {
-    if (userId && !loadingEventTypes && !loadingGlobalEvents) {
+    if (userId && !loadingEventTypes && !loadingGlobalEventsRef.current) {
       globalEventsLoadedRef.current = false; // Reset the ref when user changes
       loadGlobalEvents();
     }
-  }, [userId, loadingEventTypes]); // Removed loadGlobalEvents from dependencies to prevent loop
+  }, [userId, loadingEventTypes, loadGlobalEvents]); // loadGlobalEvents only changes with userId
 
   // FIXED: Enhanced attendance stats with comprehensive event matching and statistics integration
   const attendanceStats = useMemo(() => {
@@ -764,7 +771,7 @@ const StatsSection = ({ employeeDetails, employeeId, onRefresh }) => {
       subscriptionsRef.current.forEach(unsubscribe => unsubscribe());
       subscriptionsRef.current = [];
     };
-  }, [userId, loadingEventTypes, loadEmployeeData]);
+  }, [userId, loadingEventTypes, loadEmployeeData, loadGlobalEvents]);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {

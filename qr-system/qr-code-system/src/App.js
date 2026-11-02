@@ -23,7 +23,6 @@ import AccountSettings from './components/AccountSettings';
 import QRScannerPage from './components/QRSCANNER/index';
 import EmployeeProfile from './components/EmployeeProfile/EmployeeProfile';
 import StatDetails from './components/SuperAdmin/StatDetails';
-import UserProfile from './components/UserProfile/UserDashboard';
 import UserDashboard from './components/UserProfile/UserDashboard';
 
 /* Lazy imports */
@@ -61,7 +60,9 @@ function AppContent() {
         {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<Login />} />
-        <Route path="employee-list" element={<EmployeeListPage />} />
+
+        {/* Admin-only: shows every user's name, location and attendance */}
+        <Route path="/employee-list" element={<PrivateRoute requiredRole="ADMIN"><EmployeeListPage /></PrivateRoute>} />
 
         {/* Employee Routes */}
         <Route path="/dashboard" element={<PrivateRoute requiredRole="EMPLOYEE"><UserDashboard /></PrivateRoute>} />

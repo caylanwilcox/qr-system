@@ -1,5 +1,5 @@
 import React, { useState, memo, useEffect } from 'react';
-import { Calendar, Users, Clock, X, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, ChevronRight } from 'lucide-react';
 import moment from 'moment-timezone';
 
 /**

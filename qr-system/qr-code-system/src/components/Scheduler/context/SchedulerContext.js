@@ -1,6 +1,6 @@
 // src/components/Scheduler/context/SchedulerContext.js
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { ref, onValue, push, update, remove, get } from "firebase/database";
+import { ref, get } from "firebase/database";
 import { database } from '../../../services/firebaseConfig';
 import { useAuth } from '../../../services/authContext';
 import moment from 'moment-timezone';
@@ -8,9 +8,7 @@ import { eventBus, EVENTS } from '../../../services/eventBus';
 
 // Import the updated utility functions
 import { 
-  EVENT_TYPES, 
-  EVENT_TYPE_DISPLAY_NAMES, 
-  normalizeEventType,
+  EVENT_TYPES,
   getChicagoTime,
   createEventObject,
   EVENT_TYPE_TO_CATEGORY_MAP,
@@ -24,8 +22,7 @@ import {
   createEvent as serviceCreateEvent,
   updateEvent as serviceUpdateEvent,
   deleteEvent as serviceDeleteEvent,
-  assignEventParticipants,
-  canManageUser
+  assignEventParticipants
 } from '../../../services/schedulerService';
 
 // Create the context
@@ -562,7 +559,7 @@ export const SchedulerProvider = ({ children }) => {
     view,
     setView,
     date,
-    setDate,
+    // setDate is provided below as `setDate: setDateTime` (that later key always won)
     showEventDialog,
     setShowEventDialog,
     showAssignmentDialog,

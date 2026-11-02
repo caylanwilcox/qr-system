@@ -1,6 +1,6 @@
 // src/components/QRSCANNER/EventSelector.js
 import React from 'react';
-import { X, Clock, Users, Calendar, AlertCircle } from 'lucide-react';
+import { X, Clock, Users, AlertCircle } from 'lucide-react';
 import moment from 'moment-timezone';
 
 /**

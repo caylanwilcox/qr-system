@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Search, Users, User, Filter, Check, MapPin, AlertCircle, Loader2, UserPlus, Calendar } from 'lucide-react';
 import { useSchedulerContext } from '../context/SchedulerContext';
 import '../styles/ParticipantSelectionDialog.css';
@@ -168,7 +168,7 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
   };
 
   // Fetch users by specific location
-  const fetchUsersByLocation = async (location) => {
+  const fetchUsersByLocation = useCallback(async (location) => {
     if (!location) {
       console.log("No location provided to fetch users");
       return [];
@@ -249,7 +249,7 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
       // On error, fall back to all users
       return await fetchAllUsers();
     }
-  };
+  }, []);
 
   // Fetch users for selection
   useEffect(() => {
@@ -315,7 +315,7 @@ const ParticipantSelectionDialog = ({ eventId, onClose }) => {
     };
     
     fetchUsers();
-  }, [event, getManageableUsers, ensureUserScheduleNode]);
+  }, [event, getManageableUsers, ensureUserScheduleNode, fetchUsersByLocation]);
 
   // Save handler
   const handleSave = () => {

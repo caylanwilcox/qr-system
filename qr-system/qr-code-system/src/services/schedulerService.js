@@ -1,5 +1,5 @@
 // src/services/schedulerService.js - Updated with missing variables/exports
-import { ref, get, set, push, update, remove, query, orderByChild, equalTo } from 'firebase/database';
+import { ref, get, set, push, update, remove } from 'firebase/database';
 import { database } from './firebaseConfig';
 import { cacheService, CACHE_CONFIG } from './cacheService';
 import { eventBus, EVENTS } from './eventBus';

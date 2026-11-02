@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ref, get, set, update } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
 import { 
@@ -13,25 +13,15 @@ import {
   Shield,
   ShieldCheck,
   Search,
-  PlusCircle,
   ChevronDown,
   ChevronRight,
   UserPlus,
   Settings,
-  Home,
-  ArrowLeft,
   Eye,
   EyeOff,
-  Star,
   Building,
   Mail,
-  Phone,
-  Calendar,
-  Activity,
   TrendingUp,
-  MoreVertical,
-  Edit3,
-  Trash2,
   RefreshCw
 } from 'lucide-react';
 
@@ -134,20 +124,27 @@ const ManageAdmins = () => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
+  // Ref to the latest fetchLocationPermissions (assigned below its definition) so this
+  // mount-only effect can call it without re-running whenever `locations` changes.
+  const fetchLocationPermissionsRef = useRef(null);
+
   // Initial data loading
   useEffect(() => {
+    // Capture synchronously (before any await) so the mount-render closure is used, as before.
+    const fetchPermissionsOnMount = fetchLocationPermissionsRef.current;
+
     const fetchData = async () => {
       try {
         setLoading(true);
-        
+
         // First fetch locations so we have them available for other functions
-        await fetchLocations();
-        
+        const locationsResult = await fetchLocations();
+
         // Then fetch all other data in parallel
         const [adminsResult, usersResult, permissionsResult] = await Promise.all([
           fetchAdmins(),
           fetchRegularUsers(),
-          fetchLocationPermissions()
+          fetchPermissionsOnMount()
         ]);
         
         // Store the direct results first
@@ -158,7 +155,7 @@ const ManageAdmins = () => {
         console.log("Initial data loaded:", {
           admins: adminsResult.length,
           users: usersResult.length,
-          locations: locations.length,
+          locations: locationsResult.length,
           permissions: permissionsResult
         });
         
@@ -399,6 +396,7 @@ const ManageAdmins = () => {
       throw err;
     }
   };
+  fetchLocationPermissionsRef.current = fetchLocationPermissions;
 
   // Handle selecting a location to manage
   const handleLocationSelect = (location) => {
@@ -449,9 +447,6 @@ const ManageAdmins = () => {
           }
         });
       }
-      
-      // Use location name if key not found
-      const locationIdentifier = locationKey || selectedLocation;
       
       // Get the admin IDs that are selected
       const selectedAdminIds = Object.entries(selectedAdmins)
@@ -590,12 +585,6 @@ const ManageAdmins = () => {
     ).length;
   };
 
-  // Get admin name by ID
-  const getAdminName = (adminId) => {
-    const admin = admins.find(a => a.id === adminId);
-    return admin ? admin.name : 'Unknown Admin';
-  };
-
   // Get filtered admins based on search and filters
   const getFilteredAdmins = () => {
     return admins.filter(admin => {
@@ -719,12 +708,6 @@ const ManageAdmins = () => {
       }
     });
     setShowConfirmModal(true);
-  };
-
-  // Clear all messages
-  const clearMessages = () => {
-    setError(null);
-    setSuccessMessage('');
   };
 
   // Loading overlay component

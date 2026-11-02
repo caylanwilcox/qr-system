@@ -1,6 +1,6 @@
 // src/components/QRSCANNER/QRScannerPage.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, X, Calendar, CheckCircle, AlertCircle, ExternalLink, Clock, LogOut, LogIn } from 'lucide-react';
+import { Settings, X, CheckCircle, AlertCircle, ExternalLink, LogOut, LogIn } from 'lucide-react';
 import { ref, get, set, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { useAuth } from '../../services/authContext';
@@ -31,9 +31,9 @@ const QRScannerPage = () => {
   const [locations, setLocations] = useState([]);
   const [eventTypes, setEventTypes] = useState({});
   const [eventTypeDisplayNames, setEventTypeDisplayNames] = useState({});
-  const [meetingTypes, setMeetingTypes] = useState([]);
+  const [meetingTypes] = useState([]);
   const [selectedMeeting, setSelectedMeetting] = useState('');
-  const [scheduledEvents, setScheduledEvents] = useState([]);
+  const [scheduledEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   // Refs to track current state for callbacks
@@ -161,7 +161,7 @@ const QRScannerPage = () => {
   }, []);
 
   // FIXED: Process clock-in with unique record creation - no overwriting
-  const processClockIn = async (userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation, currentEventType) => {
+  const processClockIn = useCallback(async (userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation, currentEventType) => {
     console.log('🔍 Processing clock-in');
     
     // FIXED: Use Chicago timezone for time calculations
@@ -345,10 +345,10 @@ const QRScannerPage = () => {
     }  
     
     setMessage(`Successfully clocked in: ${userName}. Check the dashboard to see real-time updates!`);
-  };
+  }, [eventTypeDisplayNames]);
 
   // FIXED: Process clock-out with unique record creation - no overwriting
-  const processClockOut = async (userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation) => {
+  const processClockOut = useCallback(async (userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation) => {
     console.log('🔍 Processing clock-out');
     
     // FIXED: Use Chicago timezone for time calculations
@@ -474,7 +474,7 @@ const QRScannerPage = () => {
     }
     
     setMessage(`Successfully clocked out: ${userName}. Hours worked: ${hoursWorked.toFixed(2)}`);
-  };
+  }, []);
 
   // FIXED: Enhanced event emission with error handling
   const emitClockEvents = (userId, locationKey, locationValue, now, type, isLate = false, eventType = null, eventId = null) => {
@@ -635,7 +635,7 @@ const QRScannerPage = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, eventTypeDisplayNames]);
+  }, [isProcessing, processClockIn, processClockOut]);
 
   // Debug function to test timezone calculations
   const debugTimezone = () => {
@@ -737,7 +737,7 @@ const QRScannerPage = () => {
         if (userData.events[eventType]) {
           const events = userData.events[eventType];
           
-          for (const [eventId, eventData] of Object.entries(events)) {
+          for (const [, eventData] of Object.entries(events)) {
             if (eventData && eventData.scheduled) {
               // Check if event is for today
               if (eventData.date) {
@@ -869,7 +869,7 @@ const QRScannerPage = () => {
     
     // Check statistics for assigned events
     if (userData.statistics) {
-      for (const [eventId, statEntry] of Object.entries(userData.statistics)) {
+      for (const [, statEntry] of Object.entries(userData.statistics)) {
         if (statEntry && statEntry.date === dateStr && statEntry.status === 'assigned') {
           // If we have event data with scheduled time, use it
           if (statEntry.eventTime) {

@@ -15,10 +15,7 @@ import {
   User,
   Calendar,
   Search,
-  Filter,
-  Settings,
   AlertCircle,
-  MoreHorizontal,
   Lock,
   RefreshCw  // Add this import
 } from 'lucide-react';
@@ -61,7 +58,7 @@ const CodesEditor = () => {
 
   // Get the current user and determine if they're a super_admin
   const { user } = useAuth();
-  const [userRole, setUserRole] = useState('');
+  const [, setUserRole] = useState('');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // Get active category definition

@@ -15,7 +15,6 @@ import {
   Shield, 
   CheckCircle, 
   MapPin,
-  User,
   ChevronRight,
   Settings
 } from 'lucide-react';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { User, CreditCard, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Carousel Dots Component

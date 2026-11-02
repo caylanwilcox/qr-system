@@ -1,6 +1,5 @@
 // src/components/ClockedInList.js - Rewritten with event handling and improved detection
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
 import { Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import moment from 'moment-timezone';
 import { eventBus, EVENTS } from '../../services/eventBus';
@@ -42,7 +41,6 @@ const StatusBadge = ({ clockInTime, userData, date }) => {
         // Use the original 9:00 AM logic as fallback when events are scheduled
         // TODO: In the future, compare against actual event start times
         const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-        const expectedTime = new Date(`2000-01-01 09:00`);
         const lateTime = new Date(`2000-01-01 09:15`);
 
         if (clockInTime9AM > lateTime) {
@@ -105,25 +103,6 @@ const formatDateAlt = (isoDate, formatStr) => {
   }
 };
 
-// Helper function to get user's full name from various possible fields
-const getUserFullName = (user) => {
-  const profile = user.profile || {};
-  
-  // Priority order for name fields
-  if (profile.firstName && profile.lastName) {
-    return `${profile.firstName} ${profile.lastName}`;
-  }
-  
-  if (profile.name) return profile.name;
-  if (profile.displayName) return profile.displayName;
-  if (profile.fullName) return profile.fullName;
-  
-  if (profile.firstName) return profile.firstName;
-  if (profile.lastName) return profile.lastName;
-  
-  return `Unknown User (${user.id?.substring(0, 5) || 'N/A'})`;
-};
-
 const ClockedInList = ({ data = [], date }) => {
   const [clockedInUsers, setClockedInUsers] = useState([]);
   const [debug, setDebug] = useState({ 
@@ -149,80 +128,6 @@ const ClockedInList = ({ data = [], date }) => {
     chicagoNow: moment().tz('America/Chicago').format('YYYY-MM-DD HH:mm:ss Z'),
     utcNow: new Date().toISOString()
   });
-  
-  // Helper to check if a user has clocked in with the correct date
-  const hasClockInWithCorrectDate = useCallback((user, date) => {
-    if (!user) return false;
-    
-    // FIXED: Use Chicago timezone for date comparison
-    const targetDateChicago = moment.tz(date, 'America/Chicago');
-    const targetDateStr = targetDateChicago.format('YYYY-MM-DD');
-    
-    // Method 1: Check clockInTimes object
-    if (user.clockInTimes) {
-    for (const timestamp in user.clockInTimes) {
-      try {
-          // FIXED: Convert timestamp to Chicago timezone for comparison
-          const clockInChicago = moment(parseInt(timestamp)).tz('America/Chicago');
-          const dateString = clockInChicago.format('YYYY-MM-DD');
-        
-        if (dateString === targetDateStr) {
-          return true;
-        }
-      } catch (e) {
-        console.error('Error parsing timestamp:', e);
-        }
-      }
-    }
-    
-    // Method 2: Check user events structure (where QR scanner writes data)
-    if (user.events) {
-      // Check all event types for attendance on the target date
-      for (const [eventType, events] of Object.entries(user.events)) {
-        if (!events || typeof events !== 'object') continue;
-        
-        for (const [eventId, eventData] of Object.entries(events)) {
-          if (!eventData || typeof eventData !== 'object') continue;
-          
-          // Check if this event was attended on the target date
-          if (eventData.attended === true && eventData.date === targetDateStr) {
-            console.log(`${DEBUG_PREFIX} User has attended ${eventType} event on ${targetDateStr}`);
-            return true;
-          }
-          
-          // Also check if the event ID contains the target date (QR scanner format)
-          if (eventData.attended === true && eventId.startsWith(targetDateStr)) {
-            console.log(`${DEBUG_PREFIX} User has QR scan attendance for ${eventType} on ${targetDateStr}`);
-            return true;
-          }
-        }
-      }
-    }
-    
-    // Method 3: Check clockedIn flag with date validation
-    if (user.clockedIn === true) {
-      // Check if clockedInDate matches
-      if (user.clockedInDate === targetDateStr) {
-        return true;
-      }
-      
-      // Check if clockedInTimestamp is from today
-      if (user.clockedInTimestamp) {
-        try {
-          // FIXED: Convert timestamp to Chicago timezone for comparison
-          const clockedInChicago = moment(parseInt(user.clockedInTimestamp)).tz('America/Chicago');
-          const clockedInDateStr = clockedInChicago.format('YYYY-MM-DD');
-          if (clockedInDateStr === targetDateStr) {
-            return true;
-          }
-        } catch (e) {
-          console.error('Error parsing clockedInTimestamp:', e);
-        }
-      }
-    }
-    
-    return false;
-  }, []);
   
   // Process data to find clocked in users
   const processData = useCallback((force = false) => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../services/firebaseConfig';
-import { User, TrendingUp, TrendingDown, Search, Loader2, UserCircle, MapPin, ChevronLeft, Award } from 'lucide-react';
+import { TrendingUp, TrendingDown, Search, Loader2, ChevronLeft, Award } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './EmployeeListPage.css';
 
@@ -58,36 +58,41 @@ const EmployeeList = () => {
   useEffect(() => {
     if (location.state) {
       console.log("Location state received in EmployeeList:", location.state);
-      const newFilters = { ...activeFilters };
-      
+      // Collect only the filters provided by location.state, then merge them into
+      // the current filters via a functional update (avoids reading activeFilters here).
+      const filterUpdates = {};
+
       if (location.state.filter) {
         // Handle service filter (RSG, COM)
         if (['RSG', 'COM'].includes(location.state.filter)) {
-          newFilters.service = location.state.filter;
+          filterUpdates.service = location.state.filter;
         }
-        
+
         // Handle color filter (padrinosBlue, padrinosGreen, etc.)
         if (location.state.filter.startsWith('padrinos')) {
           const colorValue = location.state.filter.replace('padrinos', '').toLowerCase();
           console.log("Setting color filter to:", colorValue);
-          newFilters.color = colorValue;
+          filterUpdates.color = colorValue;
         }
       }
-      
+
       // Handle direct color parameter (for combined filters)
       if (location.state.color) {
         console.log("Setting color filter from direct parameter:", location.state.color);
-        newFilters.color = location.state.color;
+        filterUpdates.color = location.state.color;
       }
-      
+
       // Handle location filter with additional normalization
       if (location.state.location) {
         console.log("Setting location filter to:", location.state.location);
-        newFilters.location = location.state.location;
+        filterUpdates.location = location.state.location;
       }
-      
-      console.log("New filters:", newFilters);
-      setActiveFilters(newFilters);
+
+      setActiveFilters(prevFilters => {
+        const newFilters = { ...prevFilters, ...filterUpdates };
+        console.log("New filters:", newFilters);
+        return newFilters;
+      });
     }
   }, [location.state]);
 
