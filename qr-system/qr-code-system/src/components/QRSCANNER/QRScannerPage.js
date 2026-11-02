@@ -1,7 +1,7 @@
 // src/components/QRSCANNER/QRScannerPage.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Settings, X, CheckCircle, AlertCircle, ExternalLink, LogOut, LogIn } from 'lucide-react';
-import { ref, get, set, update } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { useAuth } from '../../services/authContext';
 import { eventBus, EVENTS } from '../../services/eventBus';
@@ -9,6 +9,29 @@ import { useNavigate } from 'react-router-dom';
 import Scanner from './Scanner';
 import SettingsPanel from './SettingsPanel';
 import moment from 'moment-timezone';
+import {
+  normalizeEventType,
+  splitOpenClockIns,
+  pickOpenClockIn,
+  sharedPathFor,
+  staleClockInUpdates,
+  findEventsToMarkAttended,
+  composeClockInUpdates,
+  composeClockOutUpdates
+} from '../../utils/attendanceRules';
+
+// Shared attendance copies of forgotten clock-ins that exist. Writing a status
+// to a copy that doesn't exist would create a stray partial record.
+async function existingSharedPaths(userId, staleRecords) {
+  try {
+    const paths = staleRecords.map((item) => sharedPathFor(item, userId)).filter(Boolean);
+    const snapshots = await Promise.all(paths.map((path) => get(ref(database, path))));
+    return paths.filter((_, index) => snapshots[index].exists());
+  } catch (error) {
+    console.error('🔍 Could not check shared attendance records:', error);
+    return [];
+  }
+}
 
 /**
  * Main QR Scanner page component with Clock-In and Clock-Out support
@@ -38,6 +61,9 @@ const QRScannerPage = () => {
 
   // Refs to track current state for callbacks
   const currentStateRef = useRef({ location: '', eventType: '', mode: 'clock-in' });
+  // Set synchronously on scan. The isProcessing state lags a render behind,
+  // which let two quick scans of the same badge both get through.
+  const processingRef = useRef(false);
 
   console.log('🔍 QRScannerPage render - current state:', { location, eventType, mode, isProcessing });
   
@@ -161,7 +187,7 @@ const QRScannerPage = () => {
   }, []);
 
   // FIXED: Process clock-in with unique record creation - no overwriting
-  const processClockIn = useCallback(async (userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation, currentEventType) => {
+  const processClockIn = useCallback(async (userId, userData, now, timestamp, currentDate, formattedTime, currentLocation, currentEventType) => {
     console.log('🔍 Processing clock-in');
     
     // FIXED: Use Chicago timezone for time calculations
@@ -189,26 +215,17 @@ const QRScannerPage = () => {
     const eventTypeValue = typeof currentEventType === 'object' ? (currentEventType.name || 'Unknown') : currentEventType;
     const userName = typeof userData.name === 'object' ? 'Unknown User' : (userData.name || 'Unknown User');
     const position = userData.profile?.position || 'Member';
-    
+
+    // One open clock-in at a time. Forgotten clock-ins from earlier days are
+    // closed as missed below instead of blocking the person forever.
+    const { openToday, stale } = splitOpenClockIns(userData.attendance, currentDate);
+    if (openToday.length > 0) {
+      const since = openToday[0].record.clockInTime;
+      throw new Error(`${userName} is already clocked in${since ? ` since ${since}` : ''}. Use Clock Out to end that shift first.`);
+    }
+
     // Normalize event type for consistent storage
-    let normalizedEventType = eventTypeValue.toLowerCase().replace(/\s+/g, '');
-    
-    const eventTypeMap = {
-      'general': 'generalmeeting',
-      'generalmeeting': 'generalmeeting',
-      'juntahacienda': 'juntahacienda',
-      'junta_hacienda': 'juntahacienda',
-      'juntadehacienda': 'juntahacienda',
-      'meeting': 'meetings',
-      'meetings': 'meetings',
-      'workshop': 'workshops',
-      'workshops': 'workshops',
-      'hacienda': 'haciendas',
-      'haciendas': 'haciendas',
-      'gestion': 'gestion'
-    };
-    
-    normalizedEventType = eventTypeMap[normalizedEventType] || normalizedEventType;
+    const normalizedEventType = normalizeEventType(eventTypeValue);
     console.log('🔍 Normalized Event Type:', normalizedEventType);
     
     // CRITICAL FIX: Create unique attendance record key using timestamp to prevent overwriting
@@ -295,16 +312,66 @@ const QRScannerPage = () => {
       });
     }
     
-    console.log('🔍 Clock-in updates to be applied:', userUpdates);
-    
+    // Close forgotten clock-ins from earlier days.
+    Object.assign(userUpdates, staleClockInUpdates(stale, timestamp));
+
+    // Scheduled events this scan should mark attended: events the user is a
+    // participant in, running today, with the scanned event type.
+    let attendedEventIds = [];
     try {
-      await update(userRef, userUpdates);
+      const scheduledIds = Object.keys(userData.schedule || {});
+      const snapshots = await Promise.all(scheduledIds.map((id) => get(ref(database, `events/${id}`))));
+      const scheduledEvents = snapshots
+        .filter((snapshot) => snapshot.exists())
+        .map((snapshot) => ({ id: snapshot.key, data: snapshot.val() }));
+      attendedEventIds = findEventsToMarkAttended({
+        events: scheduledEvents,
+        userId,
+        dateStr: currentDate,
+        eventType: eventTypeValue,
+        locationKey
+      });
+    } catch (error) {
+      // The clock-in still goes ahead; the event can be marked by hand.
+      console.error('🔍 Could not check scheduled events:', error);
+    }
+
+    // The shared attendance record that Reports reads.
+    const globalAttendanceData = {
+      userId,
+      name: userName,
+      position,
+      location: locationKey,
+      locationName: locationValue,
+      clockInTime: chicagoNow.toISOString(),
+      clockInTimestamp: timestamp,
+      isLate,
+      status: 'clocked-in',
+      eventType: normalizedEventType
+    };
+
+    // One atomic write: the user's record, the shared record and event
+    // attendance all save together or not at all.
+    const updates = composeClockInUpdates({
+      userId,
+      userUpdates,
+      sharedPath: `attendance/${locationKey}/${currentDate}/${userId}`,
+      sharedRecord: globalAttendanceData,
+      attendedEventIds,
+      attendedAt: chicagoNow.toISOString(),
+      staleSharedPaths: await existingSharedPaths(userId, stale)
+    });
+
+    console.log('🔍 Clock-in updates to be applied:', updates);
+
+    try {
+      await update(ref(database), updates);
       console.log('🔍 Clock-in updates applied successfully');
     } catch (error) {
       console.error('🔍 Error applying clock-in updates:', error);
       throw error;
     }
-    
+
     // Set employee info for display
     setEmployeeInfo({
       ...userData,
@@ -323,32 +390,18 @@ const QRScannerPage = () => {
     // Emit events
     emitClockEvents(userId, locationKey, locationValue, chicagoNow.toDate(), 'clock-in', isLate, normalizedEventType, eventId); // FIXED: Use Chicago timezone
     
-    // After updating user record, also write to global attendance collection to ensure correct date
-    try {
-      const globalAttendanceRef = ref(database, `attendance/${locationKey}/${currentDate}/${userId}`);
-      const globalAttendanceData = {
-        userId,
-        name: userName,
-        position,
-        location: locationKey,
-        locationName: locationValue,
-        clockInTime: chicagoNow.toISOString(),
-        clockInTimestamp: timestamp,
-        isLate,
-        status: 'clocked-in',
-        eventType: normalizedEventType
-      };
-      await set(globalAttendanceRef, globalAttendanceData);
-      console.log('🔍 Global attendance record written successfully');
-    } catch (err) {
-      console.error('🔍 Error writing global attendance record:', err);
-    }  
-    
-    setMessage(`Successfully clocked in: ${userName}. Check the dashboard to see real-time updates!`);
+    const notes = [];
+    if (attendedEventIds.length > 0) {
+      notes.push(`Marked attended for ${attendedEventIds.length} scheduled event(s).`);
+    }
+    if (stale.length > 0) {
+      notes.push(`${stale.length} earlier clock-in(s) without a clock-out were marked missed.`);
+    }
+    setMessage(`Successfully clocked in: ${userName}. ${notes.join(' ')}`.trim());
   }, [eventTypeDisplayNames]);
 
   // FIXED: Process clock-out with unique record creation - no overwriting
-  const processClockOut = useCallback(async (userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation) => {
+  const processClockOut = useCallback(async (userId, userData, now, timestamp, currentDate, formattedTime, currentLocation) => {
     console.log('🔍 Processing clock-out');
     
     // FIXED: Use Chicago timezone for time calculations
@@ -359,17 +412,12 @@ const QRScannerPage = () => {
     let mostRecentClockIn = null;
     let clockInTimestamp = null;
     
-    if (userData.attendance) {
-      Object.entries(userData.attendance).forEach(([key, record]) => {
-        // Look for records from today that are clocked in but not clocked out
-        if (key.startsWith(currentDate) && record.clockedIn === true && record.status === 'clocked-in') {
-          if (!mostRecentClockIn || record.clockInTimestamp > mostRecentClockIn.clockInTimestamp) {
-            mostRecentClockIn = record;
-            mostRecentClockInKey = key;
-            clockInTimestamp = record.clockInTimestamp;
-          }
-        }
-      });
+    // Today's open clock-in, or one from last night if the shift crossed midnight.
+    const { open, stale } = pickOpenClockIn(userData.attendance, currentDate, timestamp);
+    if (open) {
+      mostRecentClockInKey = open.key;
+      mostRecentClockIn = open.record;
+      clockInTimestamp = mostRecentClockIn.clockInTimestamp;
     }
     
     // If no active clock-in found, check if user is marked as clocked in
@@ -378,15 +426,32 @@ const QRScannerPage = () => {
       clockInTimestamp = userData.clockedInTimestamp || (timestamp - (8 * 60 * 60 * 1000)); // Default to 8 hours ago
     }
     
+    const userName = typeof userData.name === 'object' ? 'Unknown User' : (userData.name || 'Unknown User');
+
     if (!clockInTimestamp) {
+      // Nothing open today. A clock-in from an earlier day that was never
+      // closed is marked missed, so the person isn't stuck "clocked in".
+      const staleFlag = userData.clockedIn === true
+        && Boolean(userData.clockedInDate)
+        && userData.clockedInDate < currentDate;
+      if (stale.length > 0 || staleFlag) {
+        const fixes = composeClockOutUpdates({
+          userId,
+          userUpdates: { ...staleClockInUpdates(stale, timestamp), clockedIn: false },
+          sharedPath: null,
+          staleSharedPaths: await existingSharedPaths(userId, stale)
+        });
+        await update(ref(database), fixes);
+        setMessage(`No clock-in found today for ${userName}. An earlier clock-in that was never closed is now marked missed. Please clock in first.`);
+        return;
+      }
       throw new Error('No active clock-in found for today. Please clock in first.');
     }
     
     const locationValue = typeof currentLocation === 'object' ? (currentLocation.name || currentLocation.key || 'Unknown') : currentLocation;
     const locationKey = locationValue.toLowerCase().replace(/\s+/g, '');
-    const userName = typeof userData.name === 'object' ? 'Unknown User' : (userData.name || 'Unknown User');
     const position = userData.profile?.position || 'Member';
-    
+
     // Calculate hours worked
     const hoursWorked = (timestamp - clockInTimestamp) / (1000 * 60 * 60);
     console.log(`🔍 Calculated hours worked: ${hoursWorked.toFixed(2)}`);
@@ -432,10 +497,28 @@ const QRScannerPage = () => {
       console.log(`🔍 Created clock-out only record: ${uniqueAttendanceKey}`);
     }
     
-    console.log('🔍 Clock-out updates to be applied:', userUpdates);
+    // Close forgotten clock-ins from earlier days too.
+    Object.assign(userUpdates, staleClockInUpdates(stale, timestamp));
+
+    // One atomic write for the user's record and the shared record. The shared
+    // record lives under the clock-in's own location and date, which can
+    // differ from the scanner's current location.
+    const updates = composeClockOutUpdates({
+      userId,
+      userUpdates,
+      sharedPath: open ? sharedPathFor(open, userId, locationKey) : null,
+      clockOut: {
+        time: chicagoNow.toISOString(),
+        timestamp,
+        hoursWorked: hoursWorked.toFixed(2)
+      },
+      staleSharedPaths: await existingSharedPaths(userId, stale)
+    });
+
+    console.log('🔍 Clock-out updates to be applied:', updates);
     
     try {
-      await update(userRef, userUpdates);
+      await update(ref(database), updates);
       console.log('🔍 Clock-out updates applied successfully');
     } catch (error) {
       console.error('🔍 Error applying clock-out updates:', error);
@@ -458,20 +541,6 @@ const QRScannerPage = () => {
     // Emit events
     emitClockEvents(userId, locationKey, locationValue, chicagoNow.toDate(), 'clock-out', false); // FIXED: Use Chicago timezone
     
-    // After user record update, also update global attendance record for today
-    try {
-      const globalAttendanceRef = ref(database, `attendance/${locationKey}/${currentDate}/${userId}`);
-      const updateData = {
-        clockOutTime: chicagoNow.toISOString(),
-        clockOutTimestamp: timestamp,
-        hoursWorked: hoursWorked.toFixed(2),
-        status: 'completed'
-      };
-      await update(globalAttendanceRef, updateData);
-      console.log('🔍 Global attendance record (clock-out) updated');
-    } catch (err) {
-      console.error('🔍 Error updating global attendance record (clock-out):', err);
-    }
     
     setMessage(`Successfully clocked out: ${userName}. Hours worked: ${hoursWorked.toFixed(2)}`);
   }, []);
@@ -528,11 +597,11 @@ const QRScannerPage = () => {
       currentLocation, 
       currentEventType,
       currentMode,
-      isProcessing 
+      processing: processingRef.current
     });
-    
+
     // CRITICAL FIX: Validate inputs more thoroughly
-    if (isProcessing) {
+    if (processingRef.current) {
       console.log('🔍 Scan blocked: Already processing');
       setMessage('Processing in progress...');
       return;
@@ -558,6 +627,7 @@ const QRScannerPage = () => {
     }
 
     console.log('🔍 Scan proceeding with:', { location: currentLocation, eventType: currentEventType, mode: currentMode });
+    processingRef.current = true;
     setIsProcessing(true);
     setMessage(`Processing ${currentMode}...`);
 
@@ -624,18 +694,19 @@ const QRScannerPage = () => {
       
       // Process based on mode
       if (currentMode === 'clock-in') {
-        await processClockIn(userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation, currentEventType);
+        await processClockIn(userId, userData, now, timestamp, currentDate, formattedTime, currentLocation, currentEventType);
       } else {
-        await processClockOut(userId, userData, userRef, now, timestamp, currentDate, formattedTime, currentLocation);
+        await processClockOut(userId, userData, now, timestamp, currentDate, formattedTime, currentLocation);
       }
       
     } catch (error) {
       console.error('🔍 Scan error:', error);
       setMessage(`Error: ${error.message}`);
     } finally {
+      processingRef.current = false;
       setIsProcessing(false);
     }
-  }, [isProcessing, processClockIn, processClockOut]);
+  }, [processClockIn, processClockOut]);
 
   // Debug function to test timezone calculations
   const debugTimezone = () => {

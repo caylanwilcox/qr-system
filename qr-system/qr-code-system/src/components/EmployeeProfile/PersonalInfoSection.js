@@ -33,6 +33,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { calculatePadrinoColor, PADRINO_COLORS } from '../utils/padrinoColorCalculator';
+import { buildProfileUpdates, locationOptions, profileToForm } from './profileForm';
 
 const FormField = ({ label, icon, name, type = 'text', value, onChange, disabled, error, required, children }) => (
   <div className="form-group">
@@ -278,8 +279,9 @@ const PersonalInfoSection = ({
   userData, 
   isCurrentUser = false, 
   fetchUserData, 
-  locations = [], 
-  departments = [], 
+  locations = [],
+  locationsError = null,
+  departments = [],
   onPadrinoChange, 
   onPadrinoColorChange, 
   isAdminUser = false 
@@ -477,18 +479,13 @@ const PersonalInfoSection = ({
   // Update database with all form data
   const updateDatabaseWithAuthInfo = async () => {
     try {
-      const dbUpdates = {};
-      
-      // Update all form fields in the database
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && key !== 'password') {
-          dbUpdates[`users/${userId}/profile/${key}`] = value;
-          
-          // Also update certain fields at root level for backward compatibility
-          if (['name', 'email', 'location'].includes(key)) {
-            dbUpdates[`users/${userId}/${key}`] = value;
-          }
-        }
+      // Write only the fields that changed since the record was loaded, so a
+      // stale form can't undo role/status changes or blank the location.
+      const dbUpdates = buildProfileUpdates({
+        userId,
+        formData,
+        baseline: profileToForm(userData?.profile, userData?.location),
+        locations
       });
       
       // Maintain auth link
@@ -1019,12 +1016,15 @@ const PersonalInfoSection = ({
                 `}
               >
                 <option value="">Select Location</option>
-                {locations.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
+                {locationOptions(locations, userData?.profile, userData?.location).map((loc) => (
+                  <option key={loc.key} value={loc.key}>
+                    {loc.name}
                   </option>
                 ))}
               </select>
+              {locationsError && (
+                <p className="mt-1 text-xs text-red-400">{locationsError}</p>
+              )}
             </FormField>
 
             <FormField

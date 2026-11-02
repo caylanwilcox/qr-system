@@ -3,6 +3,7 @@ import { ref, get, set, push, update, remove } from 'firebase/database';
 import { database } from './firebaseConfig';
 import { cacheService, CACHE_CONFIG } from './cacheService';
 import { eventBus, EVENTS } from './eventBus';
+import { buildParticipantUpdates } from '../utils/eventParticipants';
 
 // Cache keys
 const EVENTS_CACHE_KEY = 'cached_events';
@@ -45,8 +46,8 @@ export const getUserEvents = async (userId, includeManaged = false) => {
         if (eventSnapshot.exists()) {
           const eventData = eventSnapshot.val();
           events.push({
-            id: eventId,
             ...eventData,
+            id: eventId, // the database key wins over any stored id
             start: new Date(eventData.start),
             end: new Date(eventData.end)
           });
@@ -80,8 +81,8 @@ export const getUserEvents = async (userId, includeManaged = false) => {
               // Add event if it's in a managed location
               if (eventData.location && managedLocations.includes(eventData.location)) {
                 events.push({
-                  id: eventId,
                   ...eventData,
+                  id: eventId, // the database key wins over any stored id
                   start: new Date(eventData.start),
                   end: new Date(eventData.end)
                 });
@@ -128,7 +129,10 @@ export const createEvent = async (eventData, userId) => {
       createdBy: userId,
       createdAt: new Date().toISOString()
     };
-    
+    // The database key is the event's id. A stored copy (createEventObject
+    // adds a made-up "event-<time>" one) overrode the key on read.
+    delete formattedEvent.id;
+
     await set(newEventRef, formattedEvent);
     
     // Clear event cache
@@ -167,7 +171,10 @@ export const updateEvent = async (eventId, eventData, userId) => {
       updatedBy: userId,
       updatedAt: new Date().toISOString()
     };
-    
+    // Never store the key inside the event; null also erases a stale copy
+    // that older code saved.
+    formattedEvent.id = null;
+
     await update(eventRef, formattedEvent);
     
     // Clear event cache
@@ -242,29 +249,25 @@ export const deleteEvent = async (eventId, userId) => {
  */
 export const assignEventParticipants = async (eventId, participantIds, userId) => {
   try {
-    const updates = {};
-    
-    // 1. Add participants to event
-    const participants = {};
-    participantIds.forEach(id => {
-      participants[id] = true;
+    const eventSnapshot = await get(ref(database, `events/${eventId}`));
+    if (!eventSnapshot.exists()) {
+      throw new Error(`Event ${eventId} not found`);
+    }
+    const eventData = eventSnapshot.val();
+
+    // Diff against the current participants so existing attendance survives.
+    const { updates, added, removed } = buildParticipantUpdates({
+      eventId,
+      existing: eventData.participants,
+      nextIds: participantIds,
+      changedBy: userId,
+      now: new Date().toISOString()
     });
-    
-    updates[`events/${eventId}/participants`] = participants;
-    updates[`events/${eventId}/updatedBy`] = userId;
-    updates[`events/${eventId}/updatedAt`] = new Date().toISOString();
-    
-    // 2. Add event to each participant's schedule
-    participantIds.forEach(id => {
-      updates[`users/${id}/schedule/${eventId}`] = true;
-    });
-    
-    // Apply updates
     await update(ref(database), updates);
     
     // Clear caches
     await cacheService.remove(EVENTS_CACHE_KEY + '_' + userId);
-    participantIds.forEach(async id => {
+    [...participantIds, ...removed].forEach(async id => {
       await cacheService.remove(EVENTS_CACHE_KEY + '_' + id);
     });
     
@@ -276,17 +279,14 @@ export const assignEventParticipants = async (eventId, participantIds, userId) =
       participants: participantIds
     });
     
-    // --- EMAIL NOTIFICATION ---
-    // Fetch event details
-    const eventRef = ref(database, `events/${eventId}`);
-    const eventSnapshot = await get(eventRef);
-    if (eventSnapshot.exists()) {
-      const eventData = eventSnapshot.val();
+    // Email only the people just added; re-saving shouldn't re-notify everyone.
+    if (added.length > 0) {
       // Dynamically import email service to avoid circular deps
       const { sendEventNotifications } = await import('./emailService');
-      sendEventNotifications(eventData, participantIds);
+      sendEventNotifications(eventData, added).catch((error) => {
+        console.error('Error sending event notifications:', error);
+      });
     }
-    // --- END EMAIL NOTIFICATION ---
   } catch (error) {
     console.error('Error assigning participants:', error);
     throw error;

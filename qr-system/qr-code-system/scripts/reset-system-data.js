@@ -1,79 +1,205 @@
 // scripts/reset-system-data.js
-// Run with: node scripts/reset-system-data.js
+//
+// Deletes ALL attendance, events and deleted-user backups in the production
+// database, and clears every user's schedule, attendance, events and stats.
+// There is no undo.
+//
+//   Dry run (default, deletes nothing):  node scripts/reset-system-data.js
+//   Delete:                              node scripts/reset-system-data.js --apply
+//
+// --apply asks you to type the project id, then saves a backup of everything
+// it deletes to ~/qr-system-backups/ before deleting. The backup is kept
+// outside the repo because it contains personal data.
 
-const admin = require('firebase-admin');
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const readline = require('readline');
 
-// Service-account credentials come from environment variables (see .env.example). Never commit them.
-const serviceAccount = {
-  type: "service_account",
-  project_id: process.env.FIREBASE_PROJECT_ID,
-  private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-  client_id: process.env.FIREBASE_CLIENT_ID,
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
-};
+const TOP_LEVEL_NODES = ['attendance', 'events', 'deleted_users'];
 
-if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
-  console.error('Missing FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY or FIREBASE_CLIENT_EMAIL. Add them to .env (see .env.example).');
-  process.exit(1);
+// Every per-user field that holds attendance or schedule state. The clock
+// flags are included so nobody is left looking "clocked in" after a reset.
+const USER_FIELDS = [
+  'schedule',
+  'attendance',
+  'clockInTimes',
+  'clockOutTimes',
+  'events',
+  'statistics',
+  'stats',
+  'activityLog',
+  'clockedIn',
+  'clockedInDate',
+  'clockedInTimestamp',
+  'clockedOut',
+  'clockedOutDate',
+  'clockedOutTimestamp',
+];
+
+const isPadrino = (user) => Boolean(user && user.profile && user.profile.padrino);
+
+// One multi-path update, so the reset is all-or-nothing.
+function buildResetUpdates(users) {
+  const updates = {};
+  TOP_LEVEL_NODES.forEach((node) => {
+    updates[node] = null;
+  });
+  Object.entries(users || {}).forEach(([uid, user]) => {
+    USER_FIELDS.forEach((field) => {
+      updates[`users/${uid}/${field}`] = null;
+    });
+    if (isPadrino(user)) {
+      updates[`users/${uid}/profile/padrinoColor`] = 'blue';
+      updates[`users/${uid}/profile/padrinoColorCode`] = 'blue';
+      updates[`users/${uid}/profile/manualColorOverride`] = false;
+    }
+  });
+  return updates;
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://qr-system-1cea7-default-rtdb.firebaseio.com",
-});
-
-const db = admin.database();
-
-async function resetSystemData() {
-  try {
-    console.log('--- RESETTING ATTENDANCE DATA ---');
-    await db.ref('attendance').remove();
-    console.log('Attendance data cleared.');
-
-    console.log('--- RESETTING EVENT DATA ---');
-    await db.ref('events').remove();
-    console.log('Event data cleared.');
-
-    console.log('--- RESETTING DELETED USER BACKUPS ---');
-    await db.ref('deleted_users').remove();
-    console.log('Deleted user backups cleared.');
-
-    console.log('--- RESETTING USER DATA (schedules, attendance, events, statistics, stats, padrinoColor) ---');
-    const usersRef = db.ref('users');
-    const usersSnapshot = await usersRef.once('value');
-    const updates = {};
-    usersSnapshot.forEach(userSnap => {
-      const userId = userSnap.key;
-      const user = userSnap.val();
-      // Clear schedule, attendance, clockInTimes, events, statistics, stats
-      updates[`users/${userId}/schedule`] = null;
-      updates[`users/${userId}/attendance`] = null;
-      updates[`users/${userId}/clockInTimes`] = null;
-      updates[`users/${userId}/events`] = null;
-      updates[`users/${userId}/statistics`] = null;
-      updates[`users/${userId}/stats`] = null;
-      // Set padrinoColor and padrinoColorCode to blue and clear manualColorOverride if padrino is true
-      if (user.profile && user.profile.padrino) {
-        updates[`users/${userId}/profile/padrinoColor`] = 'blue';
-        updates[`users/${userId}/profile/padrinoColorCode`] = 'blue';
-        updates[`users/${userId}/profile/manualColorOverride`] = false;
-      }
+// Everything buildResetUpdates would delete or overwrite.
+function buildBackup(data) {
+  const backup = { takenAt: new Date().toISOString(), users: {} };
+  TOP_LEVEL_NODES.forEach((node) => {
+    backup[node] = data[node] === undefined ? null : data[node];
+  });
+  Object.entries(data.users || {}).forEach(([uid, user]) => {
+    const kept = {};
+    USER_FIELDS.forEach((field) => {
+      if (user && user[field] !== undefined) kept[field] = user[field];
     });
-    await db.ref().update(updates);
-    console.log('User schedules, attendance, events, statistics, stats cleared and all padrinos set to blue.');
+    if (isPadrino(user)) {
+      const { padrinoColor, padrinoColorCode, manualColorOverride } = user.profile;
+      kept.profile = { padrinoColor, padrinoColorCode, manualColorOverride };
+    }
+    if (Object.keys(kept).length > 0) backup.users[uid] = kept;
+  });
+  return backup;
+}
 
-    console.log('--- RESET COMPLETE ---');
-    process.exit(0);
+function summarize(data) {
+  const users = Object.values(data.users || {});
+  const lines = TOP_LEVEL_NODES.map(
+    (node) => `${node}: ${Object.keys(data[node] || {}).length} entries deleted`
+  );
+  USER_FIELDS.forEach((field) => {
+    const count = users.filter((user) => user && user[field] !== undefined).length;
+    if (count > 0) lines.push(`users/*/${field}: cleared on ${count} users`);
+  });
+  lines.push(`padrino colors reset to blue: ${users.filter(isPadrino).length} users`);
+  return lines;
+}
+
+function confirmationMatches(answer, projectId) {
+  return typeof answer === 'string' && Boolean(projectId) && answer.trim() === projectId;
+}
+
+// The database must belong to the project you confirm, e.g.
+// https://<project>-default-rtdb.firebaseio.com, so typing one project's id
+// can never delete another project's data.
+function databaseMatchesProject(databaseURL, projectId) {
+  if (!projectId) return false;
+  try {
+    const label = new URL(databaseURL).hostname.split('.')[0];
+    return label === projectId || label.startsWith(`${projectId}-`);
   } catch (error) {
-    console.error('Error resetting system data:', error);
-    process.exit(1);
+    return false;
   }
 }
 
-resetSystemData(); 
+function connect() {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+  const {
+    FIREBASE_PROJECT_ID: projectId,
+    FIREBASE_CLIENT_EMAIL: clientEmail,
+    FIREBASE_PRIVATE_KEY: privateKey,
+    FIREBASE_DATABASE_URL: databaseURL,
+  } = process.env;
+  if (!projectId || !clientEmail || !privateKey || !databaseURL) {
+    throw new Error(
+      'Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_DATABASE_URL. Add them to .env (see .env.example).'
+    );
+  }
+  const admin = require('firebase-admin');
+  admin.initializeApp({
+    credential: admin.credential.cert({ projectId, clientEmail, privateKey: privateKey.replace(/\\n/g, '\n') }),
+    databaseURL,
+  });
+  return { db: admin.database(), projectId, databaseURL };
+}
+
+async function loadData(db) {
+  const data = {};
+  for (const node of [...TOP_LEVEL_NODES, 'users']) {
+    data[node] = (await db.ref(node).once('value')).val();
+  }
+  return data;
+}
+
+function ask(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+function writeBackup(backup) {
+  const dir = path.join(os.homedir(), 'qr-system-backups');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = path.join(dir, `reset-${backup.takenAt.replace(/[:.]/g, '-')}.json`);
+  fs.writeFileSync(file, JSON.stringify(backup, null, 2), { mode: 0o600 });
+  return file;
+}
+
+async function main() {
+  const apply = process.argv.includes('--apply');
+  const { db, projectId, databaseURL } = connect();
+  if (!databaseMatchesProject(databaseURL, projectId)) {
+    throw new Error(`FIREBASE_DATABASE_URL (${databaseURL}) does not belong to project ${projectId}. Fix .env first.`);
+  }
+  const data = await loadData(db);
+
+  console.log(apply ? `RESET of ${databaseURL} will delete:` : `DRY RUN for ${databaseURL} (nothing is deleted):`);
+  summarize(data).forEach((line) => console.log(`  ${line}`));
+
+  if (!apply) {
+    console.log('\nRun with --apply to delete. You will be asked to type the project id.');
+    return;
+  }
+  if (!process.stdin.isTTY) {
+    throw new Error('Refusing to delete without an interactive terminal.');
+  }
+  const answer = await ask(`\nThis cannot be undone. Type the project id (${projectId}) to continue: `);
+  if (!confirmationMatches(answer, projectId)) {
+    console.log('Not confirmed. Nothing was deleted.');
+    return;
+  }
+
+  const file = writeBackup(buildBackup(data));
+  console.log(`Backup saved to ${file}. It contains personal data; keep it private.`);
+  await db.ref().update(buildResetUpdates(data.users));
+  console.log('Reset complete.');
+}
+
+if (require.main === module) {
+  main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(`Reset failed: ${error.message}`);
+      process.exit(1);
+    });
+}
+
+module.exports = {
+  buildResetUpdates,
+  buildBackup,
+  summarize,
+  confirmationMatches,
+  databaseMatchesProject,
+  USER_FIELDS,
+  TOP_LEVEL_NODES,
+};

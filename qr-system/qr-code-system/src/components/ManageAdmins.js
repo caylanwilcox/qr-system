@@ -620,7 +620,7 @@ const ManageAdmins = () => {
       });
       
       // Update local state
-      if (selectedRole === 'admin' || selectedRole === 'super-admin') {
+      if (selectedRole === 'admin' || selectedRole === 'super_admin') {
         // Move from regular users to admins
         const updatedRegularUsers = regularUsers.filter(u => u.id !== userToPromote.id);
         const updatedAdmins = [...admins, { ...userToPromote, role: selectedRole }];
@@ -652,7 +652,7 @@ const ManageAdmins = () => {
     if (!user.role || user.role.toLowerCase() === 'regular') {
       setSelectedRole('admin');
     } else if (user.role.toLowerCase() === 'admin') {
-      setSelectedRole('super-admin');
+      setSelectedRole('super_admin');
     }
     
     setShowRoleModal(true);
@@ -669,9 +669,10 @@ const ManageAdmins = () => {
       try {
         setLoading(true);
         
-        // Update user role to regular user
+        // Set an explicit role: a null role made the app fall back to the
+        // old login claim, so a demoted admin kept admin access.
         await update(ref(database, `users/${adminId}/profile`), {
-          role: null
+          role: 'employee'
         });
         
         // Remove from all management structures
@@ -682,7 +683,7 @@ const ManageAdmins = () => {
         const demotedAdmin = admins.find(a => a.id === adminId);
         if (demotedAdmin) {
           const updatedAdmins = admins.filter(a => a.id !== adminId);
-          const updatedRegularUsers = [...regularUsers, { ...demotedAdmin, role: null }];
+          const updatedRegularUsers = [...regularUsers, { ...demotedAdmin, role: 'employee' }];
           
           setAdmins(updatedAdmins);
           setRegularUsers(updatedRegularUsers);
@@ -1600,7 +1601,7 @@ const ManageAdmins = () => {
                 className="bg-gray-800 bg-opacity-60 border border-gray-600 rounded-lg p-3 text-white w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
               >
                 <option value="admin">Administrator</option>
-                <option value="super-admin">Super Administrator</option>
+                <option value="super_admin">Super Administrator</option>
               </select>
             </div>
             
@@ -1718,7 +1719,7 @@ const ManageAdmins = () => {
                 className="bg-gray-800 bg-opacity-60 border border-gray-600 rounded-lg p-3 text-white w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
               >
                 <option value="admin">Administrator</option>
-                <option value="super-admin">Super Administrator</option>
+                <option value="super_admin">Super Administrator</option>
               </select>
             </div>
             

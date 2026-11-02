@@ -17,6 +17,9 @@ import {
   formatScheduledDates,
 } from '../utils/employeeUtils';
 import { calculatePadrinoColor } from '../utils/padrinoColorCalculator';
+import { fetchLocations } from '../../services/locationService';
+import { ROLES, normalizeRole } from '../../utils/roles';
+import { profileToForm } from './profileForm';
 
 import './styles/EmployeeProfile.css';
 // Import the new carousel CSS
@@ -39,16 +42,6 @@ import ScheduleSection from './ScheduleSection';
 import IdCardSection from './IdCardSection';
 // Import the new carousel component
 import EmployeeProfileCarousel from './EmployeeProfileCarousel';
-
-const LOCATIONS = [
-  'Aurora',
-  'Agua Viva West Chicago',
-  'Agua Viva Lyons',
-  'Agua Viva Elgin R7',
-  'Agua Viva Joliet',
-  'Agua Viva Wheeling',
-  'Retreat',
-];
 
 const DEPARTMENTS = [
   // Example: 'Finance', 'IT', 'Operations' ...
@@ -102,6 +95,8 @@ const EmployeeProfile = () => {
   const [activeTab, setActiveTab] = useState('personal');
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [locations, setLocations] = useState([]);
+  const [locationsError, setLocationsError] = useState(null);
   const [, setScheduledDates] = useState([]);
   const [activeSlide, setActiveSlide] = useState(0);
 
@@ -110,6 +105,23 @@ const EmployeeProfile = () => {
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [currentUserData, setCurrentUserData] = useState(null);
   const [adminCheckComplete, setAdminCheckComplete] = useState(false);
+
+  // The location menu lists the real locations. There is no hardcoded
+  // fallback: guessed names are how mismatched locations got saved.
+  useEffect(() => {
+    let cancelled = false;
+    fetchLocations()
+      .then((list) => {
+        if (!cancelled) setLocations(list);
+      })
+      .catch((err) => {
+        console.error('Error loading locations:', err);
+        if (!cancelled) setLocationsError('Could not load locations. Reload the page to change location.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   
   // Total number of slides in personal tab carousel
   const totalPersonalSlides = 3;
@@ -302,32 +314,19 @@ const EmployeeProfile = () => {
     setEditMode(false);
     // Reset form data to original values
     if (employeeDetails?.profile) {
-      setFormData({
-        name: employeeDetails.profile?.name || '',
-        username: employeeDetails.profile?.username || '',
-        email: employeeDetails.profile?.email || '',
-        phone: employeeDetails.profile?.phone || '',
-        position: employeeDetails.profile?.position || '',
-        department: employeeDetails.profile?.department || '',
-        location: employeeDetails.profile?.primaryLocation || '',
-        joinDate: employeeDetails.profile?.joinDate || '',
-        role: employeeDetails.profile?.role || 'employee',
-        status: employeeDetails.profile?.status || 'inactive',
-        emergencyContact: employeeDetails.profile?.emergencyContact || '',
-        emergencyPhone: employeeDetails.profile?.emergencyPhone || '',
-        notes: employeeDetails.profile?.notes || '',
-        padrino: employeeDetails.profile?.padrino ?? false,
-        padrinoColor: employeeDetails.profile?.padrinoColor || 'blue',
-        padrinoColorCode: employeeDetails.profile?.padrinoColorCode || 'blue',
-        service: employeeDetails.profile?.service || '',
-        password: '', // Always clear password field
-      });
+      setFormData(profileToForm(employeeDetails.profile, employeeDetails.location));
     }
   };
 
   // Toggle role between "admin" and "employee"
   const handleRoleToggle = async () => {
-    const newRole = formData.role === 'admin' ? 'employee' : 'admin';
+    const currentRole = normalizeRole(formData.role);
+    if (currentRole === ROLES.SUPER_ADMIN) {
+      // The toggle only switches admin/employee; it used to demote super admins.
+      showNotification('Change Super Admin roles in Manage Admins', 'error');
+      return;
+    }
+    const newRole = currentRole === ROLES.ADMIN ? ROLES.EMPLOYEE : ROLES.ADMIN;
     try {
       await update(ref(database, `users/${employeeId}/profile`), { role: newRole });
       setFormData((prev) => ({ ...prev, role: newRole }));
@@ -381,27 +380,9 @@ const EmployeeProfile = () => {
       const data = snapshot.val();
       setEmployeeDetails(data);
 
-      // Set local form data
-      setFormData({
-        name: data.profile?.name || '',
-        username: data.profile?.username || '',
-        email: data.profile?.email || '',
-        phone: data.profile?.phone || '',
-        position: data.profile?.position || '',
-        department: data.profile?.department || '',
-        location: data.profile?.primaryLocation || '',
-        joinDate: data.profile?.joinDate || '',
-        role: data.profile?.role || 'employee',
-        status: data.profile?.status || 'inactive',
-        emergencyContact: data.profile?.emergencyContact || '',
-        emergencyPhone: data.profile?.emergencyPhone || '',
-        notes: data.profile?.notes || '',
-        padrino: data.profile?.padrino || false,
-        padrinoColor: data.profile?.padrinoColorCode || 'blue',
-        padrinoColorCode: data.profile?.padrinoColorCode || 'blue',
-        service: data.profile?.service || '',
-        password: '', // Always start with empty password
-      });
+      // Set local form data (location comes from profile.locationKey, not
+      // primaryLocation, which almost no user has)
+      setFormData(profileToForm(data.profile, data.location));
 
       // Format scheduled dates
       setScheduledDates(formatScheduledDates(data.assignedDates || []));
@@ -494,7 +475,8 @@ const EmployeeProfile = () => {
               handleInputChange={handleInputChange}
               userId={employeeId}
               onRoleToggle={handleRoleToggle}
-              locations={LOCATIONS}
+              locations={locations}
+              locationsError={locationsError}
               departments={DEPARTMENTS}
               onPadrinoChange={handlePadrinoChange}
               onPadrinoColorChange={handlePadrinoColorChange}
