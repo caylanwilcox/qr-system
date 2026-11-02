@@ -24,6 +24,7 @@ import {
   deleteEvent as serviceDeleteEvent,
   assignEventParticipants
 } from '../../../services/schedulerService';
+import { locationKey, managesLocation } from '../../../utils/eventVisibility';
 
 // Create the context
 export const SchedulerContext = createContext();
@@ -82,7 +83,7 @@ export const SchedulerProvider = ({ children }) => {
     
     // Check if admin can manage this location
     if (userProfile.role === 'admin' && adminPermissions) {
-      return adminPermissions.managedLocations?.[locationName] === true;
+      return managesLocation(adminPermissions.managedLocations, locationName);
     }
     
     // Regular employees can't manage locations
@@ -169,13 +170,13 @@ export const SchedulerProvider = ({ children }) => {
         console.log('🔍 SchedulerContext: Super admin gets all locations with "All Locations"');
       } else if (userProfile?.role === 'admin') {
         // Location admins only see their managed locations (no "All Locations")
-        const managedLocations = adminPermissions?.managedLocations || {};
+        const managedLocations = adminPermissions?.managedLocations || [];
         console.log('🔍 SchedulerContext: Admin managed locations:', managedLocations);
-        
+
         const filteredLocations = locationsList.filter(location => {
           // Check if location is in managed locations or is the user's own location
-          const isManaged = managedLocations[location] === true;
-          const isUserLocation = userLocation && location === userLocation;
+          const isManaged = managesLocation(managedLocations, location);
+          const isUserLocation = Boolean(userLocation) && locationKey(location) === locationKey(userLocation);
           return isManaged || isUserLocation;
         });
         

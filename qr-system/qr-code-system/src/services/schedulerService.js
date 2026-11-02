@@ -4,6 +4,8 @@ import { database } from './firebaseConfig';
 import { cacheService, CACHE_CONFIG } from './cacheService';
 import { eventBus, EVENTS } from './eventBus';
 import { buildParticipantUpdates } from '../utils/eventParticipants';
+import { normalizeRole, ROLES } from '../utils/roles';
+import { canSeeManagedEvent } from '../utils/eventVisibility';
 
 // Cache keys
 const EVENTS_CACHE_KEY = 'cached_events';
@@ -30,7 +32,7 @@ export const getUserEvents = async (userId, includeManaged = false) => {
     }
     
     const userData = userSnapshot.val();
-    const userRole = userData.profile?.role;
+    const userRole = normalizeRole(userData.profile?.role);
     
     let events = [];
     
@@ -55,41 +57,31 @@ export const getUserEvents = async (userId, includeManaged = false) => {
       }
     }
     
-    // If user is admin or super_admin and includeManaged is true, get events for managed users
-    if (includeManaged && (userRole === 'admin' || userRole === 'super_admin')) {
-      // Get management structure
-      const managementRef = ref(database, `managementStructure/${userId}`);
-      const managementSnapshot = await get(managementRef);
-      
-      if (managementSnapshot.exists()) {
-        const managementData = managementSnapshot.val();
-        const managedLocations = Object.keys(managementData.managedLocations || {});
-        
-        if (managedLocations.length > 0) {
-          // Get all events for these locations
-          const eventsRef = ref(database, 'events');
-          const eventsSnapshot = await get(eventsRef);
-          
-          if (eventsSnapshot.exists()) {
-            const allEvents = eventsSnapshot.val();
-            
-            // Filter events by managed locations
-            Object.entries(allEvents).forEach(([eventId, eventData]) => {
-              // Skip events already added
-              if (events.some(e => e.id === eventId)) return;
-              
-              // Add event if it's in a managed location
-              if (eventData.location && managedLocations.includes(eventData.location)) {
-                events.push({
-                  ...eventData,
-                  id: eventId, // the database key wins over any stored id
-                  start: new Date(eventData.start),
-                  end: new Date(eventData.end)
-                });
-              }
-            });
-          }
+    // Admins also see the events they manage. Super admins see every event,
+    // even with no management entry; '*' used to match nothing here, so a
+    // super admin's calendar came up empty.
+    if (includeManaged && (userRole === ROLES.ADMIN || userRole === ROLES.SUPER_ADMIN)) {
+      let managedLocations = {};
+      if (userRole === ROLES.ADMIN) {
+        const managementSnapshot = await get(ref(database, `managementStructure/${userId}`));
+        if (managementSnapshot.exists()) {
+          managedLocations = managementSnapshot.val().managedLocations || {};
         }
+      }
+
+      const eventsSnapshot = await get(ref(database, 'events'));
+      if (eventsSnapshot.exists()) {
+        const alreadyAdded = new Set(events.map(e => e.id));
+        Object.entries(eventsSnapshot.val()).forEach(([eventId, eventData]) => {
+          if (alreadyAdded.has(eventId)) return;
+          if (!canSeeManagedEvent(eventData, { role: userRole, managedLocations, userId })) return;
+          events.push({
+            ...eventData,
+            id: eventId, // the database key wins over any stored id
+            start: new Date(eventData.start),
+            end: new Date(eventData.end)
+          });
+        });
       }
     }
     
