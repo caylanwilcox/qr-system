@@ -236,6 +236,7 @@ test('create-user: location admin creates an employee at their location in one w
   assert.equal(record.profile.location, 'Aurora');
   assert.equal(record.profile.role, 'employee');
   assert.equal(record.profile.padrinoColor, 'green');
+  assert.equal(record.profile.padrinoColorCode, 'green', 'the lists read padrinoColorCode');
   assert.equal(record.profile.password, undefined);
   assert.deepEqual(fake().db.locations.aurora.activeUsers[uid], { position: 'Member' });
   assert.equal(fake().db.managementStructure[uid], undefined);

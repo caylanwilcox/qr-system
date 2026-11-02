@@ -93,7 +93,7 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
       setPadrinoStatus(status);
       
       if (autoCalculate && formData.padrino) {
-        onPadrinoColorChange({ target: { value: status.color } });
+        onPadrinoColorChange({ target: { value: status.color }, auto: true });
       }
     }
   }, [userData, autoCalculate, onPadrinoColorChange, formData.padrino]);
@@ -127,7 +127,7 @@ const PadrinoStatusSection = ({ userData, formData, onPadrinoChange, onPadrinoCo
     setAutoCalculate(newValue);
     
     if (newValue && formData.padrino) {
-      onPadrinoColorChange({ target: { value: padrinoStatus.color } });
+      onPadrinoColorChange({ target: { value: padrinoStatus.color }, auto: true });
     }
   };
 

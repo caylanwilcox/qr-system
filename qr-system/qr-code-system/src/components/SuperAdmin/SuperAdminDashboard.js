@@ -1,6 +1,6 @@
 // src/components/SuperAdminDashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ref, onValue, update } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import { database } from '../../services/firebaseConfig';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { eventBus, EVENTS } from '../../services/eventBus';
@@ -29,7 +29,6 @@ const SuperAdminDashboard = () => {
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [colorUpdateStatus, setColorUpdateStatus] = useState(null);
   const [filteredData, setFilteredData] = useState({});
   const [activeTab, setActiveTab] = useState('All');
   const [activeFilter, setActiveFilter] = useState(null);
@@ -42,7 +41,6 @@ const SuperAdminDashboard = () => {
   const [, setIsManualRefreshing] = useState(false);
 
   const dataSnapshot = useRef(null);
-  const isUpdatingColors = useRef(false);
   const DEBUG_PREFIX = '🔍 [SuperAdminDashboard]';
 
   const getCurrentDateISO = () => moment().tz('America/Chicago').format('YYYY-MM-DD');
@@ -51,18 +49,6 @@ const SuperAdminDashboard = () => {
   const normalizeLocationKey = useCallback((locationKey) => {
     if (!locationKey) return null;
     return locationKey.toLowerCase().replace(/\s+/g, '');
-  }, []);
-
-  // Calculate user color based on attendance stats
-  const calculateUserColor = useCallback((profile, stats) => {
-    const attendanceRate = stats?.attendanceRate || 0;
-    const daysPresent = stats?.daysPresent || 0;
-
-    if (daysPresent === 0) return 'blue';
-    if (attendanceRate >= 90) return 'blue';
-    if (attendanceRate >= 75) return 'green';
-    if (attendanceRate >= 60) return 'orange';
-    return 'blue';
   }, []);
 
   // Helper function to check if a user has clocked in with the correct date
@@ -448,64 +434,9 @@ const SuperAdminDashboard = () => {
     return metrics;
   }, [hasClockInWithCorrectDate]);
 
-  // Update padrino colors based on attendance stats
-  const updatePadrinoColors = useCallback(async (data) => {
-    if (isUpdatingColors.current) return;
-    isUpdatingColors.current = true;
-    setColorUpdateStatus('updating');
-    
-    console.log(`${DEBUG_PREFIX} Starting padrino color updates`);
-
-    const updates = {};
-    let updateCount = 0;
-
-    Object.entries(data || {}).forEach(([id, user]) => {
-      const { profile, stats } = user;
-      if (!profile) return;
-
-      const newColor = profile.padrino && !profile.manualColorOverride
-        ? calculateUserColor(profile, stats)
-        : null;
-
-      if (newColor !== null && profile.padrinoColorCode !== newColor) {
-        updates[`users/${id}/profile/padrinoColor`] = newColor;
-        updates[`users/${id}/profile/padrinoColorCode`] = newColor;
-        updateCount++;
-        console.log(`${DEBUG_PREFIX} User ${id} color update: ${profile.padrinoColorCode} -> ${newColor}`);
-      } else if (!profile.padrino && profile.padrinoColorCode) {
-        updates[`users/${id}/profile/padrinoColor`] = null;
-        updates[`users/${id}/profile/padrinoColorCode`] = null;
-        updateCount++;
-        console.log(`${DEBUG_PREFIX} User ${id} color reset: ${profile.padrinoColorCode} -> null`);
-      }
-    });
-
-    setDebug(prev => ({
-      ...prev,
-      colorUpdates: {
-        count: updateCount,
-        updates: Object.keys(updates).length > 0 ? Object.keys(updates).slice(0, 3) : []
-      }
-    }));
-
-    if (Object.keys(updates).length > 0) {
-      try {
-        console.log(`${DEBUG_PREFIX} Applying ${Object.keys(updates).length} color updates to database`);
-        await update(ref(database), updates);
-        setColorUpdateStatus('success');
-        console.log(`${DEBUG_PREFIX} Color updates applied successfully`);
-      } catch (err) {
-        console.error(`${DEBUG_PREFIX} Error updating colors:`, err);
-        setColorUpdateStatus('error');
-      }
-    } else {
-      console.log(`${DEBUG_PREFIX} No color updates needed`);
-      setColorUpdateStatus('no-changes');
-    }
-
-    setTimeout(() => setColorUpdateStatus(null), 3000);
-    isUpdatingColors.current = false;
-  }, [calculateUserColor]);
+  // Padrino colours are not written here. This dashboard used to recompute
+  // them on every load from stats.attendanceRate, which nothing keeps up to
+  // date, so every padrino was reset to blue and manual picks were lost.
 
   // Function to process the fetched dashboard data
   const processDashboardData = useCallback((data) => {
@@ -537,16 +468,13 @@ const SuperAdminDashboard = () => {
         refreshCount: prev.refreshCount + 1,
         dataTimestamp: new Date().toISOString()
       }));
-      
-      // Update padrino colors as needed (using original data)
-      updatePadrinoColors(data);
     } catch (err) {
       console.error(`${DEBUG_PREFIX} Error processing data:`, err);
       setError('Error processing dashboard data');
       setLoading(false);
       setIsManualRefreshing(false);
     }
-  }, [activeTab, activeFilter, applyFilters, processMetrics, updatePadrinoColors]);
+  }, [activeTab, activeFilter, applyFilters, processMetrics]);
 
   // Function to manually fetch dashboard data
   const fetchDashboardData = useCallback((forceRefresh = false) => {
@@ -700,18 +628,6 @@ const SuperAdminDashboard = () => {
 
   return (
     <div className="dashboard-container relative">
-      {/* Status notifications */}
-      {colorUpdateStatus === 'success' && (
-        <div className="bg-green-100 text-green-800 px-4 py-2 rounded mb-4">
-          Padrino colors updated successfully
-        </div>
-      )}
-      {colorUpdateStatus === 'error' && (
-        <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4">
-          Error updating padrino colors
-        </div>
-      )}
-      
       {/* Main dashboard layout */}
       <div className="dashboard-grid">
         <div className="quadrant quadrant-1">
@@ -748,14 +664,6 @@ const SuperAdminDashboard = () => {
                 <div>Last Event: {debug.lastEventTime ? new Date(debug.lastEventTime).toLocaleTimeString() : 'None'}</div>
                 <div>Data Timestamp: {debug.dataTimestamp ? new Date(debug.dataTimestamp).toLocaleTimeString() : 'None'}</div>
                 <div>Refresh Count: {debug.refreshCount}</div>
-                <div className="col-span-2">
-                  Color Updates: {debug.colorUpdates?.count || 0}
-                </div>
-                {debug.colorUpdates?.updates?.length > 0 && (
-                  <div className="col-span-2">
-                    Sample Updates: {debug.colorUpdates.updates.join(', ')}
-                  </div>
-                )}
               </div>
             </details>
           </div>

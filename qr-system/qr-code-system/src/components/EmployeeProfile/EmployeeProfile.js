@@ -271,12 +271,19 @@ const EmployeeProfile = () => {
     }
   };
 
-  // Handle Padrino color selection
+  // Handle Padrino color selection. A colour picked by hand is marked
+  // manualColorOverride, so the automatic colour never replaces it; the
+  // Auto-calculate option passes `auto: true` and clears the mark.
   const handlePadrinoColorChange = async (e) => {
     const { value } = e.target;
+    const manualColorOverride = !e.auto;
     try {
-      await update(ref(database, `users/${employeeId}/profile`), { padrinoColor: value, padrinoColorCode: value });
-      setFormData((prev) => ({ ...prev, padrinoColorCode: value }));
+      await update(ref(database, `users/${employeeId}/profile`), {
+        padrinoColor: value,
+        padrinoColorCode: value,
+        manualColorOverride,
+      });
+      setFormData((prev) => ({ ...prev, padrinoColorCode: value, manualColorOverride }));
       showNotification('Padrino color updated successfully');
     } catch (err) {
       console.error('Error updating padrino color:', err);
@@ -390,8 +397,8 @@ const EmployeeProfile = () => {
       // Format scheduled dates
       setScheduledDates(formatScheduledDates(data.assignedDates || []));
 
-      // Auto-update padrino color if needed
-      if (data.profile?.padrino && data.events) {
+      // Auto-update padrino color if needed, unless an admin picked it by hand
+      if (data.profile?.padrino && !data.profile?.manualColorOverride && data.events) {
         const padrinoStatus = calculatePadrinoColor(data);
         if (
           padrinoStatus.color &&
