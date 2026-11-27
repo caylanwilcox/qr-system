@@ -5,7 +5,7 @@ import moment from 'moment-timezone';
 import { eventBus, EVENTS } from '../../services/eventBus';
 
 // Status badge with on-time/late indication
-const StatusBadge = ({ clockInTime, userData, date }) => {
+const StatusBadge = ({ clockInTime, isLate }) => {
   if (!clockInTime) {
     return (
       <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
@@ -16,42 +16,8 @@ const StatusBadge = ({ clockInTime, userData, date }) => {
     );
   }
 
-  // FIXED: Only calculate late status if user has scheduled events for this date
-  let isLate = false;
-  
-  if (userData && date) {
-    // Check if user has scheduled events for this date
-    let hasScheduledEvents = false;
-    
-    if (userData.events) {
-      Object.values(userData.events).forEach(eventTypeData => {
-        if (eventTypeData && typeof eventTypeData === 'object') {
-          Object.values(eventTypeData).forEach(eventData => {
-            if (eventData && eventData.scheduled && eventData.date === date) {
-              hasScheduledEvents = true;
-            }
-          });
-        }
-      });
-    }
-    
-    // Only apply late logic if there are scheduled events
-    if (hasScheduledEvents) {
-      try {
-        // Use the original 9:00 AM logic as fallback when events are scheduled
-        // TODO: In the future, compare against actual event start times
-        const clockInTime9AM = new Date(`2000-01-01 ${clockInTime}`);
-        const lateTime = new Date(`2000-01-01 09:15`);
-
-        if (clockInTime9AM > lateTime) {
-          isLate = true;
-        }
-      } catch (e) {
-        // If time parsing fails, don't mark as late
-        isLate = false;
-      }
-    }
-  }
+  // `isLate` is the flag stored on the attendance record (the server works it
+  // out from the scheduled event's start), not a fixed 9:15 cut-off.
 
   // Return status based on calculation
   if (isLate) {
@@ -166,6 +132,7 @@ const ClockedInList = ({ data = [], date }) => {
       let clockInTime = null;
       let clockOutTime = null;
       let onTime = false;
+      let isLate = false; // only from a stored record's flags
       let timestamp = null;
       
       // 1. First check attendance object with today's date (standardized format)
@@ -187,6 +154,7 @@ const ClockedInList = ({ data = [], date }) => {
           onTime = entry.onTime === true || entry.isLate === false;
           timestamp = entry.clockInTimestamp || null;
           
+          isLate = entry.isLate === true || entry.onTime === false;
           console.log(`${DEBUG_PREFIX} User ${id} is clocked in via attendance object with date ${today}`);
         }
       }
@@ -214,6 +182,7 @@ const ClockedInList = ({ data = [], date }) => {
               onTime = entry.onTime === true || entry.isLate === false;
               timestamp = entry.clockInTimestamp || null;
               
+              isLate = entry.isLate === true || entry.onTime === false;
               console.log(`${DEBUG_PREFIX} User ${id} is clocked in via unique attendance key ${attendanceKey}`);
             }
           }
@@ -235,6 +204,7 @@ const ClockedInList = ({ data = [], date }) => {
             onTime = entry.onTime === true || entry.isLate === false;
             timestamp = entry.clockInTimestamp || null;
             
+            isLate = entry.isLate === true || entry.onTime === false;
             console.log(`${DEBUG_PREFIX} User ${id} is clocked in via attendance object with date format ${dateFormat}`);
             break;
           }
@@ -361,6 +331,7 @@ const ClockedInList = ({ data = [], date }) => {
           clockInTime,
           clockOutTime,
           onTime,
+          isLate,
           timestamp,
           profile: user.profile,
           padrinoColor,
@@ -486,7 +457,7 @@ const ClockedInList = ({ data = [], date }) => {
                 <div className={`clock-time ${user.colorClass || ''}`}>
                   {user.clockInTime || '(No time)'}
                 </div>
-                <StatusBadge clockInTime={user.clockInTime} userData={user} date={effectiveDate} />
+                <StatusBadge clockInTime={user.clockInTime} isLate={user.isLate} />
               </div>
             </div>
           ))}

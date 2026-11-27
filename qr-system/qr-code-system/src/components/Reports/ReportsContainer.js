@@ -106,6 +106,11 @@ const isLateTime = (timeStr, hasScheduledEvents = true) => {
 };
 
 // Calculate percentage
+// Location key as the scanner stores it: lowercase, spaces removed ("Aurora"
+// and "aurora" are one location).
+const compactLocation = (value) =>
+  typeof value === 'string' ? value.toLowerCase().replace(/\s+/g, '') : '';
+
 const calculatePercentage = (numerator, denominator) => {
   return denominator ? ((numerator / denominator) * 100).toFixed(2) : '0.00';
 };
@@ -366,7 +371,15 @@ const ReportsContainer = ({ locationFiltered = false }) => {
             return;
           }
 
-          const location = record.locationName || record.location || userData.profile.locationKey || userData.profile.primaryLocation || 'unknown';
+          // The same bucket as the shared copy the scanner writes
+          // (attendance/{locationKey}/{date}/{uid}), so this record replaces
+          // that copy instead of being counted a second time.
+          const location =
+            compactLocation(record.location) ||
+            compactLocation(record.locationName) ||
+            compactLocation(userData.profile.locationKey) ||
+            compactLocation(userData.profile.primaryLocation) ||
+            'unknown';
           allLocations.add(location);
 
           // Ensure location and date exist in combined data
@@ -403,7 +416,10 @@ const ReportsContainer = ({ locationFiltered = false }) => {
         // Process legacy clock times
         Object.entries(legacyClockIns).forEach(([timestamp, clockInTime]) => {
           const formattedDate = timestampToChicagoDate(timestamp);
-          const location = userData.profile.locationKey || userData.profile.primaryLocation || 'unknown';
+          const location =
+            compactLocation(userData.profile.locationKey) ||
+            compactLocation(userData.profile.primaryLocation) ||
+            'unknown';
           allLocations.add(location);
 
           if (!combinedData[location]) {
@@ -475,7 +491,7 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     // Process attendance data
     Object.entries(attendance || {}).forEach(([locationName, locationData]) => {
       // Skip if we're filtering by location and this isn't the user's location
-      if (userLocation && locationName.toLowerCase() !== userLocation.toLowerCase()) {
+      if (userLocation && compactLocation(locationName) !== compactLocation(userLocation)) {
         return;
       }
       
@@ -773,10 +789,10 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     // Apply location filter if active
     if (selectedLocation !== 'all') {
       filtered = filtered.filter(report => 
-        report.location.toLowerCase() === selectedLocation.toLowerCase()
+        compactLocation(report.location) === compactLocation(selectedLocation)
       );
     }
-    
+
     // Apply event type filter if active
     if (selectedEventType !== 'all') {
       const normalizedSelectedType = normalizeEventType(selectedEventType);
@@ -834,7 +850,7 @@ const ReportsContainer = ({ locationFiltered = false }) => {
             
             // Apply location filter
             if (selectedLocation !== 'all') {
-              passes = passes && ph.location.toLowerCase() === selectedLocation.toLowerCase();
+              passes = passes && compactLocation(ph.location) === compactLocation(selectedLocation);
             }
             
             // We can't filter placeholders by event type since they don't have that data
@@ -890,8 +906,8 @@ const ReportsContainer = ({ locationFiltered = false }) => {
     setFilteredMonthlyAttendance(monthlyAttendance);
     // Set filtered reports to all reports with just location filter
     if (selectedLocation !== 'all') {
-      const locationFiltered = employeeReports.filter(report => 
-        report.location.toLowerCase() === selectedLocation.toLowerCase()
+      const locationFiltered = employeeReports.filter(report =>
+        compactLocation(report.location) === compactLocation(selectedLocation)
       );
       setFilteredReports(locationFiltered);
     } else {

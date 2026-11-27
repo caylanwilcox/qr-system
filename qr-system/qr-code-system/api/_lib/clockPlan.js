@@ -14,6 +14,7 @@ import {
   composeClockOutUpdates,
   hasScheduledEventsToday,
   isLateForScheduledEvents,
+  isLateForEvents,
 } from '../../src/utils/attendanceRules.js';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -73,9 +74,20 @@ export function planClockIn({
     throw new HttpError(409, `${name} is already clocked in${since ? ` since ${since}` : ''}. Use Clock Out to end that shift first.`);
   }
 
-  const isLate = hasScheduledEventsToday(userData, currentDate)
-    ? isLateForScheduledEvents(userData, currentDate, now)
-    : false;
+  // The Scheduler events this scan is for. Lateness is measured against
+  // their start times; with none matched, the per-user entries are checked
+  // as before.
+  const attendedEventIds = findEventsToMarkAttended({
+    events: scheduledEvents,
+    userId,
+    dateStr: currentDate,
+    eventType,
+    locationKey,
+    eventTypeNames,
+  });
+  const isLate = attendedEventIds.length > 0
+    ? isLateForEvents(scheduledEvents, attendedEventIds, currentDate, now)
+    : hasScheduledEventsToday(userData, currentDate) && isLateForScheduledEvents(userData, currentDate, now);
   const normalizedEventType = normalizeEventType(eventType);
   const attendanceKey = `${currentDate}_${timestamp}`;
   const eventId = `${currentDate}-${timestamp}`;
@@ -113,15 +125,6 @@ export function planClockIn({
     userUpdates['stats/daysPresent'] = (userData.stats?.daysPresent || 0) + 1;
     if (isLate) userUpdates['stats/daysLate'] = (userData.stats?.daysLate || 0) + 1;
   }
-
-  const attendedEventIds = findEventsToMarkAttended({
-    events: scheduledEvents,
-    userId,
-    dateStr: currentDate,
-    eventType,
-    locationKey,
-    eventTypeNames,
-  });
 
   const updates = composeClockInUpdates({
     userId,
